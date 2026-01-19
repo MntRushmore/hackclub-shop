@@ -19,10 +19,11 @@ export interface Product {
 
 export interface ProductDetail {
     id: number;
-    external_id: string;
     name: string;
-    variants: number;
-    synced: number;
     thumbnail_url: string;
-    is_ignored: boolean;
+    sync_variants?: Variant[];
+    external_id?: string;
+    variants?: number;
+    synced?: number;
+    is_ignored?: boolean;
 }

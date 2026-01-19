@@ -8,9 +8,8 @@ import Image from 'next/image';
 interface Product {
     id: number;
     name: string;
-    price: string;
     thumbnail_url: string;
-    variant_id: number | null;
+    sync_variants: { retail_price: string }[];
 }
 
 const Shop = () => {
@@ -21,7 +20,7 @@ const Shop = () => {
     useEffect(() => {
         const fetchProducts = async () => {
             try {
-                const response = await fetch('/api/printful/products');
+                const response = await fetch('/api/products');
                 if (!response.ok) {
                     throw new Error('Failed to fetch products');
                 }
@@ -51,7 +50,7 @@ const Shop = () => {
                     {products.map((product) => (
                         <div
                             key={product.id}
-                            className="border p-4 rounded-2xl shadow-lg bg-white flex flex-col"
+                            className="border border-gray-700 p-4 rounded-2xl shadow-lg bg-[#17171d] flex flex-col"
                         >
                             <Link href={`/products/${product.id}`}>
                                 <Image
@@ -62,11 +61,11 @@ const Shop = () => {
                                     className="w-full h-48 object-contain mb-4"
                                 />
                             </Link>
-                            <h2 className="text-xl text-black font-semibold mb-2 flex-grow">{product.name}</h2>
-                            <p className="text-lg text-gray-700 mb-4">${parseFloat(product.price).toFixed(2)}</p>
+                            <h2 className="text-xl text-white font-semibold mb-2 flex-grow">{product.name}</h2>
+                            <p className="text-lg text-gray-300 mb-4">${parseFloat(product.sync_variants[0]?.retail_price || '0').toFixed(2)}</p>
                             <Link href={`/products/${product.id}`}>
                                 <button
-                                    className="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition-colors"
+                                    className="bg-[#338eda] text-white py-2 px-4 rounded-full hover:bg-blue-700 transition-colors"
                                 >
                                     View Product
                                 </button>

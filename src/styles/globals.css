@@ -22,7 +22,8 @@
 /* Global Styles */
 body {
     font-family: 'Phantom Sans', sans-serif;
-    background-color: #FFF;
+    background-color: var(--hackclub-dark);
+    color: var(--hackclub-light);
 }
 
 a {
@@ -40,7 +41,7 @@ h3,
 h4,
 h5,
 h6 {
-    color: var(--hackclub-text);
+    color: inherit;
 }
 
 button {

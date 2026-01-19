@@ -22,7 +22,7 @@ const MainPage = () => {
           </p>
           <Link
             href="/shop"
-            className="text-white bg-hackclub-red py-4 px-10 rounded-lg text-xl hover:bg-red-700 transition-all duration-300"
+            className="text-white bg-hackclub-red py-4 px-10 rounded-full text-xl hover:bg-red-700 transition-all duration-300"
           >
             Start Preordering
           </Link>
@@ -62,7 +62,7 @@ const MainPage = () => {
       </div>
 
       <footer className="text-center text-white py-6 bg-hackclub-dark z-10">
-        © 2025 Hack Club Shop. All rights reserved.
+        © 2026 Hack Club. 501(c)(3) nonprofit.
       </footer>
     </div>
   );

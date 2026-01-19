@@ -23,12 +23,11 @@ const ProductPage = () => {
     useEffect(() => {
         const fetchProduct = async () => {
             try {
-                const response = await fetch(`/api/printful/products/${productId}`);
+                const response = await fetch(`/api/products/${productId}`);
                 if (!response.ok) {
                     throw new Error('Failed to fetch product');
                 }
                 const data = await response.json();
-                console.log(data);
                 setProduct(data.result.sync_product);
                 setVariants(data.result.sync_variants);
 
@@ -113,7 +112,7 @@ const ProductPage = () => {
                                         const variant = variants.find(v => v.variant_id === parseInt(e.target.value));
                                         setSelectedVariant(variant || null);
                                     }}
-                                    className="border rounded p-2 w-full bg-hackclub-dark"
+                                    className="border border-gray-600 rounded p-2 w-full bg-hackclub-dark text-white"
                                 >
                                     {variants.map((variant) => (
                                         <option key={variant.variant_id} value={variant.variant_id}>
@@ -125,7 +124,7 @@ const ProductPage = () => {
                         )}
 
                         <button
-                            className="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition-colors"
+                            className="bg-[#338eda] text-white py-2 px-4 rounded-full hover:bg-[#2a6bb8] transition-colors"
                             onClick={handleAddToCart}
                         >
                             Add to Cart

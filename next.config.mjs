@@ -2,7 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   images: {
-    domains: ['files.cdn.printful.com', 'hackclub.com'],
+    domains: ['files.cdn.printful.com', 'hackclub.com', 'assets.hackclub.com'],
   },
 };
 

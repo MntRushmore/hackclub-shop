@@ -38,11 +38,12 @@ const Checkout = () => {
   };
 
   return (
-    <div className="container mx-auto p-6">
-      <h1 className="text-3xl font-bold">Preorder Checkout</h1>
-      <div className="mt-4">
-        <h2 className="text-xl">Cart Items</h2>
-        <ul>
+    <div className="bg-hackclub-dark min-h-screen text-white">
+      <div className="container mx-auto p-6">
+        <h1 className="text-3xl font-bold">Preorder Checkout</h1>
+        <div className="mt-4">
+          <h2 className="text-xl">Cart Items</h2>
+          <ul>
           {cart.map((item) => (
             <li key={item.id} className="flex justify-between py-2">
               <span>{item.name}</span>
@@ -66,6 +67,7 @@ const Checkout = () => {
           {loading ? 'Processing...' : 'Checkout'}
         </button>
       </div>
+    </div>
     </div>
   );
 };

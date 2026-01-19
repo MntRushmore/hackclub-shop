@@ -97,7 +97,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
             }
 
             <button
-                className="mt-2 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors shadow-sm"
+                className="mt-2 bg-[#338eda] text-white py-2 px-4 rounded-full hover:bg-[#2a6bb8] transition-colors shadow-sm"
                 style={{
                     boxShadow: '4px 4px 10px rgba(0,0,0,0.1)',
                 }}
