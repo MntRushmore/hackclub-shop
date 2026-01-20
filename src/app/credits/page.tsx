@@ -7,36 +7,38 @@ import { CreditsContext } from '../../context/CreditsContext';
 
 const HCB_DONATE_URL = 'https://hcb.hackclub.com/donations/start/ysws-combinator';
 
-// Generate a unique claim code
-const generateClaimCode = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed confusing chars like 0/O, 1/I
-    let code = 'HC-';
-    for (let i = 0; i < 6; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-};
-
 const CreditsPage = () => {
     const { data: session, status } = useSession();
     const creditsContext = useContext(CreditsContext);
     const [showAddCredits, setShowAddCredits] = useState(false);
     const [claimCode, setClaimCode] = useState('');
     const [verifying, setVerifying] = useState(false);
+    const [codeLoading, setCodeLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<{ amount: number } | null>(null);
     const refreshIconRef = useRef<any>(null);
 
     useEffect(() => {
-        // Generate or retrieve claim code from localStorage
-        const savedCode = localStorage.getItem('hcb_claim_code');
-        if (savedCode) {
-            setClaimCode(savedCode);
-        } else {
-            const newCode = generateClaimCode();
-            localStorage.setItem('hcb_claim_code', newCode);
-            setClaimCode(newCode);
-        }
+        const fetchClaimCode = async () => {
+            setCodeLoading(true);
+            setError(null);
+            try {
+                const res = await fetch('/api/credits/claim-code');
+                const data = await res.json();
+                if (res.ok && data.result?.code) {
+                    setClaimCode(data.result.code);
+                } else {
+                    setError(data.error || 'Failed to load claim code');
+                }
+            } catch (err) {
+                console.error(err);
+                setError('Failed to load claim code');
+            } finally {
+                setCodeLoading(false);
+            }
+        };
+
+        fetchClaimCode();
     }, []);
 
     if (!creditsContext) return null;
@@ -103,18 +105,34 @@ const CreditsPage = () => {
         });
     };
 
-    const handleGenerateNewCode = () => {
-        const newCode = generateClaimCode();
-        localStorage.setItem('hcb_claim_code', newCode);
-        setClaimCode(newCode);
+    const handleGenerateNewCode = async () => {
+        setCodeLoading(true);
         setError(null);
         setSuccess(null);
+        try {
+            const res = await fetch('/api/credits/claim-code?refresh=true');
+            const data = await res.json();
+            if (res.ok && data.result?.code) {
+                setClaimCode(data.result.code);
+            } else {
+                setError(data.error || 'Failed to generate a new claim code');
+            }
+        } catch (err) {
+            console.error(err);
+            setError('Failed to generate a new claim code');
+        } finally {
+            setCodeLoading(false);
+        }
         if (refreshIconRef.current) {
             refreshIconRef.current.animate({ rotate: [0, 360] }, { duration: 0.3 });
         }
     };
 
     const handleVerifyPayment = async () => {
+        if (codeLoading || !claimCode) {
+            setError('Claim code not ready yet. Please try again.');
+            return;
+        }
         setVerifying(true);
         setError(null);
         setSuccess(null);

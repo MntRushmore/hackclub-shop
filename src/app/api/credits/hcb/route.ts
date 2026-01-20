@@ -45,6 +45,23 @@ export async function GET(request: Request) {
             error: 'Missing claim code'
         }, { status: 400 });
     }
+    const normalizedCode = code.trim().toUpperCase();
+
+    // Verify claim code belongs to this user and is server-issued
+    const codeOwner = await redis.get<string>(`claim_code:${normalizedCode}:user`);
+    if (!codeOwner) {
+        return NextResponse.json({
+            code: 400,
+            error: 'Invalid claim code. Generate a new one in the credits page.'
+        }, { status: 400 });
+    }
+
+    if (codeOwner !== userId) {
+        return NextResponse.json({
+            code: 403,
+            error: 'This claim code belongs to a different account'
+        }, { status: 403 });
+    }
 
     try {
         // Fetch donations from HCB API
@@ -72,7 +89,7 @@ export async function GET(request: Request) {
         const matchingDonation = donations.find(donation => {
             if (!donation.memo) return false;
             const memoLower = donation.memo.toLowerCase();
-            const codeLower = code.toLowerCase();
+            const codeLower = normalizedCode.toLowerCase();
             return memoLower.includes(codeLower);
         });
 
