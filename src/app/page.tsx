@@ -2,7 +2,6 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import Navigation from "./components/Navigation";
 import Image from "next/image";
 import { motion } from 'framer-motion';
 
@@ -174,7 +173,6 @@ const MainPage = () => {
       `,
       backgroundSize: '30px 30px',
     }}>
-      <Navigation />
 
       <div className="absolute inset-0">
         {stickers.map((sticker) => (

@@ -1,5 +1,6 @@
 import { CartProvider } from '../context/CartContext';
 import '../styles/globals.css';
+import Navigation from './components/Navigation';
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -19,6 +20,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <CartProvider>
+          <Navigation />
           {children}
         </CartProvider>
       </body>

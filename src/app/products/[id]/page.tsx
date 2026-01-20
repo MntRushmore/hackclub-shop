@@ -3,7 +3,6 @@
 import React, { useEffect, useState, useContext } from "react";
 import { useParams } from "next/navigation";
 import { CartContext } from "../../../context/CartContext";
-import Navigation from "../../components/Navigation";
 import Image from 'next/image';
 import { ProductDetail, Variant } from '../../../types/Product';
 import { motion } from 'framer-motion';
@@ -68,7 +67,6 @@ const ProductPage = () => {
                 `,
                 backgroundSize: '30px 30px',
             }}>
-                <Navigation />
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
                     <div className="text-center">
                         <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-4 border-hackclub-red"></div>
@@ -88,7 +86,6 @@ const ProductPage = () => {
                 `,
                 backgroundSize: '30px 30px',
             }}>
-                <Navigation />
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
                     <p className="text-center text-hackclub-red text-xl font-bold">{error || 'Product not found'}</p>
                 </div>
@@ -107,7 +104,6 @@ const ProductPage = () => {
                 backgroundSize: '30px 30px',
             }}
         >
-            <Navigation />
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 <div className="grid md:grid-cols-2 gap-12 items-start">
                     <div className="bg-white rounded-2xl p-8 shadow-lg border-2 border-gray-200">

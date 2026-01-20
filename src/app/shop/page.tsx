@@ -1,10 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useContext } from 'react';
-import Navigation from '../components/Navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { CartContext } from '../../context/CartContext';
 
 interface Product {
@@ -134,7 +133,6 @@ const Shop = () => {
                 backgroundSize: '30px 30px',
             }}
         >
-            <Navigation />
             
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 <div className="mb-12">
@@ -157,7 +155,7 @@ const Shop = () => {
                         <motion.div
                             key={product.id}
                             whileHover={{ scale: 1.02 }}
-                            className="group bg-white rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden border-2 border-gray-200 hover:border-hackclub-red"
+                            className="group bg-white rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden border-2 border-gray-200 hover:border-hackclub-red relative"
                         >
                             <div 
                                 className="aspect-square bg-hackclub-smoke relative overflow-hidden"
@@ -175,20 +173,43 @@ const Shop = () => {
                                     draggable={false}
                                 />
                             </div>
-                            <Link href={`/products/${product.id}`} className="block p-5 bg-white">
-                                <h2 className="text-lg font-black text-hackclub-dark mb-2 line-clamp-2 group-hover:text-hackclub-red transition-colors">
-                                    {product.name}
-                                </h2>
-                                <p className="text-2xl font-black text-hackclub-red mb-3">
-                                    ${parseFloat(product.sync_variants[0]?.retail_price || '0').toFixed(2)}
-                                </p>
-                                <div className="text-hackclub-blue font-bold text-sm flex items-center gap-1">
-                                    View Details
-                                    <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                    </svg>
+                            <div className="flex flex-col gap-2 p-5 bg-white">
+                                <Link href={`/products/${product.id}`} className="block">
+                                    <h2 className="text-lg font-black text-hackclub-dark mb-2 line-clamp-2 group-hover:text-hackclub-red transition-colors">
+                                        {product.name}
+                                    </h2>
+                                    <p className="text-2xl font-black text-hackclub-red mb-3">
+                                        ${parseFloat(product.sync_variants[0]?.retail_price || '0').toFixed(2)}
+                                    </p>
+                                </Link>
+                                <div className="flex items-center gap-2">
+                                    <Link href={`/products/${product.id}`} className="text-hackclub-blue font-bold text-sm flex items-center gap-1">
+                                        View Details
+                                        <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                        </svg>
+                                    </Link>
+                                    <button
+                                        className="bg-hackclub-red hover:bg-hackclub-orange text-white font-bold px-4 py-1 rounded-full shadow transition-colors transition-opacity duration-200 text-sm opacity-0 group-hover:opacity-100 focus:opacity-100 ml-auto"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            if (product.sync_variants && product.sync_variants.length > 0 && cartContext) {
+                                                const variant = product.sync_variants[0];
+                                                cartContext.addToCart({
+                                                    name: variant.name,
+                                                    price: variant.retail_price,
+                                                    thumbnail_url: variant.product.image,
+                                                    variant_id: variant.variant_id,
+                                                });
+                                            }
+                                            e.currentTarget.blur();
+                                        }}
+                                    >
+                                        Add to Cart
+                                    </button>
                                 </div>
-                            </Link>
+                            </div>
                         </motion.div>
                     ))}
                 </div>
