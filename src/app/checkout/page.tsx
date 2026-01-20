@@ -17,7 +17,6 @@ const Checkout = () => {
   const router = useRouter();
 
   useEffect(() => {
-    // Retrieve cart items 
     const savedCart = JSON.parse(localStorage.getItem('cart') || '[]') as CartItem[];
     setCart(savedCart);
   }, []);
@@ -25,16 +24,14 @@ const Checkout = () => {
   const handleCheckout = () => {
     setLoading(true);
 
-    // Fake payment process
     setTimeout(() => {
       setLoading(false);
-      alert('Preorder taken! We will contact you soon.'); // Show alert
-      router.push('/thank-you'); // Redirect to thank-you page
+      router.push('/thank-you');
 
       setTimeout(() => {
         router.push('/');
       }, 2000);
-    }, 2000);  // 2 seconds wait
+    }, 2000);
   };
 
   return (

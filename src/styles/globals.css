@@ -1,57 +1,80 @@
-/* globals.css */
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/*  Hack Club Theme */
-:root {
-    --hackclub-dark: #181818;
-    --hackclub-light: #ffffff;
-    --hackclub-blue: #00bfff;
-    /* --hackclub-red: #ff0000; */
-}
-
 @font-face {
-    font-family: 'Phantom Sans';
-    src: url('../../public/fonts/PhantomSans_Bold.woff') format('woff');
-    font-weight: bold;
-    font-style: normal;
+  font-family: 'Phantom Sans';
+  src: url('https://assets.hackclub.com/fonts/Phantom_Sans_0.7/Regular.woff')
+      format('woff'),
+    url('https://assets.hackclub.com/fonts/Phantom_Sans_0.7/Regular.woff2')
+      format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Phantom Sans';
+  src: url('https://assets.hackclub.com/fonts/Phantom_Sans_0.7/Italic.woff')
+      format('woff'),
+    url('https://assets.hackclub.com/fonts/Phantom_Sans_0.7/Italic.woff2')
+      format('woff2');
+  font-weight: normal;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Phantom Sans';
+  src: url('https://assets.hackclub.com/fonts/Phantom_Sans_0.7/Bold.woff')
+      format('woff'),
+    url('https://assets.hackclub.com/fonts/Phantom_Sans_0.7/Bold.woff2')
+      format('woff2');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
 }
 
-/* Global Styles */
+:root {
+    --hackclub-red: #ec3750;
+    --hackclub-orange: #ff8c37;
+    --hackclub-yellow: #f1c40f;
+    --hackclub-green: #33d6a6;
+    --hackclub-cyan: #5bc0de;
+    --hackclub-blue: #338eda;
+    --hackclub-purple: #a633d6;
+    --hackclub-muted: #8492a6;
+    --hackclub-dark: #17171d;
+    --hackclub-darker: #0e0e10;
+    --hackclub-light: #ffffff;
+    --hackclub-smoke: #f9fafc;
+    --hackclub-snow: #ffffff;
+    --hackclub-slate: #3c4858;
+}
+
+* {
+    box-sizing: border-box;
+}
+
 body {
-    font-family: 'Phantom Sans', sans-serif;
-    background-color: var(--hackclub-dark);
-    color: var(--hackclub-light);
+    font-family: 'Phantom Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--hackclub-snow);
+    color: var(--hackclub-slate);
+    margin: 0;
+    padding: 0;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-weight: 800;
+    line-height: 1.25;
+    margin: 0;
 }
 
 a {
-    color: var(--hackclub-blue);
+    color: inherit;
     text-decoration: none;
 }
 
-a:hover {
-    text-decoration: underline;
-}
-
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-    color: inherit;
-}
-
 button {
-    background-color: var(--hackclub-blue);
-    color: var(--hackclub-light);
-    border: none;
-    padding: 10px 15px;
+    font-family: 'Phantom Sans', system-ui, sans-serif;
+    font-weight: 700;
     cursor: pointer;
 }
-
-/* button:hover {
-    background-color: var(--hackclub-red);
-} */

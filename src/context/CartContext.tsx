@@ -8,12 +8,14 @@ interface CartItem {
     price: string;
     thumbnail_url: string;
     variant_id: number | null;
+    quantity: number;
 }
 
 interface CartContextType {
     cart: CartItem[] | null;
-    addToCart: (item: Omit<CartItem, 'id'>) => void;
+    addToCart: (item: Omit<CartItem, 'id' | 'quantity'>) => void;
     removeFromCart: (id: number) => void;
+    updateQuantity: (id: number, quantity: number) => void;
     clearCart: () => void;
     totalPrice: number;
 }
@@ -34,29 +36,57 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }, [cart]);
 
-    const addToCart = (item: Omit<CartItem, 'id'>) => {
-        const uniqueId = Date.now() + Math.floor(Math.random() * 1000);
-        const newItem: CartItem = { id: uniqueId, ...item };
-        setCart((prevCart) => (prevCart ? [...prevCart, newItem] : [newItem]));
+    const addToCart = (item: Omit<CartItem, 'id' | 'quantity'>) => {
+        setCart((prevCart) => {
+            if (!prevCart) return [{ id: Date.now(), ...item, quantity: 1 }];
+            
+            const existingItemIndex = prevCart.findIndex(
+                (cartItem) => cartItem.variant_id === item.variant_id && cartItem.variant_id !== null
+            );
+            
+            if (existingItemIndex !== -1) {
+                const updatedCart = [...prevCart];
+                updatedCart[existingItemIndex] = {
+                    ...updatedCart[existingItemIndex],
+                    quantity: updatedCart[existingItemIndex].quantity + 1
+                };
+                return updatedCart;
+            } else {
+                const uniqueId = Date.now() + Math.floor(Math.random() * 1000);
+                return [...prevCart, { id: uniqueId, ...item, quantity: 1 }];
+            }
+        });
     };
 
     const removeFromCart = (id: number) => {
         setCart((prevCart) => prevCart ? prevCart.filter((item) => item.id !== id) : []);
     };
 
+    const updateQuantity = (id: number, quantity: number) => {
+        if (quantity <= 0) {
+            removeFromCart(id);
+            return;
+        }
+        setCart((prevCart) => {
+            if (!prevCart) return [];
+            return prevCart.map((item) => 
+                item.id === id ? { ...item, quantity } : item
+            );
+        });
+    };
+
     const clearCart = () => {
         setCart([]);
     };
 
-    const totalPrice = cart ? cart.reduce((total, item) => total + parseFloat(item.price), 0) : 0;
+    const totalPrice = cart ? cart.reduce((total, item) => total + (parseFloat(item.price) * item.quantity), 0) : 0;
 
     if (cart === null) {
-        // Return null or a loading indicator until cart is loaded
         return null;
     }
 
     return (
-        <CartContext.Provider value={{ cart, addToCart, removeFromCart, clearCart, totalPrice }}>
+        <CartContext.Provider value={{ cart, addToCart, removeFromCart, updateQuantity, clearCart, totalPrice }}>
             {children}
         </CartContext.Provider>
     );

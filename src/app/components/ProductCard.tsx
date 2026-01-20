@@ -39,7 +39,6 @@ const ProductCard: React.FC<ProductCardProps> = ({
                 variant_id: selectedVariant.variant_id,
             };
             addToCart(cartItem);
-            alert('Product added to cart!');
         }
     };
 
@@ -63,7 +62,6 @@ const ProductCard: React.FC<ProductCardProps> = ({
                 </Link>
             </div>
 
-            {/* Product info */}
             < h3 className="text-xl font-semibold mt-4 text-hackclub-text text-center" >
                 {product.name}
             </h3 >

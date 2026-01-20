@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useContext } from 'react';
-import Navigation from '../components/Navigation';
 import { CartContext } from '../../context/CartContext';
 import { useRouter } from 'next/navigation';
 
@@ -16,13 +15,11 @@ const CartPage = () => {
     const { cart, removeFromCart, clearCart, totalPrice } = cartContext;
 
     const handleCheckout = () => {
-        // Implement checkout logic
         router.push('/checkout');
     };
 
     return (
         <div className="bg-hackclub-dark min-h-screen">
-            <Navigation />
             <div className="container mx-auto p-6">
                 <h1 className="text-3xl font-bold mb-6">Your Cart</h1>
                 {cart.length > 0 ? (
@@ -36,7 +33,7 @@ const CartPage = () => {
                                     </div>
                                     <button
                                         className="text-white bg-red-600 rounded"
-                                        onClick={() => removeFromCart(item.id)} // Use the unique id
+                                        onClick={() => removeFromCart(item.id)}
                                     >
                                         Remove
                                     </button>

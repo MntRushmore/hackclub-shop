@@ -6,6 +6,7 @@ import { CartContext } from "../../../context/CartContext";
 import Navigation from "../../components/Navigation";
 import Image from 'next/image';
 import { ProductDetail, Variant } from '../../../types/Product';
+import { motion } from 'framer-motion';
 
 
 const ProductPage = () => {
@@ -55,16 +56,24 @@ const ProductPage = () => {
             };
 
             addToCart(cartItem);
-            alert('Product added to cart!');
         }
     };
 
     if (loading) {
         return (
-            <div className="bg-hackclub-dark min-h-screen">
+            <div className="min-h-screen bg-white" style={{
+                backgroundImage: `
+                  linear-gradient(to right, #e0f2fe 1px, transparent 1px),
+                  linear-gradient(to bottom, #e0f2fe 1px, transparent 1px)
+                `,
+                backgroundSize: '30px 30px',
+            }}>
                 <Navigation />
-                <div className="container mx-auto p-6">
-                    <p className="text-center text-gray-500">Loading product...</p>
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+                    <div className="text-center">
+                        <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-4 border-hackclub-red"></div>
+                        <p className="mt-4 text-hackclub-muted font-bold">Loading product...</p>
+                    </div>
                 </div>
             </div>
         );
@@ -72,37 +81,57 @@ const ProductPage = () => {
 
     if (error || !product) {
         return (
-            <div className="bg-hackclub-dark min-h-screen">
+            <div className="min-h-screen bg-white" style={{
+                backgroundImage: `
+                  linear-gradient(to right, #e0f2fe 1px, transparent 1px),
+                  linear-gradient(to bottom, #e0f2fe 1px, transparent 1px)
+                `,
+                backgroundSize: '30px 30px',
+            }}>
                 <Navigation />
-                <div className="container mx-auto p-6">
-                    <p className="text-center text-red-500">{error || 'Product not found'}</p>
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+                    <p className="text-center text-hackclub-red text-xl font-bold">{error || 'Product not found'}</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="bg-hackclub-dark min-h-screen">
+        <div 
+            className="min-h-screen bg-white" 
+            style={{
+                backgroundImage: `
+                  linear-gradient(to right, #e0f2fe 1px, transparent 1px),
+                  linear-gradient(to bottom, #e0f2fe 1px, transparent 1px)
+                `,
+                backgroundSize: '30px 30px',
+            }}
+        >
             <Navigation />
-            <div className="container mx-auto p-6">
-                <div className="flex flex-col md:flex-row items-center md:items-start">
-                    <Image
-                        src={selectedVariant?.product.image || product.thumbnail_url}
-                        alt={product.name}
-                        width={500}
-                        height={500}
-                        className="w-full md:w-1/2 h-auto object-contain mb-6 md:mb-0"
-                    />
-                    <div className="md:ml-6 w-full md:w-1/2">
-                        <h1 className="text-3xl font-bold mb-4">{product.name}</h1>
-                        <p className="text-xl text-white mb-4">
-                            Price: ${parseFloat(selectedVariant?.retail_price || '0.00').toFixed(2)}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+                <div className="grid md:grid-cols-2 gap-12 items-start">
+                    <div className="bg-white rounded-2xl p-8 shadow-lg border-2 border-gray-200">
+                        <Image
+                            src={selectedVariant?.product.image || product.thumbnail_url}
+                            alt={product.name}
+                            width={600}
+                            height={600}
+                            className="w-full h-auto object-contain"
+                        />
+                    </div>
+
+                    <div className="bg-white rounded-2xl p-8 shadow-lg border-2 border-gray-200">
+                        <h1 className="text-4xl sm:text-5xl font-black text-hackclub-dark mb-4">
+                            {product.name}
+                        </h1>
+                        
+                        <p className="text-4xl font-black text-hackclub-red mb-8">
+                            ${parseFloat(selectedVariant?.retail_price || '0.00').toFixed(2)}
                         </p>
 
-                        {/* Variant Selection */}
                         {variants.length > 0 && (
-                            <div className="mb-4">
-                                <label htmlFor="variant" className="block text-lg font-medium mb-2">
+                            <div className="mb-8">
+                                <label htmlFor="variant" className="block text-lg font-bold text-hackclub-dark mb-3">
                                     Select Variant:
                                 </label>
                                 <select
@@ -112,23 +141,25 @@ const ProductPage = () => {
                                         const variant = variants.find(v => v.variant_id === parseInt(e.target.value));
                                         setSelectedVariant(variant || null);
                                     }}
-                                    className="border border-gray-600 rounded p-2 w-full bg-hackclub-dark text-white"
+                                    className="border-2 border-gray-300 rounded-xl p-3 w-full bg-white text-hackclub-dark font-bold focus:outline-none focus:border-hackclub-red transition-colors"
                                 >
                                     {variants.map((variant) => (
                                         <option key={variant.variant_id} value={variant.variant_id}>
-                                            {variant.name} - {variant.size} / {variant.color}
+                                            {variant.size} / {variant.color}
                                         </option>
                                     ))}
                                 </select>
                             </div>
                         )}
 
-                        <button
-                            className="bg-[#338eda] text-white py-2 px-4 rounded-full hover:bg-[#2a6bb8] transition-colors"
+                        <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            className="w-full bg-hackclub-red hover:bg-hackclub-orange text-white font-black text-lg py-4 rounded-full transition-all shadow-lg hover:shadow-xl"
                             onClick={handleAddToCart}
                         >
                             Add to Cart
-                        </button>
+                        </motion.button>
                     </div>
                 </div>
             </div>
