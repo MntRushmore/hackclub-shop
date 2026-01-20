@@ -13,7 +13,7 @@ export const authOptions: NextAuthOptions = {
             wellKnown: 'https://auth.hackclub.com/.well-known/openid-configuration',
             authorization: {
                 params: {
-                    scope: 'openid profile',
+                    scope: 'openid profile email name slack_id',
                 },
             },
             client: {
