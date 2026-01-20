@@ -61,16 +61,13 @@ const CartModal: React.FC<CartModalProps> = ({ isOpen, onClose }) => {
             <div className="flex-1 overflow-y-auto p-6">
               <AnimatePresence initial={false}>
                 {cart.length > 0 ? (
-                  cart.map((item, index) => (
+                  cart.map((item) => (
                     <motion.div
                       key={item.id}
                       initial={{ opacity: 0, scale: 0.8 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.8, x: 100 }}
-                      transition={{ 
-                        duration: 0.2,
-                        exit: { delay: (cart.length - 1 - index) * 0.05 }
-                      }}
+                      transition={{ duration: 0.2 }}
                       className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 hover:shadow-md transition-shadow mb-4"
                     >
                       <div className="flex gap-4">

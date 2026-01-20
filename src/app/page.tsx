@@ -3,7 +3,6 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { motion } from 'framer-motion';
 
 interface DraggableSticker {
   id: string;
@@ -190,7 +189,7 @@ const MainPage = () => {
             </h1>
             
             <p className="text-xl sm:text-2xl text-hackclub-slate mb-10 max-w-2xl mx-auto font-bold">
-              Stickers, shirts, and other cool stuff. All proceeds support HC's {" "}
+              Stickers, shirts, and other cool stuff. All proceeds support HC&apos;s {" "}
               <span className="text-hackclub-red font-black">YSWS</span>, {" "}
               <span className="text-hackclub-red font-black">Hackathons</span>{" "}
               and other projects.

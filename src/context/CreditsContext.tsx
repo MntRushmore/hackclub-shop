@@ -1,81 +1,134 @@
 'use client';
 
 import React, { createContext, useState, useEffect, useCallback } from 'react';
+import { useSession } from 'next-auth/react';
 import { CreditTransaction, CreditsContextType } from '../types/Credits';
 
 export const CreditsContext = createContext<CreditsContextType | undefined>(undefined);
 
 export const CreditsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const { data: session, status } = useSession();
     const [balance, setBalance] = useState<number>(0);
     const [transactions, setTransactions] = useState<CreditTransaction[]>([]);
     const [isInitialized, setIsInitialized] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+
+    // Fetch credits from API when user is authenticated
+    const fetchCredits = useCallback(async () => {
+        if (status !== 'authenticated' || !session?.user) return;
+
+        setIsLoading(true);
+        try {
+            const response = await fetch('/api/credits/user');
+            if (response.ok) {
+                const data = await response.json();
+                setBalance(data.balance || 0);
+                const transactionsWithDates = (data.transactions || []).map((t: CreditTransaction) => ({
+                    ...t,
+                    timestamp: new Date(t.timestamp)
+                }));
+                setTransactions(transactionsWithDates);
+            }
+        } catch (error) {
+            console.error('Failed to fetch credits:', error);
+        } finally {
+            setIsLoading(false);
+            setIsInitialized(true);
+        }
+    }, [session?.user, status]);
+
+    // Initialize - fetch from API if authenticated, otherwise mark as initialized
     useEffect(() => {
-        const savedBalance = localStorage.getItem('credits_balance');
-        const savedTransactions = localStorage.getItem('credits_transactions');
+        if (status === 'loading') return;
 
-        if (savedBalance) {
-            setBalance(parseFloat(savedBalance));
+        if (status === 'authenticated') {
+            fetchCredits();
+        } else {
+            // Not authenticated - reset to 0 and mark initialized
+            setBalance(0);
+            setTransactions([]);
+            setIsInitialized(true);
         }
-        if (savedTransactions) {
-            const parsed = JSON.parse(savedTransactions);
-            const withDates = parsed.map((t: CreditTransaction) => ({
-                ...t,
-                timestamp: new Date(t.timestamp)
-            }));
-            setTransactions(withDates);
+    }, [status, fetchCredits]);
+
+    const addCredits = useCallback(async (amount: number, description?: string) => {
+        if (status !== 'authenticated') {
+            console.warn('Must be authenticated to add credits');
+            return;
         }
-        setIsInitialized(true);
-    }, []);
 
-    useEffect(() => {
-        if (isInitialized) {
-            localStorage.setItem('credits_balance', balance.toString());
-            localStorage.setItem('credits_transactions', JSON.stringify(transactions));
+        try {
+            const response = await fetch('/api/credits/user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ amount, description }),
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                setBalance(data.balance);
+                setTransactions(prev => [{
+                    ...data.transaction,
+                    timestamp: new Date(data.transaction.timestamp)
+                }, ...prev]);
+            }
+        } catch (error) {
+            console.error('Failed to add credits:', error);
         }
-    }, [balance, transactions, isInitialized]);
+    }, [status]);
 
-    const addCredits = useCallback((amount: number, description?: string) => {
-        const transaction: CreditTransaction = {
-            id: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            amount,
-            type: 'deposit',
-            description: description || 'Added credits via HCB',
-            timestamp: new Date(),
-        };
+    const useCredits = useCallback(async (amount: number, orderId?: string): Promise<boolean> => {
+        if (status !== 'authenticated') {
+            console.warn('Must be authenticated to use credits');
+            return false;
+        }
 
-        setBalance(prev => prev + amount);
-        setTransactions(prev => [transaction, ...prev]);
-    }, []);
-
-    const useCredits = useCallback((amount: number, orderId?: string): boolean => {
         if (amount > balance) {
             return false;
         }
 
-        const transaction: CreditTransaction = {
-            id: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            amount: -amount,
-            type: 'purchase',
-            description: 'Purchase at Hack Club Shop',
-            timestamp: new Date(),
-            orderId,
-        };
+        try {
+            const response = await fetch('/api/credits/user', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ amount, orderId }),
+            });
 
-        setBalance(prev => prev - amount);
-        setTransactions(prev => [transaction, ...prev]);
-        return true;
-    }, [balance]);
+            if (response.ok) {
+                const data = await response.json();
+                setBalance(data.balance);
+                setTransactions(prev => [{
+                    ...data.transaction,
+                    timestamp: new Date(data.transaction.timestamp)
+                }, ...prev]);
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('Failed to use credits:', error);
+            return false;
+        }
+    }, [status, balance]);
 
     const canAfford = useCallback((amount: number): boolean => {
         return balance >= amount;
     }, [balance]);
 
-    if (!isInitialized) {
-        return null;
+    const refreshCredits = useCallback(async () => {
+        await fetchCredits();
+    }, [fetchCredits]);
+
+    // Show loading state
+    if (status === 'loading' || (status === 'authenticated' && !isInitialized)) {
+        return (
+            <CreditsContext.Provider value={{ balance: 0, transactions: [], addCredits, useCredits, canAfford, refreshCredits }}>
+                {children}
+            </CreditsContext.Provider>
+        );
     }
 
     return (
-        <CreditsContext.Provider value={{ balance, transactions, addCredits, useCredits, canAfford }}>
+        <CreditsContext.Provider value={{ balance, transactions, addCredits, useCredits, canAfford, refreshCredits, isLoading }}>
             {children}
         </CreditsContext.Provider>
     );

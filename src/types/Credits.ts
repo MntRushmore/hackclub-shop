@@ -15,7 +15,9 @@ export interface CreditsState {
 export interface CreditsContextType {
     balance: number;
     transactions: CreditTransaction[];
-    addCredits: (amount: number, description?: string) => void;
-    useCredits: (amount: number, orderId?: string) => boolean;
+    addCredits: (amount: number, description?: string) => void | Promise<void>;
+    useCredits: (amount: number, orderId?: string) => boolean | Promise<boolean>;
     canAfford: (amount: number) => boolean;
+    refreshCredits: () => Promise<void>;
+    isLoading?: boolean;
 }

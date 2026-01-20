@@ -1,5 +1,6 @@
 import { CartProvider } from '../context/CartContext';
 import { CreditsProvider } from '../context/CreditsContext';
+import AuthProvider from '../context/AuthProvider';
 import '../styles/globals.css';
 import Navigation from './components/Navigation';
 import type { Metadata } from "next";
@@ -20,12 +21,14 @@ export default function RootLayout({
         <link rel="stylesheet" href="https://assets.hackclub.com/fonts/phantom-sans.css" />
       </head>
       <body className="antialiased">
-        <CreditsProvider>
-          <CartProvider>
-            <Navigation />
-            {children}
-          </CartProvider>
-        </CreditsProvider>
+        <AuthProvider>
+          <CreditsProvider>
+            <CartProvider>
+              <Navigation />
+              {children}
+            </CartProvider>
+          </CreditsProvider>
+        </AuthProvider>
       </body>
     </html>
   );

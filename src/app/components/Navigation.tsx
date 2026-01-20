@@ -7,16 +7,19 @@ import { CreditsContext } from '../../context/CreditsContext';
 import Image from 'next/image';
 import CartModal from './CartModal';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSession, signIn, signOut } from 'next-auth/react';
 
 const Navigation = () => {
   const cartContext = useContext(CartContext);
   const creditsContext = useContext(CreditsContext);
+  const { data: session, status } = useSession();
   const [isClient, setIsClient] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [prevPrice, setPrevPrice] = useState(0);
+  const [, setPrevPrice] = useState(0);
   const [prevItemCount, setPrevItemCount] = useState(0);
   const [shouldAnimateCart, setShouldAnimateCart] = useState(false);
   const [isInitialMount, setIsInitialMount] = useState(true);
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -42,7 +45,7 @@ const Navigation = () => {
         setPrevItemCount(currentCount);
       }
     }
-  }, [cartContext?.cart, isClient, isInitialMount, prevItemCount]);
+  }, [cartContext, isClient, isInitialMount, prevItemCount]);
 
   if (!cartContext || cartContext.cart === null) {
     return null;
@@ -120,6 +123,60 @@ const Navigation = () => {
               </Link>
             </div>
 
+            <div className="flex items-center gap-4">
+              {status === 'loading' ? (
+                <div className="w-8 h-8 rounded-full bg-gray-200 animate-pulse" />
+              ) : session ? (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowUserMenu(!showUserMenu)}
+                    className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                  >
+                    {session.user?.image ? (
+                      <Image
+                        src={session.user.image}
+                        alt={session.user.name || 'User'}
+                        width={32}
+                        height={32}
+                        className="rounded-full border-2 border-hackclub-red"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-hackclub-red flex items-center justify-center text-white font-bold text-sm">
+                        {session.user?.name?.charAt(0) || '?'}
+                      </div>
+                    )}
+                    <span className="hidden sm:inline text-hackclub-slate font-bold">
+                      {session.user?.name?.split(' ')[0]}
+                    </span>
+                  </button>
+
+                  {showUserMenu && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                      <div className="px-4 py-2 border-b border-gray-100">
+                        <p className="font-bold text-hackclub-dark truncate">{session.user?.name}</p>
+                        <p className="text-sm text-hackclub-slate truncate">{session.user?.email}</p>
+                      </div>
+                      <button
+                        onClick={() => signOut()}
+                        className="w-full text-left px-4 py-2 text-hackclub-red hover:bg-gray-50 font-bold transition-colors"
+                      >
+                        Sign Out
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <button
+                  onClick={() => signIn('hackclub')}
+                  className="flex items-center gap-2 text-hackclub-slate hover:text-hackclub-red font-bold transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <span className="hidden sm:inline">Sign In</span>
+                </button>
+              )}
+
             <motion.button
               data-cart-button
               onClick={() => setIsCartOpen(true)}
@@ -160,6 +217,7 @@ const Navigation = () => {
               )}
               <span className="hidden md:inline">· $<AnimatedPrice value={totalPrice} shouldAnimate={shouldAnimateCart} /></span>
             </motion.button>
+            </div>
           </div>
         </div>
       </nav>

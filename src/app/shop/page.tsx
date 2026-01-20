@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { CartContext } from '../../context/CartContext';
 
 interface Product {
@@ -24,6 +24,7 @@ const Shop = () => {
     const [error, setError] = useState<string | null>(null);
     const [draggingProduct, setDraggingProduct] = useState<Product | null>(null);
     const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
     const [isReleasing, setIsReleasing] = useState(false);
     const [releaseOnCart, setReleaseOnCart] = useState(false);
@@ -151,7 +152,7 @@ const Shop = () => {
                 )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {products.map((product, index) => (
+                    {products.map((product) => (
                         <motion.div
                             key={product.id}
                             whileHover={{ scale: 1.02 }}

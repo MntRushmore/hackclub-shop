@@ -12,9 +12,11 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mui/material": "^6.1.10",
+    "@upstash/redis": "^1.36.1",
     "autoprefixer": "^10.4.20",
     "framer-motion": "^12.27.5",
     "next": "^13.4.0",
+    "next-auth": "^4.24.13",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-icons": "^5.4.0"

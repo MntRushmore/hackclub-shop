@@ -1,16 +1,96 @@
 'use client';
 
-import { useContext, useState } from 'react';
+import { useContext, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSession, signIn } from 'next-auth/react';
 import { CreditsContext } from '../../context/CreditsContext';
 
+const HCB_DONATE_URL = 'https://hcb.hackclub.com/donations/start/ysws-combinator';
+
+// Generate a unique claim code
+const generateClaimCode = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed confusing chars like 0/O, 1/I
+    let code = 'HC-';
+    for (let i = 0; i < 6; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+};
+
 const CreditsPage = () => {
+    const { data: session, status } = useSession();
     const creditsContext = useContext(CreditsContext);
     const [showAddCredits, setShowAddCredits] = useState(false);
+    const [claimCode, setClaimCode] = useState('');
+    const [verifying, setVerifying] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState<{ amount: number } | null>(null);
+
+    useEffect(() => {
+        // Generate or retrieve claim code from localStorage
+        const savedCode = localStorage.getItem('hcb_claim_code');
+        if (savedCode) {
+            setClaimCode(savedCode);
+        } else {
+            const newCode = generateClaimCode();
+            localStorage.setItem('hcb_claim_code', newCode);
+            setClaimCode(newCode);
+        }
+    }, []);
 
     if (!creditsContext) return null;
 
-    const { balance, transactions, addCredits } = creditsContext;
+    // Show loading state
+    if (status === 'loading') {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-white"
+                style={{
+                    backgroundImage: `
+                      linear-gradient(to right, #e0f2fe 1px, transparent 1px),
+                      linear-gradient(to bottom, #e0f2fe 1px, transparent 1px)
+                    `,
+                    backgroundSize: '30px 30px',
+                }}
+            >
+                <div className="animate-pulse text-hackclub-slate font-bold">Loading...</div>
+            </div>
+        );
+    }
+
+    // Require authentication
+    if (!session) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-white"
+                style={{
+                    backgroundImage: `
+                      linear-gradient(to right, #e0f2fe 1px, transparent 1px),
+                      linear-gradient(to bottom, #e0f2fe 1px, transparent 1px)
+                    `,
+                    backgroundSize: '30px 30px',
+                }}
+            >
+                <div className="bg-white rounded-2xl shadow-xl border-2 border-gray-200 p-8 max-w-md w-full mx-4 text-center">
+                    <div className="w-16 h-16 bg-hackclub-red/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-8 h-8 text-hackclub-red" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                    </div>
+                    <h2 className="text-2xl font-black text-hackclub-dark mb-2">Sign In Required</h2>
+                    <p className="text-hackclub-slate mb-6">
+                        You need to sign in with your Hack Club account to view and manage your credits.
+                    </p>
+                    <button
+                        onClick={() => signIn('hackclub')}
+                        className="w-full bg-hackclub-red hover:bg-hackclub-orange text-white font-black py-3 px-6 rounded-full transition-colors"
+                    >
+                        Sign In with Hack Club
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    const { balance, transactions, refreshCredits } = creditsContext;
 
     const formatDate = (date: Date) => {
         return new Date(date).toLocaleDateString('en-US', {
@@ -22,9 +102,41 @@ const CreditsPage = () => {
         });
     };
 
-    const handleSimulateHCBPayment = (amount: number) => {
-        addCredits(amount, `HCB Payment - $${amount.toFixed(2)}`);
-        setShowAddCredits(false);
+    const handleGenerateNewCode = () => {
+        const newCode = generateClaimCode();
+        localStorage.setItem('hcb_claim_code', newCode);
+        setClaimCode(newCode);
+        setError(null);
+        setSuccess(null);
+    };
+
+    const handleVerifyPayment = async () => {
+        setVerifying(true);
+        setError(null);
+        setSuccess(null);
+
+        try {
+            const response = await fetch(`/api/credits/hcb?code=${encodeURIComponent(claimCode)}`);
+            const data = await response.json();
+
+            if (response.ok && data.result) {
+                // Refresh credits from server (HCB route already added them)
+                await refreshCredits();
+                setSuccess({ amount: data.result.amount });
+                // Generate new code for next time
+                handleGenerateNewCode();
+            } else {
+                setError(data.error || 'Failed to verify donation');
+            }
+        } catch {
+            setError('Failed to connect to server');
+        } finally {
+            setVerifying(false);
+        }
+    };
+
+    const copyToClipboard = () => {
+        navigator.clipboard.writeText(claimCode);
     };
 
     return (
@@ -89,53 +201,149 @@ const CreditsPage = () => {
                                     animate={{ opacity: 1 }}
                                     exit={{ opacity: 0 }}
                                     className="fixed inset-0 bg-black/50 z-[10001]"
-                                    onClick={() => setShowAddCredits(false)}
+                                    onClick={() => {
+                                        setShowAddCredits(false);
+                                        setError(null);
+                                        setSuccess(null);
+                                    }}
                                 />
                                 <motion.div
                                     initial={{ opacity: 0, scale: 0.9, y: 20 }}
                                     animate={{ opacity: 1, scale: 1, y: 0 }}
                                     exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                                    className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-2xl p-6 shadow-2xl z-[10002] w-full max-w-sm mx-4"
+                                    className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-2xl p-6 shadow-2xl z-[10002] w-full max-w-md mx-4"
                                 >
-                                    <h2 className="text-2xl font-black text-hackclub-dark mb-1">Add Credits</h2>
+                                    <h2 className="text-2xl font-black text-hackclub-dark mb-1">Add Credits via HCB</h2>
                                     <p className="text-hackclub-slate text-sm mb-5">
-                                        Pay via HCB to add credits to your account
+                                        Donate to our HCB organization and claim your credits
                                     </p>
 
-                                    <div className="bg-hackclub-smoke rounded-xl p-4 mb-5">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-9 h-9 bg-hackclub-red rounded-lg flex items-center justify-center flex-shrink-0">
-                                                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                    {/* Success Message */}
+                                    <AnimatePresence>
+                                        {success && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: -10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: -10 }}
+                                                className="mb-5 p-4 bg-hackclub-green/10 border-2 border-hackclub-green rounded-xl"
+                                            >
+                                                <p className="text-hackclub-green font-bold">
+                                                    Successfully added ${success.amount.toFixed(2)} credits!
+                                                </p>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+
+                                    {/* Step 1: Your Code */}
+                                    <div className="mb-5">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="w-6 h-6 bg-hackclub-red text-white rounded-full flex items-center justify-center text-sm font-black">1</span>
+                                            <p className="font-bold text-hackclub-dark">Your Claim Code</p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex-1 bg-hackclub-smoke rounded-xl px-4 py-3 font-mono text-lg font-bold text-hackclub-dark tracking-wider">
+                                                {claimCode}
+                                            </div>
+                                            <motion.button
+                                                whileHover={{ scale: 1.05 }}
+                                                whileTap={{ scale: 0.95 }}
+                                                onClick={copyToClipboard}
+                                                className="p-3 bg-hackclub-smoke hover:bg-hackclub-dark hover:text-white rounded-xl transition-colors"
+                                                title="Copy code"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                                                 </svg>
-                                            </div>
-                                            <div>
-                                                <p className="font-bold text-hackclub-dark text-sm">HCB Integration</p>
-                                                <p className="text-xs text-hackclub-muted">Coming soon</p>
-                                            </div>
+                                            </motion.button>
+                                            <motion.button
+                                                whileHover={{ scale: 1.05 }}
+                                                whileTap={{ scale: 0.95 }}
+                                                onClick={handleGenerateNewCode}
+                                                className="p-3 bg-hackclub-smoke hover:bg-hackclub-dark hover:text-white rounded-xl transition-colors"
+                                                title="Generate new code"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                </svg>
+                                            </motion.button>
                                         </div>
                                     </div>
 
-                                    <p className="text-xs text-hackclub-muted font-bold uppercase tracking-wide mb-2">Quick add (for testing)</p>
-                                    <div className="grid grid-cols-3 gap-2 mb-5">
-                                        {[10, 25, 50].map((amount) => (
-                                            <motion.button
-                                                key={amount}
-                                                whileHover={{ scale: 1.03 }}
-                                                whileTap={{ scale: 0.97 }}
-                                                onClick={() => handleSimulateHCBPayment(amount)}
-                                                className="bg-hackclub-smoke hover:bg-hackclub-red hover:text-white text-hackclub-dark font-black py-3 rounded-xl transition-all text-lg"
-                                            >
-                                                ${amount}
-                                            </motion.button>
-                                        ))}
+                                    {/* Step 2: Donate */}
+                                    <div className="mb-5">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="w-6 h-6 bg-hackclub-red text-white rounded-full flex items-center justify-center text-sm font-black">2</span>
+                                            <p className="font-bold text-hackclub-dark">Donate on HCB</p>
+                                        </div>
+                                        <p className="text-hackclub-slate text-sm mb-3">
+                                            Include your claim code <span className="font-mono font-bold text-hackclub-red">{claimCode}</span> in the donation memo/message.
+                                        </p>
+                                        <motion.a
+                                            href={HCB_DONATE_URL}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            whileHover={{ scale: 1.02 }}
+                                            whileTap={{ scale: 0.98 }}
+                                            className="block w-full bg-hackclub-blue hover:bg-hackclub-cyan text-white font-bold py-3 rounded-xl text-center transition-colors"
+                                        >
+                                            Open HCB Donation Page →
+                                        </motion.a>
+                                    </div>
+
+                                    {/* Step 3: Claim */}
+                                    <div className="mb-5">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="w-6 h-6 bg-hackclub-red text-white rounded-full flex items-center justify-center text-sm font-black">3</span>
+                                            <p className="font-bold text-hackclub-dark">Claim Your Credits</p>
+                                        </div>
+                                        <p className="text-hackclub-slate text-sm mb-3">
+                                            After donating, click below to verify and add credits to your account.
+                                        </p>
+
+                                        {/* Error Message */}
+                                        <AnimatePresence>
+                                            {error && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, y: -10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    exit={{ opacity: 0, y: -10 }}
+                                                    className="mb-3 p-3 bg-hackclub-red/10 border-2 border-hackclub-red rounded-xl"
+                                                >
+                                                    <p className="text-hackclub-red text-sm font-medium">{error}</p>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+
+                                        <motion.button
+                                            whileHover={{ scale: 1.02 }}
+                                            whileTap={{ scale: 0.98 }}
+                                            onClick={handleVerifyPayment}
+                                            disabled={verifying}
+                                            className="w-full bg-hackclub-green hover:bg-hackclub-cyan text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {verifying ? (
+                                                <span className="flex items-center justify-center gap-2">
+                                                    <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                    </svg>
+                                                    Verifying...
+                                                </span>
+                                            ) : (
+                                                "I've Donated - Claim Credits"
+                                            )}
+                                        </motion.button>
                                     </div>
 
                                     <motion.button
                                         whileHover={{ scale: 1.02 }}
                                         whileTap={{ scale: 0.98 }}
-                                        onClick={() => setShowAddCredits(false)}
-                                        className="w-full bg-hackclub-dark hover:bg-hackclub-slate text-white font-bold py-3 rounded-full transition-colors"
+                                        onClick={() => {
+                                            setShowAddCredits(false);
+                                            setError(null);
+                                            setSuccess(null);
+                                        }}
+                                        className="w-full bg-hackclub-smoke hover:bg-hackclub-dark hover:text-white text-hackclub-dark font-bold py-3 rounded-full transition-colors"
                                     >
                                         Close
                                     </motion.button>
