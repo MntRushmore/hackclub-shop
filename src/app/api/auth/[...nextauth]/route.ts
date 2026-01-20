@@ -13,7 +13,7 @@ export const authOptions: NextAuthOptions = {
             wellKnown: 'https://auth.hackclub.com/.well-known/openid-configuration',
             authorization: {
                 params: {
-                    scope: 'openid profile email slack_id',
+                    scope: 'openid profile email name slack_id',
                 },
             },
             client: {
@@ -23,13 +23,9 @@ export const authOptions: NextAuthOptions = {
             clientSecret: process.env.HACKCLUB_CLIENT_SECRET,
             idToken: true,
             checks: ['pkce', 'state'],
-            profile(profile) {
+            profile(profile: any) {
                 return {
                     id: profile.sub,
-                    name: profile.name || profile.preferred_username,
-                    email: profile.email,
-                    image: profile.picture,
-                    slackId: profile.slack_id,
                 };
             },
         },
@@ -39,14 +35,36 @@ export const authOptions: NextAuthOptions = {
             if (account && profile) {
                 token.accessToken = account.access_token;
                 token.id = profile.sub;
-                token.slackId = (profile as { slack_id?: string }).slack_id;
+                
+                if (account.access_token) {
+                    try {
+                        const meResponse = await fetch('https://auth.hackclub.com/api/v1/me', {
+                            headers: {
+                                'Authorization': `Bearer ${account.access_token}`,
+                            },
+                        });
+                        const meData = await meResponse.json();
+                        if (meData.identity) {
+                            token.name = `${meData.identity.first_name} ${meData.identity.last_name}`;
+                            token.email = meData.identity.primary_email;
+                            token.slackId = meData.identity.slack_id;
+                        }
+                    } catch (error) {
+                        console.error('Failed to fetch user info in JWT callback:', error);
+                    }
+                }
+                
+                token.image = (profile as any).picture || (profile as any).image;
             }
             return token;
         },
         async session({ session, token }) {
             if (session.user) {
+                session.user.name = token.name as string;
+                session.user.email = token.email as string;
                 (session.user as { id?: string }).id = token.id as string;
                 (session.user as { slackId?: string }).slackId = token.slackId as string;
+                (session.user as { image?: string }).image = (token.image || token.picture) as string;
             }
             return session;
         },
