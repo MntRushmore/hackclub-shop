@@ -438,7 +438,11 @@ const CreditsPage = () => {
                                     whileTap={{ scale: 0.98 }}
                                     onClick={handleVerifyPayment}
                                     disabled={verifying || codeLoading || !claimCode}
-                                    className="w-full bg-hackclub-green hover:bg-hackclub-cyan text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    style={{
+                                        backgroundColor: '#33d6a6',
+                                        color: '#ffffff',
+                                    }}
+                                    className="w-full font-bold py-3 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
                                 >
                                     {verifying ? (
                                         <span className="flex items-center justify-center gap-2">
