@@ -17,9 +17,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <head>
-        <link rel="stylesheet" href="https://assets.hackclub.com/fonts/phantom-sans.css" />
-      </head>
+      <head />
       <body className="antialiased">
         <AuthProvider>
           <CreditsProvider>

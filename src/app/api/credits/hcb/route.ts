@@ -15,7 +15,8 @@ const redis = new Redis({
 
 interface HCBDonation {
     id: string;
-    memo: string | null;
+    memo?: string | null;
+    message?: string | null;
     amount_cents: number;
     status: string;
     date: string;
@@ -85,10 +86,11 @@ export async function GET(request: Request) {
 
         const donations: HCBDonation[] = await response.json();
 
-        // Find donation with matching memo (case-insensitive)
+        // Find donation with matching memo/message (case-insensitive)
         const matchingDonation = donations.find(donation => {
-            if (!donation.memo) return false;
-            const memoLower = donation.memo.toLowerCase();
+            const memoText = donation.memo ?? donation.message;
+            if (!memoText) return false;
+            const memoLower = memoText.toLowerCase();
             const codeLower = normalizedCode.toLowerCase();
             return memoLower.includes(codeLower);
         });
