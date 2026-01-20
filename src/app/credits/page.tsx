@@ -359,7 +359,7 @@ const CreditsPage = () => {
                                 <div className="flex gap-2">
                                     <input
                                         type="text"
-                                        value={claimCode}
+                                        value={codeLoading ? 'Loading...' : claimCode}
                                         readOnly
                                         className="flex-1 bg-hackclub-smoke border-2 border-gray-200 rounded-xl px-4 py-3 font-mono font-bold text-hackclub-dark"
                                     />
@@ -367,7 +367,8 @@ const CreditsPage = () => {
                                         whileHover={{ scale: 1.05 }}
                                         whileTap={{ scale: 0.95 }}
                                         onClick={copyToClipboard}
-                                        className="p-3 bg-hackclub-smoke hover:bg-hackclub-dark hover:text-white rounded-xl transition-colors border-2 border-gray-200 hover:border-hackclub-dark"
+                                        disabled={codeLoading || !claimCode}
+                                        className="p-3 bg-hackclub-smoke hover:bg-hackclub-dark hover:text-white rounded-xl transition-colors border-2 border-gray-200 hover:border-hackclub-dark disabled:opacity-50 disabled:cursor-not-allowed"
                                         title="Copy code"
                                     >
                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -378,7 +379,8 @@ const CreditsPage = () => {
                                         whileHover={{ scale: 1.05 }}
                                         whileTap={{ scale: 0.95 }}
                                         onClick={handleGenerateNewCode}
-                                        className="p-3 bg-hackclub-smoke hover:bg-hackclub-dark hover:text-white rounded-xl transition-colors border-2 border-gray-200 hover:border-hackclub-dark"
+                                        disabled={codeLoading}
+                                        className="p-3 bg-hackclub-smoke hover:bg-hackclub-dark hover:text-white rounded-xl transition-colors border-2 border-gray-200 hover:border-hackclub-dark disabled:opacity-50 disabled:cursor-not-allowed"
                                         title="Generate new code"
                                     >
                                         <motion.svg 
@@ -435,7 +437,7 @@ const CreditsPage = () => {
                                     whileHover={{ scale: 1.02 }}
                                     whileTap={{ scale: 0.98 }}
                                     onClick={handleVerifyPayment}
-                                    disabled={verifying}
+                                    disabled={verifying || codeLoading || !claimCode}
                                     className="w-full bg-hackclub-green hover:bg-hackclub-cyan text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {verifying ? (
