@@ -4,21 +4,14 @@ import { useContext, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
-import Link from 'next/link';
 import { CartContext } from '../../context/CartContext';
-
-interface CartItem {
-  id: number;
-  name: string;
-  price: string;
-  thumbnail_url: string;
-  variant_id: number | null;
-  quantity: number;
-}
+import { CreditsContext } from '../../context/CreditsContext';
 
 const Checkout = () => {
   const cartContext = useContext(CartContext);
+  const creditsContext = useContext(CreditsContext);
   const [loading, setLoading] = useState(false);
+  const [useCredits, setUseCredits] = useState(false);
   const router = useRouter();
 
   if (!cartContext || cartContext.cart === null) return null;
@@ -26,8 +19,16 @@ const Checkout = () => {
   const { cart, clearCart } = cartContext;
   const totalPrice = cart.reduce((total, item) => total + parseFloat(item.price) * (item.quantity || 1), 0);
 
+  const creditsBalance = creditsContext?.balance || 0;
+  const creditsToApply = useCredits ? Math.min(creditsBalance, totalPrice) : 0;
+  const remainingTotal = totalPrice - creditsToApply;
+
   const handleCheckout = () => {
     setLoading(true);
+    if (useCredits && creditsToApply > 0 && creditsContext) {
+      creditsContext.useCredits(creditsToApply, `order_${Date.now()}`);
+    }
+
     clearCart();
     setTimeout(() => {
       setLoading(false);
@@ -91,10 +92,69 @@ const Checkout = () => {
               )}
             </AnimatePresence>
           </div>
-          <div className="flex justify-between items-center mt-8 mb-4 text-xl font-black">
-            <span>Total:</span>
-            <span className="text-hackclub-red">${totalPrice.toFixed(2)}</span>
+          {/* Credits Section */}
+          {creditsBalance > 0 && cart.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-6 p-4 bg-hackclub-smoke rounded-2xl"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-hackclub-green rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-bold text-hackclub-dark">Use Credits</p>
+                    <p className="text-sm text-hackclub-muted">Balance: ${creditsBalance.toFixed(2)}</p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={useCredits}
+                    onChange={(e) => setUseCredits(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-hackclub-green"></div>
+                </label>
+              </div>
+              {useCredits && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mt-3 pt-3 border-t border-hackclub-smoke"
+                >
+                  <div className="flex justify-between text-sm">
+                    <span className="text-hackclub-muted">Credits applied:</span>
+                    <span className="font-bold text-hackclub-green">-${creditsToApply.toFixed(2)}</span>
+                  </div>
+                </motion.div>
+              )}
+            </motion.div>
+          )}
+
+          {/* Order Summary */}
+          <div className="mt-6 space-y-2">
+            <div className="flex justify-between items-center text-hackclub-slate">
+              <span>Subtotal:</span>
+              <span>${totalPrice.toFixed(2)}</span>
+            </div>
+            {useCredits && creditsToApply > 0 && (
+              <div className="flex justify-between items-center text-hackclub-green">
+                <span>Credits:</span>
+                <span>-${creditsToApply.toFixed(2)}</span>
+              </div>
+            )}
+            <div className="flex justify-between items-center text-xl font-black pt-2 border-t border-hackclub-smoke">
+              <span>Total:</span>
+              <span className="text-hackclub-red">${remainingTotal.toFixed(2)}</span>
+            </div>
           </div>
+
           <motion.button
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
