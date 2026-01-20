@@ -17,12 +17,15 @@ interface HCBDonation {
     id: string;
     memo?: string | null;
     message?: string | null;
+    note?: string | null;
+    comment?: string | null;
     amount_cents: number;
     status: string;
     date: string;
     donor?: {
         name: string;
         anonymous: boolean;
+        note?: string | null;
     };
 }
 
@@ -86,13 +89,26 @@ export async function GET(request: Request) {
 
         const donations: HCBDonation[] = await response.json();
 
-        // Find donation with matching memo/message (case-insensitive)
+        // Debug: Log first few donations to see structure
+        console.log('[HCB API] Sample donation structure:', JSON.stringify(donations[0], null, 2));
+
+        // Find donation with matching memo/message/note (case-insensitive)
+        // Check multiple possible fields where the donor's message might be stored
         const matchingDonation = donations.find(donation => {
-            const memoText = donation.memo ?? donation.message;
-            if (!memoText) return false;
-            const memoLower = memoText.toLowerCase();
             const codeLower = normalizedCode.toLowerCase();
-            return memoLower.includes(codeLower);
+
+            // Check all possible text fields
+            const fieldsToCheck = [
+                donation.memo,
+                donation.message,
+                donation.note,
+                donation.comment,
+                donation.donor?.note,
+            ].filter(Boolean);
+
+            return fieldsToCheck.some(field =>
+                field!.toLowerCase().includes(codeLower)
+            );
         });
 
         if (!matchingDonation) {
