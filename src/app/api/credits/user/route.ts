@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { Redis } from '@upstash/redis';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import { CreditTransaction } from '../../../../types/Credits';
+import { rateLimit, rateLimitResponse } from '../../../../lib/rateLimit';
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -18,6 +19,12 @@ export async function GET() {
     }
 
     const userId = session.user.id;
+
+    // Rate limit: 30 requests per minute
+    const rateLimitResult = await rateLimit(`credits:get:${userId}`, { maxRequests: 30, windowMs: 60000 });
+    if (!rateLimitResult.success) {
+        return rateLimitResponse();
+    }
 
     try {
         const balance = await redis.get<number>(`user:${userId}:balance`) || 0;
@@ -42,6 +49,12 @@ export async function POST(request: Request) {
     }
 
     const userId = session.user.id;
+
+    // Rate limit: 10 requests per minute
+    const rateLimitResult = await rateLimit(`credits:post:${userId}`, { maxRequests: 10, windowMs: 60000 });
+    if (!rateLimitResult.success) {
+        return rateLimitResponse();
+    }
 
     try {
         const { amount, description, donationId } = await request.json();
@@ -94,6 +107,12 @@ export async function PUT(request: Request) {
     }
 
     const userId = session.user.id;
+
+    // Rate limit: 10 requests per minute
+    const rateLimitResult = await rateLimit(`credits:put:${userId}`, { maxRequests: 10, windowMs: 60000 });
+    if (!rateLimitResult.success) {
+        return rateLimitResponse();
+    }
 
     try {
         const { amount, orderId } = await request.json();

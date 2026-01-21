@@ -1,18 +1,37 @@
 'use client';
 
-import { useContext, useState } from 'react';
+import { useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession, signIn } from 'next-auth/react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CartContext } from '../../context/CartContext';
 import { CreditsContext } from '../../context/CreditsContext';
 
 const Checkout = () => {
+  const { data: session, status } = useSession();
   const cartContext = useContext(CartContext);
   const creditsContext = useContext(CreditsContext);
   const [loading, setLoading] = useState(false);
-  const [useCredits, setUseCredits] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      signIn('hackclub', { callbackUrl: '/checkout' });
+    }
+  }, [status]);
+
+  if (status === 'loading') {
+    return (
+      <div className="bg-hackclub-smoke min-h-screen flex items-center justify-center">
+        <div className="text-hackclub-dark font-bold">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!session) return null;
 
   if (!cartContext || cartContext.cart === null) return null;
 
@@ -20,23 +39,52 @@ const Checkout = () => {
   const totalPrice = cart.reduce((total, item) => total + parseFloat(item.price) * (item.quantity || 1), 0);
 
   const creditsBalance = creditsContext?.balance || 0;
-  const creditsToApply = useCredits ? Math.min(creditsBalance, totalPrice) : 0;
-  const remainingTotal = totalPrice - creditsToApply;
+  const hasEnoughCredits = creditsBalance >= totalPrice;
 
-  const handleCheckout = () => {
-    setLoading(true);
-    if (useCredits && creditsToApply > 0 && creditsContext) {
-      creditsContext.useCredits(creditsToApply, `order_${Date.now()}`);
+  const handleCheckout = async () => {
+    if (!hasEnoughCredits) {
+      setError('Insufficient credits. Please add more credits to complete your purchase.');
+      return;
     }
 
-    clearCart();
-    setTimeout(() => {
-      setLoading(false);
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: cart.map(item => ({
+            id: item.id,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity || 1,
+            thumbnail_url: item.thumbnail_url,
+          })),
+          totalAmount: totalPrice,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || 'Failed to process order');
+        setLoading(false);
+        return;
+      }
+
+      // Refresh credits balance
+      if (creditsContext?.refreshCredits) {
+        await creditsContext.refreshCredits();
+      }
+
+      clearCart();
       router.push('/thank-you');
-      setTimeout(() => {
-        router.push('/');
-      }, 2000);
-    }, 2000);
+    } catch {
+      setError('Failed to connect to server. Please try again.');
+      setLoading(false);
+    }
   };
 
   return (
@@ -92,50 +140,55 @@ const Checkout = () => {
               )}
             </AnimatePresence>
           </div>
-          {/* Credits Section */}
-          {creditsBalance > 0 && cart.length > 0 && (
+          {/* Credits Balance */}
+          {cart.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mt-6 p-4 bg-hackclub-smoke rounded-2xl"
+              className={`mt-6 p-4 rounded-2xl ${hasEnoughCredits ? 'bg-hackclub-green/10 border-2 border-hackclub-green' : 'bg-hackclub-red/10 border-2 border-hackclub-red'}`}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-hackclub-green rounded-full flex items-center justify-center">
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="font-bold text-hackclub-dark">Use Credits</p>
-                    <p className="text-sm text-hackclub-muted">Balance: ${creditsBalance.toFixed(2)}</p>
-                  </div>
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${hasEnoughCredits ? 'bg-hackclub-green' : 'bg-hackclub-red'}`}>
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={useCredits}
-                    onChange={(e) => setUseCredits(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-hackclub-green"></div>
-                </label>
+                <div className="flex-1">
+                  <p className="font-bold text-hackclub-dark">Your Credits</p>
+                  <p className="text-sm text-hackclub-muted">Balance: ${creditsBalance.toFixed(2)}</p>
+                </div>
+                {hasEnoughCredits ? (
+                  <span className="text-hackclub-green font-bold text-sm">✓ Sufficient</span>
+                ) : (
+                  <Link 
+                    href="/credits" 
+                    className="text-hackclub-red font-bold text-sm hover:underline"
+                  >
+                    Add Credits →
+                  </Link>
+                )}
               </div>
-              {useCredits && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="mt-3 pt-3 border-t border-hackclub-smoke"
-                >
-                  <div className="flex justify-between text-sm">
-                    <span className="text-hackclub-muted">Credits applied:</span>
-                    <span className="font-bold text-hackclub-green">-${creditsToApply.toFixed(2)}</span>
-                  </div>
-                </motion.div>
+              {!hasEnoughCredits && (
+                <p className="mt-3 text-sm text-hackclub-red font-medium">
+                  You need ${(totalPrice - creditsBalance).toFixed(2)} more credits to complete this purchase.
+                </p>
               )}
             </motion.div>
           )}
+
+          {/* Error Message */}
+          <AnimatePresence>
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="mt-4 p-3 bg-hackclub-red/10 border-2 border-hackclub-red rounded-xl"
+              >
+                <p className="text-hackclub-red font-bold text-sm">{error}</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Order Summary */}
           <div className="mt-6 space-y-2">
@@ -143,24 +196,26 @@ const Checkout = () => {
               <span>Subtotal:</span>
               <span>${totalPrice.toFixed(2)}</span>
             </div>
-            {useCredits && creditsToApply > 0 && (
-              <div className="flex justify-between items-center text-hackclub-green">
-                <span>Credits:</span>
-                <span>-${creditsToApply.toFixed(2)}</span>
-              </div>
-            )}
+            <div className="flex justify-between items-center text-hackclub-green">
+              <span>Pay with Credits:</span>
+              <span>-${totalPrice.toFixed(2)}</span>
+            </div>
             <div className="flex justify-between items-center text-xl font-black pt-2 border-t border-hackclub-smoke">
               <span>Total:</span>
-              <span className="text-hackclub-red">${remainingTotal.toFixed(2)}</span>
+              <span className="text-hackclub-red">$0.00</span>
             </div>
           </div>
 
           <motion.button
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            className="w-full bg-hackclub-red hover:bg-hackclub-orange text-white font-black text-lg py-3 rounded-full transition-all shadow-lg hover:shadow-xl mt-2"
+            whileHover={hasEnoughCredits && cart.length > 0 ? { scale: 1.03 } : {}}
+            whileTap={hasEnoughCredits && cart.length > 0 ? { scale: 0.97 } : {}}
+            className={`w-full font-black text-lg py-3 rounded-full transition-all shadow-lg mt-2 ${
+              hasEnoughCredits && cart.length > 0 
+                ? 'bg-hackclub-red hover:bg-hackclub-orange text-white hover:shadow-xl' 
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
             onClick={handleCheckout}
-            disabled={loading || cart.length === 0}
+            disabled={loading || cart.length === 0 || !hasEnoughCredits}
           >
             <AnimatePresence mode="wait" initial={false}>
               {loading ? (
