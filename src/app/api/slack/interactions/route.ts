@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
                                 break;
                             }
                         }
-                    } catch (_error) {
+                    } catch {
                     }
                     
                     const userId = payload.user.id;
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
                                 text: `Message about your order #${orderId.slice(-8)}:\n\n${messageText}`,
                             }),
                         });
-                    } catch (_error) {
+                    } catch {
                     }
                     
                     if (messageTs && channelId) {
@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
                                     }),
                                 });
                             }
-                        } catch (_error) {
+                        } catch {
                         }
                     }
                 }
@@ -223,7 +223,7 @@ export async function POST(request: NextRequest) {
                                     await redis.set(`user:${userId}:transactions`, newTransactions);
                                     
                                 }
-                            } catch (_error) {
+                            } catch {
                             }
                         }
                         
@@ -253,7 +253,7 @@ export async function POST(request: NextRequest) {
                                     break;
                                 }
                             }
-                        } catch (_error) {
+                        } catch {
                         }
                         
                         const updatedBlocks = messageBlock.blocks.map((block: any) => {
@@ -304,11 +304,11 @@ export async function POST(request: NextRequest) {
                                         text: `❌ Your order #${orderId.slice(-8)} has been denied.\n\n*Reason:* ${denialReason}\n\nThe order amount has been refunded to your account.`,
                                     }),
                                 });
-                            } catch (_error) {
+                            } catch {
                             }
                         }
                     }
-                } catch (_error) {
+                } catch {
                 }
                 
                 return NextResponse.json({});
@@ -334,7 +334,7 @@ export async function POST(request: NextRequest) {
                                 text: `Message about your donation:\n\n${messageText}`,
                             }),
                         });
-                    } catch (_error) {
+                    } catch {
                     }
                     
                     if (messageTs && channelId) {
@@ -376,7 +376,7 @@ export async function POST(request: NextRequest) {
                                     }),
                                 });
                             }
-                        } catch (_error) {
+                        } catch {
                         }
                     }
                 }
@@ -422,7 +422,7 @@ export async function POST(request: NextRequest) {
                             break;
                         }
                     }
-                } catch (_error) {
+                } catch {
                 }
                 
                 const updatedBlocks = [
@@ -486,7 +486,7 @@ export async function POST(request: NextRequest) {
                 
                 const channelId = payload.container?.channel_id || SLACK_CHANNEL_ID;
                 
-                const updateRes = await fetch('https://slack.com/api/chat.update', {
+                await fetch('https://slack.com/api/chat.update', {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`,
@@ -521,7 +521,7 @@ export async function POST(request: NextRequest) {
                                 text: `✅ Your order #${orderId.slice(-8)} has been approved and is being prepared for fulfillment!`,
                             }),
                         });
-                    } catch (_error) {
+                    } catch {
                     }
                 }
 
@@ -614,7 +614,7 @@ export async function POST(request: NextRequest) {
                             break;
                         }
                     }
-                } catch (_error) {
+                } catch {
                 }
                 
                 const originalBlocks = payload.message.blocks || [];
@@ -679,7 +679,7 @@ export async function POST(request: NextRequest) {
                                 text: `✅ Your order #${orderId.slice(-8)} has been fulfilled! It's on its way to you.`,
                             }),
                         });
-                    } catch (_error) {
+                    } catch {
                     }
                 }
                 
@@ -747,7 +747,7 @@ export async function POST(request: NextRequest) {
                             refundSucceeded = true;
                         } else {
                         }
-                    } catch (_error) {
+                    } catch {
                     }
                 } else {
                 }
@@ -779,7 +779,7 @@ export async function POST(request: NextRequest) {
                                 break;
                             }
                         }
-                    } catch (_error) {
+                    } catch {
                     }
                     
                     const updatedBlocks = [
@@ -820,7 +820,7 @@ export async function POST(request: NextRequest) {
                                 blocks: updatedBlocks,
                             }),
                         });
-                    } catch (_error) {
+                    } catch {
                     }
                     
                     if (slackId) {
@@ -836,7 +836,7 @@ export async function POST(request: NextRequest) {
                                     text: `↩️ Your order #${orderId.slice(-8)} has been refunded. $${refundAmount.toFixed(2)} in credits has been returned to your account.`,
                                 }),
                             });
-                        } catch (_error) {
+                        } catch {
                         }
                     }
                 }
@@ -996,7 +996,7 @@ export async function POST(request: NextRequest) {
                             await redis.set(`user:${userId}:transactions`, newTransactions);
                             
                         }
-                    } catch (_error) {
+                    } catch {
                     }
                 }
                 
@@ -1089,7 +1089,7 @@ export async function POST(request: NextRequest) {
         }
 
         return NextResponse.json({ ok: true });
-    } catch (_error) {
+    } catch {
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 }
