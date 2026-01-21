@@ -51,18 +51,23 @@ const Checkout = () => {
     setError(null);
 
     try {
+      // Generate idempotency key to prevent duplicate orders
+      const idempotencyKey = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
       const response = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           items: cart.map(item => ({
-            id: item.id,
+            id: String(item.id),
             name: item.name,
             price: item.price,
             quantity: item.quantity || 1,
+            variant_id: item.variant_id,
             thumbnail_url: item.thumbnail_url,
           })),
           totalAmount: totalPrice,
+          idempotencyKey,
         }),
       });
 

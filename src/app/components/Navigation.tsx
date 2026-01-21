@@ -121,6 +121,15 @@ const Navigation = () => {
                   </span>
                 )}
               </Link>
+
+              {session && (
+                <Link
+                  href="/orders"
+                  className="text-hackclub-slate hover:text-hackclub-red font-bold text-xl transition-colors"
+                >
+                  Orders
+                </Link>
+              )}
             </div>
 
             <div className="flex items-center gap-4">

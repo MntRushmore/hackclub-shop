@@ -4,6 +4,7 @@ import { useContext, useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSession, signIn } from 'next-auth/react';
 import { CreditsContext } from '../../context/CreditsContext';
+import { CreditsSkeleton } from '../components/Skeleton';
 
 const HCB_DONATE_URL = 'https://hcb.hackclub.com/donations/start/ysws-combinator';
 
@@ -46,7 +47,7 @@ const CreditsPage = () => {
     // Show loading state
     if (status === 'loading') {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-white"
+            <div className="min-h-screen bg-white text-hackclub-dark"
                 style={{
                     backgroundImage: `
                       linear-gradient(to right, #e0f2fe 1px, transparent 1px),
@@ -55,7 +56,13 @@ const CreditsPage = () => {
                     backgroundSize: '30px 30px',
                 }}
             >
-                <div className="animate-pulse text-hackclub-slate font-bold">Loading...</div>
+                <div className="max-w-2xl mx-auto px-4 py-12">
+                    <div className="mb-10">
+                        <div className="h-14 w-48 bg-hackclub-smoke rounded animate-pulse mb-2" />
+                        <div className="h-6 w-72 bg-hackclub-smoke rounded animate-pulse" />
+                    </div>
+                    <CreditsSkeleton />
+                </div>
             </div>
         );
     }
