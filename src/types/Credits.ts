@@ -1,7 +1,7 @@
 export interface CreditTransaction {
     id: string;
     amount: number;
-    type: 'deposit' | 'purchase';
+    type: 'deposit' | 'purchase' | 'refund';
     description: string;
     timestamp: Date;
     orderId?: string;

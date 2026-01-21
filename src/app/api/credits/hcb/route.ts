@@ -104,6 +104,7 @@ export async function GET(request: Request) {
                 donation.note,
                 donation.comment,
                 donation.donor?.note,
+                donation.donor?.name,
             ].filter(Boolean);
 
             return fieldsToCheck.some(field =>
@@ -114,7 +115,7 @@ export async function GET(request: Request) {
         if (!matchingDonation) {
             return NextResponse.json({
                 code: 404,
-                error: 'No donation found with this code. Make sure you included the code in the donation memo.'
+                error: `No donation found with code ${normalizedCode}. Make sure you included it in your donor name. If you're sure you donated, take screenshots of both your HCB transaction and this page, then let us know in #hack-club-store.`
             }, { status: 404 });
         }
 
@@ -158,6 +159,12 @@ export async function GET(request: Request) {
 
         await redis.set(`user:${userId}:balance`, newBalance);
         await redis.set(`user:${userId}:transactions`, newTransactions);
+
+        // Store slackId mapping if available
+        const slackId = (session.user as any)?.slackId;
+        if (slackId) {
+            await redis.set(`user:${userId}:slackId`, slackId);
+        }
 
         // Store which user claimed this donation
         await redis.set(`donation:${matchingDonation.id}:user`, userId);

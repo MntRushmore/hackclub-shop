@@ -145,7 +145,6 @@ const Checkout = () => {
               )}
             </AnimatePresence>
           </div>
-          {/* Credits Balance */}
           {cart.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -181,7 +180,6 @@ const Checkout = () => {
             </motion.div>
           )}
 
-          {/* Error Message */}
           <AnimatePresence>
             {error && (
               <motion.div
@@ -195,7 +193,6 @@ const Checkout = () => {
             )}
           </AnimatePresence>
 
-          {/* Order Summary */}
           <div className="mt-6 space-y-2">
             <div className="flex justify-between items-center text-hackclub-slate">
               <span>Subtotal:</span>

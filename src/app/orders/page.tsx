@@ -52,10 +52,14 @@ const OrdersPage = () => {
         switch (status) {
             case 'pending':
                 return 'bg-yellow-100 text-yellow-800';
-            case 'completed':
+            case 'approved':
+                return 'bg-blue-100 text-blue-800';
+            case 'fulfilled':
                 return 'bg-green-100 text-green-800';
-            case 'cancelled':
+            case 'denied':
                 return 'bg-red-100 text-red-800';
+            case 'refunded':
+                return 'bg-orange-100 text-orange-800';
             default:
                 return 'bg-gray-100 text-gray-800';
         }
@@ -190,10 +194,10 @@ const OrdersPage = () => {
                                         className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke overflow-hidden"
                                     >
                                         <div className="px-6 py-4 border-b-2 border-hackclub-smoke flex items-center justify-between">
-                                            <div>
-                                                <p className="text-sm text-hackclub-muted font-bold">Order #{order.id}</p>
-                                                <p className="text-xs text-hackclub-slate">{formatDate(order.createdAt)}</p>
-                                            </div>
+                                             <div>
+                                                 <p className="text-sm text-hackclub-muted font-bold">Order #{order.id.slice(-8)}</p>
+                                                 <p className="text-xs text-hackclub-slate">{formatDate(order.createdAt)}</p>
+                                             </div>
                                             <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${getStatusColor(order.status)}`}>
                                                 {order.status}
                                             </span>
@@ -221,17 +225,34 @@ const OrdersPage = () => {
                                         </div>
 
                                         <div className="px-6 py-4 border-t-2 border-hackclub-smoke bg-hackclub-smoke/30 flex items-center justify-between">
-                                            <p className="font-bold text-hackclub-slate">Total</p>
-                                            <p className="text-xl font-black text-hackclub-dark">${order.totalAmount.toFixed(2)}</p>
+                                             <p className="font-bold text-hackclub-slate">Total</p>
+                                             <p className="text-xl font-black text-hackclub-dark">${order.totalAmount.toFixed(2)}</p>
+                                         </div>
+
+                                        {order.statusHistory && order.statusHistory.length > 0 && (
+                                             <div className="px-6 py-4 border-t-2 border-hackclub-smoke space-y-2">
+                                                 <p className="text-xs font-bold text-hackclub-muted uppercase">Status History</p>
+                                                 <div className="space-y-1">
+                                                     {order.statusHistory.map((update, index) => (
+                                                         <div key={index} className="text-xs">
+                                                             <p className="font-bold text-hackclub-dark capitalize">{update.status}</p>
+                                                             <p className="text-hackclub-muted">{formatDate(update.timestamp)}</p>
+                                                             {update.message && (
+                                                                 <p className="text-hackclub-slate italic mt-1">{update.message}</p>
+                                                             )}
+                                                         </div>
+                                                     ))}
+                                                 </div>
+                                             </div>
+                                         )}
+                                        </motion.div>
+                                        ))}
+                                        </AnimatePresence>
                                         </div>
-                                    </motion.div>
-                                ))}
-                            </AnimatePresence>
-                        </div>
-                    )}
-                </motion.div>
-            </div>
-        </div>
+                                        )}
+                                        </motion.div>
+                                        </div>
+                                        </div>
     );
 };
 

@@ -112,6 +112,7 @@ export async function POST(request: Request) {
 
         // Create order with verified items
         const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const now = new Date();
         const order: Order = {
             id: orderId,
             userId,
@@ -124,8 +125,11 @@ export async function POST(request: Request) {
             })),
             totalAmount: verifiedTotal,
             creditsPaid: verifiedTotal,
-            status: 'completed',
-            createdAt: new Date(),
+            status: 'pending',
+            statusHistory: [
+                { status: 'pending', timestamp: now }
+            ],
+            createdAt: now,
         };
 
         // Deduct credits
@@ -153,12 +157,35 @@ export async function POST(request: Request) {
             redis.set(`user:${userId}:orders`, newOrders),
         ];
 
+        const slackId = (session.user as any)?.slackId;
+        if (slackId) {
+            savePromises.push(redis.set(`user:${userId}:slackId`, slackId));
+        }
+
         // Store idempotency key for 24 hours
         if (idempotencyKey) {
             savePromises.push(redis.set(`idempotency:${userId}:${idempotencyKey}`, orderId, { ex: 86400 }));
         }
 
         await Promise.all(savePromises);
+
+        try {
+            await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/slack/notify-purchase`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    orderId: order.id,
+                    userId,
+                    userEmail: session.user?.email,
+                    slackId: (session.user as any)?.slackId,
+                    items: order.items,
+                    totalAmount: order.totalAmount,
+                    newBalance,
+                }),
+            });
+        } catch (error) {
+            console.error('Failed to notify Slack about purchase:', error);
+        }
 
         return NextResponse.json({ 
             order,

@@ -40,7 +40,7 @@ export async function GET() {
     }
 }
 
-// POST - Add credits to user's account
+// POST - Add credits to user's account (deposits or refunds)
 export async function POST(request: Request) {
     const session = await getServerSession(authOptions);
 
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     }
 
     try {
-        const { amount, description, donationId } = await request.json();
+        const { amount, description, donationId, transactionType = 'deposit' } = await request.json();
 
         if (typeof amount !== 'number' || amount <= 0) {
             return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
@@ -71,8 +71,8 @@ export async function POST(request: Request) {
         const transaction: CreditTransaction = {
             id: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             amount,
-            type: 'deposit',
-            description: description || 'Added credits via HCB',
+            type: transactionType as 'deposit' | 'refund',
+            description: description || (transactionType === 'refund' ? 'Refund' : 'Added credits via HCB'),
             timestamp: new Date(),
         };
 

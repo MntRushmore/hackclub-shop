@@ -191,7 +191,6 @@ const CreditsPage = () => {
                         Add credits via HCB and use them at checkout
                     </p>
 
-                    {/* Balance Card */}
                     <motion.div
                         initial={{ opacity: 0, scale: 0.96 }}
                         animate={{ opacity: 1, scale: 1 }}
@@ -223,7 +222,6 @@ const CreditsPage = () => {
 
 
 
-                    {/* Transaction History */}
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -256,11 +254,11 @@ const CreditsPage = () => {
                                             className="px-6 py-4 flex items-center gap-4 hover:bg-hackclub-smoke/30 transition-colors"
                                         >
                                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                                                transaction.type === 'deposit'
+                                                transaction.type === 'deposit' || transaction.type === 'refund'
                                                     ? 'bg-hackclub-green text-white'
                                                     : 'bg-hackclub-red text-white'
                                             }`}>
-                                                {transaction.type === 'deposit' ? (
+                                                {transaction.type === 'deposit' || transaction.type === 'refund' ? (
                                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 10l7-7m0 0l7 7m-7-7v18" />
                                                     </svg>
@@ -409,12 +407,12 @@ const CreditsPage = () => {
                                     <p className="font-bold text-hackclub-dark">Donate on HCB</p>
                                 </div>
                                 <p className="text-hackclub-slate font-medium text-sm mb-3">
-                                    Include <span className="font-mono font-bold bg-hackclub-smoke px-2 py-1 rounded">{claimCode}</span> in memo
+                                    <span className="text-hackclub-red font-bold">Required:</span> Include <span className="font-mono font-bold bg-hackclub-smoke px-2 py-1 rounded">{claimCode}</span> in your donor name
                                 </p>
                                 <motion.a
                                     whileHover={{ scale: 1.02 }}
                                     whileTap={{ scale: 0.98 }}
-                                    href={`${HCB_DONATE_BASE}?message=${encodeURIComponent(claimCode)}&goods=true`}
+                                    href={`${HCB_DONATE_BASE}?message=${encodeURIComponent(claimCode)}&goods=true&name=${encodeURIComponent(claimCode)}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="block w-full bg-hackclub-blue hover:bg-hackclub-cyan text-white font-bold py-3 rounded-full text-center transition-colors"
