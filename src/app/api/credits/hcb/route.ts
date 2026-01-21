@@ -89,15 +89,10 @@ export async function GET(request: Request) {
 
         const donations: HCBDonation[] = await response.json();
 
-        // Debug: Log first few donations to see structure
-        console.log('[HCB API] Sample donation structure:', JSON.stringify(donations[0], null, 2));
-
-        // Find donation with matching memo/message/note (case-insensitive)
-        // Check multiple possible fields where the donor's message might be stored
+        // Find donation with matching donor details (case-insensitive)
+        const codeLower = normalizedCode.toLowerCase();
         const matchingDonation = donations.find(donation => {
-            const codeLower = normalizedCode.toLowerCase();
-
-            // Check all possible text fields
+            // Check multiple possible text fields where the donor could have entered the claim code
             const fieldsToCheck = [
                 donation.memo,
                 donation.message,
@@ -115,7 +110,7 @@ export async function GET(request: Request) {
         if (!matchingDonation) {
             return NextResponse.json({
                 code: 404,
-                error: `No donation found with code ${normalizedCode}. Make sure you included it in your donor name. If you're sure you donated, take screenshots of both your HCB transaction and this page, then let us know in #hack-club-store.`
+                error: `No donation found with code ${normalizedCode}. Make sure you entered the code as your name when donating. If you're sure you donated, take screenshots of both your HCB transaction and this page, then let us know in #hack-club-store.`
             }, { status: 404 });
         }
 
@@ -161,7 +156,7 @@ export async function GET(request: Request) {
         await redis.set(`user:${userId}:transactions`, newTransactions);
 
         // Store slackId mapping if available
-        const slackId = (session.user as any)?.slackId;
+        const slackId = (session.user as { slackId?: string })?.slackId;
         if (slackId) {
             await redis.set(`user:${userId}:slackId`, slackId);
         }

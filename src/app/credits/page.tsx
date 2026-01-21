@@ -407,7 +407,7 @@ const CreditsPage = () => {
                                     <p className="font-bold text-hackclub-dark">Donate on HCB</p>
                                 </div>
                                 <p className="text-hackclub-slate font-medium text-sm mb-3">
-                                    <span className="text-hackclub-red font-bold">Required:</span> Include <span className="font-mono font-bold bg-hackclub-smoke px-2 py-1 rounded">{claimCode}</span> in your donor name
+                                    <span className="text-hackclub-red font-bold">Required:</span> Enter <span className="font-mono font-bold bg-hackclub-smoke px-2 py-1 rounded">{claimCode}</span> as your name
                                 </p>
                                 <motion.a
                                     whileHover={{ scale: 1.02 }}
