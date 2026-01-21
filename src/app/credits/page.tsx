@@ -6,7 +6,7 @@ import { useSession, signIn } from 'next-auth/react';
 import { CreditsContext } from '../../context/CreditsContext';
 import { CreditsSkeleton } from '../components/Skeleton';
 
-const HCB_DONATE_URL = 'https://hcb.hackclub.com/donations/start/ysws-combinator';
+const HCB_DONATE_BASE = process.env.NEXT_PUBLIC_HCB_DONATE_BASE || 'https://hcb.hackclub.com/donations/start/hc-store';
 
 const CreditsPage = () => {
     const { data: session, status } = useSession();
@@ -414,7 +414,7 @@ const CreditsPage = () => {
                                 <motion.a
                                     whileHover={{ scale: 1.02 }}
                                     whileTap={{ scale: 0.98 }}
-                                    href={HCB_DONATE_URL}
+                                    href={`${HCB_DONATE_BASE}?message=${encodeURIComponent(claimCode)}&goods=true`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="block w-full bg-hackclub-blue hover:bg-hackclub-cyan text-white font-bold py-3 rounded-full text-center transition-colors"

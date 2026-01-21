@@ -48,13 +48,38 @@ export const authOptions: NextAuthOptions = {
                             token.name = `${meData.identity.first_name} ${meData.identity.last_name}`;
                             token.email = meData.identity.primary_email;
                             token.slackId = meData.identity.slack_id;
+                            
+                            if (meData.identity.slack_id && process.env.SLACK_BOT_TOKEN) {
+                                try {
+                                    const slackResponse = await fetch('https://slack.com/api/users.info', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`,
+                                            'Content-Type': 'application/x-www-form-urlencoded',
+                                        },
+                                        body: `user=${meData.identity.slack_id}`,
+                                    });
+                                    const slackData = await slackResponse.json();
+                                    if (slackData.ok && slackData.user?.profile?.image_512) {
+                                        token.image = slackData.user.profile.image_512;
+                                    } else {
+                                        token.image = (profile as any).picture || (profile as any).image;
+                                    }
+                                } catch (error) {
+                                    console.error('Failed to fetch Slack profile:', error);
+                                    token.image = (profile as any).picture || (profile as any).image;
+                                }
+                            } else {
+                                token.image = (profile as any).picture || (profile as any).image;
+                            }
                         }
                     } catch (error) {
                         console.error('Failed to fetch user info in JWT callback:', error);
+                        token.image = (profile as any).picture || (profile as any).image;
                     }
+                } else {
+                    token.image = (profile as any).picture || (profile as any).image;
                 }
-                
-                token.image = (profile as any).picture || (profile as any).image;
             }
             return token;
         },
