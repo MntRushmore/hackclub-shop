@@ -5,6 +5,7 @@ import { useSession, signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import Icon from 'supercons';
 
 export default function AdminDashboard() {
     const { data: session, status } = useSession();
@@ -76,9 +77,7 @@ export default function AdminDashboard() {
             >
                 <div className="bg-white rounded-2xl shadow-xl border-2 border-gray-200 p-8 max-w-md w-full mx-4 text-center">
                     <div className="w-16 h-16 bg-hackclub-red/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg className="w-8 h-8 text-hackclub-red" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                        </svg>
+                        <Icon glyph="private" size={32} style={{ color: 'var(--hackclub-red, #EC3750)' }} />
                     </div>
                     <h2 className="text-2xl font-black text-hackclub-dark mb-2">Access Denied</h2>
                     <p className="text-hackclub-slate mb-6">
@@ -128,9 +127,7 @@ export default function AdminDashboard() {
                             <Link href="/admin/products">
                                 <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-6 hover:shadow-xl hover:border-hackclub-red transition-all cursor-pointer group">
                                     <div className="w-12 h-12 bg-hackclub-red/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-hackclub-red/20 transition-colors">
-                                        <svg className="w-6 h-6 text-hackclub-red" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                                        </svg>
+                                        <Icon glyph="bag" size={24} style={{ color: 'var(--hackclub-red, #EC3750)' }} />
                                     </div>
                                     <h3 className="text-xl font-black text-hackclub-dark mb-2">Products</h3>
                                     <p className="text-hackclub-slate text-sm">Create, edit, and manage your products</p>
@@ -147,9 +144,7 @@ export default function AdminDashboard() {
                             <Link href="/admin/coupons">
                                 <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-6 hover:shadow-xl hover:border-hackclub-green transition-all cursor-pointer group">
                                     <div className="w-12 h-12 bg-hackclub-green/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-hackclub-green/20 transition-colors">
-                                        <svg className="w-6 h-6 text-hackclub-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 012-2h6a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V5z" />
-                                        </svg>
+                                        <Icon glyph="airdrop" size={24} style={{ color: 'var(--hackclub-green, #35B930)' }} />
                                     </div>
                                     <h3 className="text-xl font-black text-hackclub-dark mb-2">Coupons</h3>
                                     <p className="text-hackclub-slate text-sm">Create and manage discount codes</p>
@@ -166,9 +161,7 @@ export default function AdminDashboard() {
                             <Link href="/admin/orders">
                                 <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-6 hover:shadow-xl hover:border-hackclub-orange transition-all cursor-pointer group">
                                     <div className="w-12 h-12 bg-hackclub-orange/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-hackclub-orange/20 transition-colors">
-                                        <svg className="w-6 h-6 text-hackclub-orange" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                        </svg>
+                                        <Icon glyph="docs" size={24} style={{ color: 'var(--hackclub-orange, #F77F00)' }} />
                                     </div>
                                     <h3 className="text-xl font-black text-hackclub-dark mb-2">Orders</h3>
                                     <p className="text-hackclub-slate text-sm">View and manage customer orders</p>
@@ -185,9 +178,7 @@ export default function AdminDashboard() {
                             <Link href="/admin/users">
                                 <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-6 hover:shadow-xl hover:border-hackclub-blue transition-all cursor-pointer group">
                                     <div className="w-12 h-12 bg-hackclub-blue/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-hackclub-blue/20 transition-colors">
-                                        <svg className="w-6 h-6 text-hackclub-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 8.048M12 9v.01M17 19H7a2 2 0 01-2-2V7a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2z" />
-                                        </svg>
+                                        <Icon glyph="people-3" size={24} style={{ color: 'var(--hackclub-blue, #3291FF)' }} />
                                     </div>
                                     <h3 className="text-xl font-black text-hackclub-dark mb-2">Users</h3>
                                     <p className="text-hackclub-slate text-sm">Manage user balances and credits</p>
@@ -204,9 +195,7 @@ export default function AdminDashboard() {
                             <Link href="/admin/stats">
                                 <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-6 hover:shadow-xl hover:border-hackclub-purple transition-all cursor-pointer group">
                                     <div className="w-12 h-12 bg-hackclub-purple/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-hackclub-purple/20 transition-colors">
-                                        <svg className="w-6 h-6 text-hackclub-purple" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                                        </svg>
+                                        <Icon glyph="pie-chart" size={24} style={{ color: 'var(--hackclub-purple, #8B5CF6)' }} />
                                     </div>
                                     <h3 className="text-xl font-black text-hackclub-dark mb-2">Statistics</h3>
                                     <p className="text-hackclub-slate text-sm">View sales and order statistics</p>
@@ -223,9 +212,7 @@ export default function AdminDashboard() {
                             <Link href="/admin/admins">
                                 <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-6 hover:shadow-xl hover:border-hackclub-yellow transition-all cursor-pointer group">
                                     <div className="w-12 h-12 bg-hackclub-yellow/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-hackclub-yellow/20 transition-colors">
-                                        <svg className="w-6 h-6 text-hackclub-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                        </svg>
+                                        <Icon glyph="admin-badge" size={24} style={{ color: 'var(--hackclub-yellow, #FFC72C)' }} />
                                     </div>
                                     <h3 className="text-xl font-black text-hackclub-dark mb-2">Admins</h3>
                                     <p className="text-hackclub-slate text-sm">Manage admin roles and permissions</p>
