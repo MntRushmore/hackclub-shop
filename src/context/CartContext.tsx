@@ -3,19 +3,19 @@
 import React, { createContext, useState, useEffect } from 'react';
 
 interface CartItem {
-    id: number;
+    id: string | number;
     name: string;
     price: string;
     thumbnail_url: string;
-    variant_id: number | null;
+    variant_id?: string | number | null;
     quantity: number;
 }
 
 interface CartContextType {
     cart: CartItem[] | null;
     addToCart: (item: Omit<CartItem, 'quantity'>) => void;
-    removeFromCart: (id: number) => void;
-    updateQuantity: (id: number, quantity: number) => void;
+    removeFromCart: (id: string | number) => void;
+    updateQuantity: (id: string | number, quantity: number) => void;
     clearCart: () => void;
     totalPrice: number;
 }
@@ -40,12 +40,18 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCart((prevCart) => {
             const itemWithId = {
                 ...item,
-                id: item.id !== undefined ? item.id : Date.now() + Math.floor(Math.random() * 1000)
+                id: item.id !== undefined ? item.id : `${Date.now()}_${Math.floor(Math.random() * 1000)}`
             };
             if (!prevCart) return [{ ...itemWithId, quantity: 1 }];
             
+            // Check for existing item by variant (if variant exists) or by product ID
             const existingItemIndex = prevCart.findIndex(
-                (cartItem) => cartItem.variant_id === item.variant_id && cartItem.variant_id !== null
+                (cartItem) => {
+                    if (item.variant_id && cartItem.variant_id) {
+                        return cartItem.id === item.id && cartItem.variant_id === item.variant_id;
+                    }
+                    return cartItem.id === item.id;
+                }
             );
             
             if (existingItemIndex !== -1) {
@@ -61,11 +67,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
     };
 
-    const removeFromCart = (id: number) => {
+    const removeFromCart = (id: string | number) => {
         setCart((prevCart) => prevCart ? prevCart.filter((item) => item.id !== id) : []);
     };
 
-    const updateQuantity = (id: number, quantity: number) => {
+    const updateQuantity = (id: string | number, quantity: number) => {
         if (quantity <= 0) {
             removeFromCart(id);
             return;

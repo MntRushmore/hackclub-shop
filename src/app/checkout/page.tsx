@@ -62,7 +62,7 @@ const Checkout = () => {
           const firstItem = cart[0];
           const res = await fetch(`/api/products/${firstItem.id}`);
           const data = await res.json();
-          
+                    
           if (data.result?.sync_product) {
             const product = data.result.sync_product;
             
@@ -70,7 +70,7 @@ const Checkout = () => {
               ? product.shippingOptions.map((s: any, idx: number) => ({
                   id: s.id || `ship_${Date.now()}_${idx}`,
                   country: s.country,
-                  cost: s.cost,
+                  cost: parseFloat(s.cost) || 0,
                 }))
               : [];
             console.log('[Checkout] Loaded shipping options:', shipping);

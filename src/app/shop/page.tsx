@@ -106,9 +106,8 @@ const Shop = () => {
                     } else if (variant.id !== undefined && variant.id !== null) {
                         variantId = typeof variant.id === 'string' ? Number(variant.id) : variant.id;
                     }
-                    const productId = typeof product.id === 'string' ? Number(product.id) : product.id;
                     cartContext.addToCart({
-                        id: productId,
+                        id: product.id,
                         name: variant.name,
                         price: variant.retail_price,
                         thumbnail_url: variant.product.image,
@@ -215,7 +214,7 @@ const Shop = () => {
                                                     variantId = typeof variant.id === 'string' ? Number(variant.id) : variant.id;
                                                 }
                                                 cartContext.addToCart({
-                                                    id: typeof product.id === 'string' ? Number(product.id) : product.id,
+                                                    id: product.id,
                                                     name: variant.name,
                                                     price: variant.retail_price,
                                                     thumbnail_url: variant.product.image,
