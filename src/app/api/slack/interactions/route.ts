@@ -91,22 +91,6 @@ export async function POST(request: NextRequest) {
                     } catch (error) {
                     }
                     
-                    const userId = payload.user.id;
-                    try {
-                        await fetch('https://slack.com/api/chat.postMessage', {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`,
-                                'Content-Type': 'application/json; charset=utf-8',
-                            },
-                            body: JSON.stringify({
-                                channel: userId,
-                                text: `Message about your order #${orderId.slice(-8)}:\n\n${messageText}`,
-                            }),
-                        });
-                    } catch (error) {
-                    }
-                    
                     if (messageTs && channelId) {
                         try {
                             const existingRes = await fetch(`https://slack.com/api/conversations.history?channel=${channelId}&latest=${messageTs}&limit=1&inclusive=true`, {
@@ -120,6 +104,28 @@ export async function POST(request: NextRequest) {
                             const messageBlock = messages[0];
                             
                             if (messageBlock && messageBlock.blocks) {
+                                const fieldsBlock = messageBlock.blocks.find((b: any) => b.fields && b.fields.length > 0);
+                                const customerField = fieldsBlock?.fields?.find((f: any) => f.text?.includes('*Customer:*'));
+                                const customerText = customerField?.text || '';
+                                const slackMatch = customerText.match(/<@([A-Z0-9]+)>/);
+                                const customerSlackId = slackMatch?.[1];
+                                
+                                if (customerSlackId) {
+                                    try {
+                                        await fetch('https://slack.com/api/chat.postMessage', {
+                                            method: 'POST',
+                                            headers: {
+                                                'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`,
+                                                'Content-Type': 'application/json; charset=utf-8',
+                                            },
+                                            body: JSON.stringify({
+                                                channel: customerSlackId,
+                                                text: `Message about your order #${orderId.slice(-8)}:\n\n${messageText}`,
+                                            }),
+                                        });
+                                    } catch (error) {
+                                    }
+                                }
                                 const updatedBlocks = messageBlock.blocks.map((block: any) => {
                                     if (block.type === 'section' && block.text?.text?.includes('Status:')) {
                                         return {
