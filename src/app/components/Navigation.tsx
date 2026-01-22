@@ -122,6 +122,13 @@ const Navigation = () => {
                 )}
               </Link>
 
+              <Link
+                href="/submit"
+                className="text-hackclub-slate hover:text-hackclub-red font-bold text-xl transition-colors"
+              >
+                Submit
+              </Link>
+
               {session && (
                 <Link
                   href="/orders"
