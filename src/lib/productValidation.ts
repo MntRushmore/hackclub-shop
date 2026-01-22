@@ -1,34 +1,50 @@
-import path from 'path';
-import { promises as fs } from 'fs';
+import { Redis } from '@upstash/redis';
 
 interface ProductVariant {
-    id: number;
-    variant_id: number;
+    id: string;
+    variant_id: string;
     name: string;
-    retail_price: string;
-    size: string;
-    color: string;
+    price: number;
+    size?: string;
+    color?: string;
+    image_url?: string;
+    stock?: number;
 }
 
-interface Product {
-    id: number;
+interface AdminProduct {
+    id: string;
     name: string;
-    thumbnail_url: string;
-    sync_variants: ProductVariant[];
+    thumbnail_url?: string;
+    image_url?: string;
+    category?: string;
+    variants: ProductVariant[];
 }
 
-let cachedProducts: Product[] | null = null;
+const redis = new Redis({
+    url: process.env.UPSTASH_REDIS_REST_URL!,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+});
 
-async function loadProducts(): Promise<Product[]> {
-    if (cachedProducts) return cachedProducts;
-    
-    const jsonDirectory = path.join(process.cwd(), 'src', 'data');
-    const fileContents = await fs.readFile(jsonDirectory + '/products.json', 'utf8');
-    cachedProducts = JSON.parse(fileContents);
-    return cachedProducts!;
+async function loadProducts(): Promise<AdminProduct[]> {
+    try {
+        const keys = await redis.keys('product:*');
+        const products: AdminProduct[] = [];
+
+        for (const key of keys) {
+            const product = await redis.get<AdminProduct>(key);
+            if (product) {
+                products.push(product);
+            }
+        }
+
+        return products;
+    } catch (error) {
+        console.error('Failed to load products from Redis:', error);
+        return [];
+    }
 }
 
-export async function validateCartItems(items: { id: string; name: string; price: string; quantity: number; variant_id?: number }[]): Promise<{
+export async function validateCartItems(items: { id: string; name: string; price: string; quantity: number; variant_id?: string }[]): Promise<{
     valid: boolean;
     error?: string;
     verifiedTotal?: number;
@@ -39,40 +55,39 @@ export async function validateCartItems(items: { id: string; name: string; price
     const verifiedItems: { id: string; name: string; price: string; quantity: number; thumbnail_url?: string }[] = [];
 
     for (const item of items) {
-        let found = false;
+        const product = products.find(p => p.id === item.id);
         
-        for (const product of products) {
-            for (const variant of product.sync_variants) {
-                // Match by variant_id if provided, otherwise by name
-                if (item.variant_id && variant.variant_id === item.variant_id) {
-                    // Verify price matches
-                    if (item.price !== variant.retail_price) {
-                        return {
-                            valid: false,
-                            error: `Price mismatch for ${item.name}: expected ${variant.retail_price}, got ${item.price}`,
-                        };
-                    }
-                    verifiedTotal += parseFloat(variant.retail_price) * item.quantity;
-                    verifiedItems.push({
-                        id: item.id,
-                        name: variant.name,
-                        price: variant.retail_price,
-                        quantity: item.quantity,
-                        thumbnail_url: product.thumbnail_url,
-                    });
-                    found = true;
-                    break;
-                }
-            }
-            if (found) break;
-        }
-        
-        if (!found) {
+        if (!product) {
             return {
                 valid: false,
                 error: `Product not found: ${item.name}`,
             };
         }
+
+        const variant = product.variants.find(v => v.variant_id === item.variant_id || v.id === item.variant_id);
+        
+        if (!variant) {
+            return {
+                valid: false,
+                error: `Variant not found for ${item.name}`,
+            };
+        }
+
+        if (item.price !== variant.price.toString()) {
+            return {
+                valid: false,
+                error: `Price mismatch for ${item.name}: expected ${variant.price}, got ${item.price}`,
+            };
+        }
+
+        verifiedTotal += variant.price * item.quantity;
+        verifiedItems.push({
+            id: item.id,
+            name: variant.name,
+            price: variant.price.toString(),
+            quantity: item.quantity,
+            thumbnail_url: variant.image_url || product.image_url || product.thumbnail_url,
+        });
     }
 
     return {
@@ -82,16 +97,7 @@ export async function validateCartItems(items: { id: string; name: string; price
     };
 }
 
-export async function getProductByVariantId(variantId: number): Promise<{ product: Product; variant: ProductVariant } | null> {
-    const products = await loadProducts();
-    
-    for (const product of products) {
-        for (const variant of product.sync_variants) {
-            if (variant.variant_id === variantId) {
-                return { product, variant };
-            }
-        }
-    }
-    
-    return null;
+export async function getProductById(productId: string): Promise<AdminProduct | null> {
+    const product = await redis.get<AdminProduct>(`product:${productId}`);
+    return product || null;
 }

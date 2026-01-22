@@ -55,12 +55,19 @@ export async function POST(request: Request) {
     }
 
     try {
-        const { items, totalAmount, csrfToken, idempotencyKey } = await request.json() as { 
+        const { items, totalAmount, shippingCost, shippingCountry, checkoutData, csrfToken, idempotencyKey, couponDiscount = 0 } = await request.json() as { 
             items: { id: string; name: string; price: string; quantity: number; variant_id?: number }[]; 
             totalAmount: number;
+            shippingCost?: number | string;
+            shippingCountry?: string;
+            checkoutData?: Record<string, string>;
             csrfToken?: string;
             idempotencyKey?: string;
+            couponDiscount?: number;
         };
+        
+        const shippingCostNum = typeof shippingCost === 'string' ? parseFloat(shippingCost) : (shippingCost || 0);
+        const couponDiscountNum = typeof couponDiscount === 'string' ? parseFloat(couponDiscount as any) : (couponDiscount || 0);
 
         // Validate CSRF token
         if (csrfToken) {
@@ -82,20 +89,28 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'No items in order' }, { status: 400 });
         }
 
+        const itemsWithStringVariantId = items.map(item => ({
+            ...item,
+            variant_id: item.variant_id !== undefined ? String(item.variant_id) : undefined,
+        }));
+
         // Validate products and prices server-side
-        const validation = await validateCartItems(items);
+        const validation = await validateCartItems(itemsWithStringVariantId);
         if (!validation.valid) {
             return NextResponse.json({ error: validation.error }, { status: 400 });
         }
 
-        // Use server-verified total, not client-provided
-        const verifiedTotal = validation.verifiedTotal!;
+        const verifiedItemTotal = validation.verifiedTotal!;
+        const verifiedTotal = Math.max(0, verifiedItemTotal - couponDiscountNum + shippingCostNum);
 
         if (Math.abs(verifiedTotal - totalAmount) > 0.01) {
             return NextResponse.json({ 
                 error: 'Price mismatch detected. Please refresh your cart.',
                 expectedTotal: verifiedTotal,
-                providedTotal: totalAmount
+                providedTotal: totalAmount,
+                itemsTotal: verifiedItemTotal,
+                shippingCost: shippingCostNum,
+                couponDiscount: couponDiscountNum
             }, { status: 400 });
         }
 
@@ -123,8 +138,13 @@ export async function POST(request: Request) {
                 quantity: item.quantity,
                 thumbnail_url: item.thumbnail_url,
             })),
+            subtotal: verifiedItemTotal,
+            couponDiscount: couponDiscountNum > 0 ? couponDiscountNum : undefined,
+            shippingCost: shippingCostNum,
             totalAmount: verifiedTotal,
             creditsPaid: verifiedTotal,
+            shippingCountry,
+            checkoutData: checkoutData || {},
             status: 'pending',
             statusHistory: [
                 { status: 'pending', timestamp: now }
@@ -179,7 +199,12 @@ export async function POST(request: Request) {
                     userEmail: session.user?.email,
                     slackId: (session.user as any)?.slackId,
                     items: order.items,
+                    subtotal: order.subtotal,
+                    couponDiscount: order.couponDiscount,
                     totalAmount: order.totalAmount,
+                    shippingCost: order.shippingCost,
+                    shippingCountry: order.shippingCountry,
+                    checkoutData: order.checkoutData,
                     newBalance,
                 }),
             });

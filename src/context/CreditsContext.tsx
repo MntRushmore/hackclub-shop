@@ -37,12 +37,26 @@ export const CreditsProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     }, [session?.user, status]);
 
-    // Initialize - fetch from API if authenticated, otherwise mark as initialized
     useEffect(() => {
         if (status === 'loading') return;
 
         if (status === 'authenticated') {
-            fetchCredits();
+            const migrationDone = sessionStorage.getItem('user-data-migration-done');
+            if (!migrationDone) {
+                fetch('/api/migrate/user-data', { method: 'POST' })
+                    .then(res => res.json())
+                    .then(data => {
+                        console.log('Migration result:', data);
+                        sessionStorage.setItem('user-data-migration-done', 'true');
+                        fetchCredits();
+                    })
+                    .catch(error => {
+                        console.error('Migration failed:', error);
+                        fetchCredits();
+                    });
+            } else {
+                fetchCredits();
+            }
         } else {
             // Not authenticated - reset to 0 and mark initialized
             setBalance(0);

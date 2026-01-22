@@ -48,10 +48,11 @@ const ProductPage = () => {
     const handleAddToCart = () => {
         if (product && selectedVariant) {
             const cartItem = {
+                id: product.id,
                 name: selectedVariant.name,
                 price: selectedVariant.retail_price,
                 thumbnail_url: selectedVariant.product.image,
-                variant_id: selectedVariant.variant_id,
+                variant_id: selectedVariant.variant_id || selectedVariant.id,
             };
 
             addToCart(cartItem);
@@ -132,16 +133,20 @@ const ProductPage = () => {
                                 </label>
                                 <select
                                     id="variant"
-                                    value={selectedVariant?.variant_id || ''}
+                                    value={selectedVariant?.id || selectedVariant?.variant_id || ''}
                                     onChange={(e) => {
-                                        const variant = variants.find(v => v.variant_id === parseInt(e.target.value));
-                                        setSelectedVariant(variant || null);
+                                        const variant = variants.find(v =>
+                                            String(v.id) === e.target.value || String(v.variant_id) === e.target.value
+                                        );
+                                        if (variant) {
+                                            setSelectedVariant(variant);
+                                        }
                                     }}
                                     className="border-2 border-gray-300 rounded-xl p-3 w-full bg-white text-hackclub-dark font-bold focus:outline-none focus:border-hackclub-red transition-colors"
                                 >
-                                    {variants.map((variant) => (
-                                        <option key={variant.variant_id} value={variant.variant_id}>
-                                            {variant.size} / {variant.color}
+                                    {variants.map((variant, idx) => (
+                                        <option key={`${variant.id || variant.variant_id}_${idx}`} value={variant.id || variant.variant_id}>
+                                            {variant.size || 'Default'} / {variant.color || 'Default'} - ${parseFloat(variant.retail_price || '0').toFixed(2)}
                                         </option>
                                     ))}
                                 </select>

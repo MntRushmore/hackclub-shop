@@ -24,6 +24,7 @@ export const authOptions: NextAuthOptions = {
             idToken: true,
             checks: ['pkce', 'state'],
             profile(profile: any) {
+                console.log('[auth] Profile from provider:', profile);
                 return {
                     id: profile.sub,
                 };
@@ -48,6 +49,10 @@ export const authOptions: NextAuthOptions = {
                             token.name = `${meData.identity.first_name} ${meData.identity.last_name}`;
                             token.email = meData.identity.primary_email;
                             token.slackId = meData.identity.slack_id;
+                            if (meData.identity.id) {
+                                token.id = meData.identity.id;
+                                console.log('[auth] Using Hack Club identity ID:', meData.identity.id);
+                            }
                             
                             if (meData.identity.slack_id && process.env.SLACK_BOT_TOKEN) {
                                 try {
@@ -87,8 +92,11 @@ export const authOptions: NextAuthOptions = {
             if (session.user) {
                 session.user.name = token.name as string;
                 session.user.email = token.email as string;
-                (session.user as { id?: string }).id = token.id as string;
+                const userId = (token.slackId as string) || (token.id as string);
+                (session.user as { id?: string }).id = userId;
+                console.log('[auth] Session user ID:', userId, 'slack_id:', token.slackId, 'identity_id:', token.id);
                 (session.user as { slackId?: string }).slackId = token.slackId as string;
+                (session.user as { identityId?: string }).identityId = token.id as string;
                 (session.user as { image?: string }).image = (token.image || token.picture) as string;
             }
             return session;

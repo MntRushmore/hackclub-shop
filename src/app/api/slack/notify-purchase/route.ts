@@ -14,7 +14,12 @@ interface PurchaseNotification {
     userEmail: string;
     slackId?: string;
     items: OrderItem[];
+    subtotal: number;
+    couponDiscount?: number;
     totalAmount: number;
+    shippingCost?: number;
+    shippingCountry?: string;
+    checkoutData?: Record<string, string>;
     newBalance: number;
 }
 
@@ -31,6 +36,12 @@ export async function POST(request: NextRequest) {
         const itemsList = body.items
             .map(item => `• ${item.name} x${item.quantity} - $${(item.price * item.quantity).toFixed(2)}`)
             .join('\n');
+
+        const checkoutDataText = body.checkoutData && Object.keys(body.checkoutData).length > 0
+            ? `\n\n*Shipping Information:*\n` + Object.entries(body.checkoutData)
+                .map(([key, value]) => `• ${key}: ${value}`)
+                .join('\n')
+            : '';
 
         const message = {
             channel: SLACK_CHANNEL_ID,
@@ -55,6 +66,18 @@ export async function POST(request: NextRequest) {
                         },
                         {
                             type: 'mrkdwn',
+                            text: `*Subtotal:*\n$${body.subtotal.toFixed(2)}`,
+                        },
+                        ...(body.couponDiscount ? [{
+                            type: 'mrkdwn',
+                            text: `*Discount:*\n-$${body.couponDiscount.toFixed(2)}`,
+                        }] : []),
+                        {
+                            type: 'mrkdwn',
+                            text: `*Shipping (${body.shippingCountry || 'N/A'}):*\n$${(body.shippingCost || 0).toFixed(2)}`,
+                        },
+                        {
+                            type: 'mrkdwn',
                             text: `*Total:*\n$${body.totalAmount.toFixed(2)}`,
                         },
                         {
@@ -67,7 +90,7 @@ export async function POST(request: NextRequest) {
                     type: 'section',
                     text: {
                         type: 'mrkdwn',
-                        text: `*Items:*\n${itemsList}`,
+                        text: `*Items:*\n${itemsList}${checkoutDataText}`,
                     },
                 },
                 {

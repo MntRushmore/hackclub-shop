@@ -36,13 +36,6 @@ export default function SignInPage() {
                     onClick={() => signIn('hackclub', { callbackUrl: '/' })}
                     className="w-full flex items-center justify-center gap-3 bg-hackclub-red hover:bg-hackclub-orange text-white font-black text-lg px-6 py-4 rounded-full transition-all shadow-md hover:shadow-lg hover:scale-105 transform"
                 >
-                    <Image
-                        src="https://assets.hackclub.com/flag-standalone.svg"
-                        alt=""
-                        width={24}
-                        height={24}
-                        className="invert"
-                    />
                     Continue with Hack Club
                 </button>
 

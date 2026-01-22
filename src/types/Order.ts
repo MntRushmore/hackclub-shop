@@ -16,8 +16,13 @@ export interface Order {
     id: string;
     userId: string;
     items: OrderItem[];
+    subtotal: number;
+    couponDiscount?: number;
+    shippingCost: number;
     totalAmount: number;
     creditsPaid: number;
+    shippingCountry?: string;
+    checkoutData: Record<string, string>;
     status: 'pending' | 'approved' | 'fulfilled' | 'denied' | 'refunded';
     statusHistory: OrderStatusUpdate[];
     createdAt: Date;

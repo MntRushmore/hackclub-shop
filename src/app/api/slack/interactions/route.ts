@@ -91,21 +91,6 @@ export async function POST(request: NextRequest) {
                     } catch {
                     }
                     
-                    const userId = payload.user.id;
-                    try {
-                        await fetch('https://slack.com/api/chat.postMessage', {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`,
-                                'Content-Type': 'application/json; charset=utf-8',
-                            },
-                            body: JSON.stringify({
-                                channel: userId,
-                                text: `Message about your order #${orderId.slice(-8)}:\n\n${messageText}`,
-                            }),
-                        });
-                    } catch {
-                    }
                     
                     if (messageTs && channelId) {
                         try {

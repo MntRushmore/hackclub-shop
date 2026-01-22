@@ -7,13 +7,16 @@ import { motion } from 'framer-motion';
 import { CartContext } from '../../context/CartContext';
 
 interface Product {
-    id: number;
+    id: string | number;
     name: string;
     thumbnail_url: string;
     sync_variants: { 
         retail_price: string;
-        variant_id: number;
+        variant_id: string | number;
         name: string;
+        id?: string | number;
+        size?: string;
+        color?: string;
         product: { image: string };
     }[];
 }
@@ -97,11 +100,19 @@ const Shop = () => {
                 if (isNearCart && product.sync_variants && product.sync_variants.length > 0 && cartContext) {
                     droppedOnCart = true;
                     const variant = product.sync_variants[0];
+                    let variantId: number | null = null;
+                    if (variant.variant_id !== undefined && variant.variant_id !== null) {
+                        variantId = typeof variant.variant_id === 'string' ? Number(variant.variant_id) : variant.variant_id;
+                    } else if (variant.id !== undefined && variant.id !== null) {
+                        variantId = typeof variant.id === 'string' ? Number(variant.id) : variant.id;
+                    }
+                    const productId = typeof product.id === 'string' ? Number(product.id) : product.id;
                     cartContext.addToCart({
+                        id: productId,
                         name: variant.name,
                         price: variant.retail_price,
                         thumbnail_url: variant.product.image,
-                        variant_id: variant.variant_id,
+                        variant_id: variantId,
                     });
                 }
             }
@@ -197,11 +208,18 @@ const Shop = () => {
                                             e.preventDefault();
                                             if (product.sync_variants && product.sync_variants.length > 0 && cartContext) {
                                                 const variant = product.sync_variants[0];
+                                                let variantId: number | null = null;
+                                                if (variant.variant_id !== undefined && variant.variant_id !== null) {
+                                                    variantId = typeof variant.variant_id === 'string' ? Number(variant.variant_id) : variant.variant_id;
+                                                } else if (variant.id !== undefined && variant.id !== null) {
+                                                    variantId = typeof variant.id === 'string' ? Number(variant.id) : variant.id;
+                                                }
                                                 cartContext.addToCart({
+                                                    id: typeof product.id === 'string' ? Number(product.id) : product.id,
                                                     name: variant.name,
                                                     price: variant.retail_price,
                                                     thumbnail_url: variant.product.image,
-                                                    variant_id: variant.variant_id,
+                                                    variant_id: variantId,
                                                 });
                                             }
                                             e.currentTarget.blur();

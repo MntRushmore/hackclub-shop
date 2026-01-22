@@ -33,6 +33,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
         );
         if (selectedVariant) {
             const cartItem = {
+                id: product.id,
                 name: selectedVariant.name,
                 price: selectedVariant.retail_price,
                 thumbnail_url: selectedVariant.product.image,

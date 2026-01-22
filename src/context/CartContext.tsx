@@ -13,7 +13,7 @@ interface CartItem {
 
 interface CartContextType {
     cart: CartItem[] | null;
-    addToCart: (item: Omit<CartItem, 'id' | 'quantity'>) => void;
+    addToCart: (item: Omit<CartItem, 'quantity'>) => void;
     removeFromCart: (id: number) => void;
     updateQuantity: (id: number, quantity: number) => void;
     clearCart: () => void;
@@ -36,9 +36,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }, [cart]);
 
-    const addToCart = (item: Omit<CartItem, 'id' | 'quantity'>) => {
+    const addToCart = (item: Omit<CartItem, 'quantity'>) => {
         setCart((prevCart) => {
-            if (!prevCart) return [{ id: Date.now(), ...item, quantity: 1 }];
+            const itemWithId = {
+                ...item,
+                id: item.id !== undefined ? item.id : Date.now() + Math.floor(Math.random() * 1000)
+            };
+            if (!prevCart) return [{ ...itemWithId, quantity: 1 }];
             
             const existingItemIndex = prevCart.findIndex(
                 (cartItem) => cartItem.variant_id === item.variant_id && cartItem.variant_id !== null
@@ -52,8 +56,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 };
                 return updatedCart;
             } else {
-                const uniqueId = Date.now() + Math.floor(Math.random() * 1000);
-                return [...prevCart, { id: uniqueId, ...item, quantity: 1 }];
+                return [...prevCart, { ...itemWithId, quantity: 1 }];
             }
         });
     };
