@@ -6,7 +6,7 @@ import { getProjectSubmissions } from '../../../../lib/airtable';
 
 export async function GET(request: Request) {
     const session = await getServerSession(authOptions);
-    const canView = await requireAdminPermission(session, 'canViewOrders');
+    const canView = await requireAdminPermission(session, 'canViewStats');
 
     if (!canView.allowed) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });

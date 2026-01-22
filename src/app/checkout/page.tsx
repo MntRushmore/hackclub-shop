@@ -4,7 +4,6 @@ import { useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession, signIn } from 'next-auth/react';
 import Image from 'next/image';
-import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CartContext } from '../../context/CartContext';
 import { CreditsContext } from '../../context/CreditsContext';

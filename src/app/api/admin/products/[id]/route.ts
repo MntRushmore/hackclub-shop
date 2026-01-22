@@ -28,7 +28,7 @@ export async function GET(
         }
 
         return NextResponse.json({ product });
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: 'Failed to fetch product' }, { status: 500 });
     }
 }
@@ -61,7 +61,7 @@ export async function PUT(
 
         await redis.set(`product:${params.id}`, updated);
         return NextResponse.json({ product: updated });
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: 'Failed to update product' }, { status: 500 });
     }
 }
@@ -80,7 +80,7 @@ export async function DELETE(
     try {
         await redis.del(`product:${params.id}`);
         return NextResponse.json({ success: true });
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: 'Failed to delete product' }, { status: 500 });
     }
 }

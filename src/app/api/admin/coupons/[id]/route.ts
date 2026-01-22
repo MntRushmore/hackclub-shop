@@ -28,7 +28,7 @@ export async function GET(
         }
 
         return NextResponse.json({ coupon });
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: 'Failed to fetch coupon' }, { status: 500 });
     }
 }
@@ -61,7 +61,7 @@ export async function PUT(
         await redis.set(`coupon:${params.id}`, updated);
         await redis.set(`coupon:${updated.code}`, updated);
         return NextResponse.json({ coupon: updated });
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: 'Failed to update coupon' }, { status: 500 });
     }
 }
@@ -86,7 +86,7 @@ export async function DELETE(
         await redis.del(`coupon:${params.id}`);
         await redis.del(`coupon:${coupon.code}`);
         return NextResponse.json({ success: true });
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: 'Failed to delete coupon' }, { status: 500 });
     }
 }

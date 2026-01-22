@@ -31,7 +31,7 @@ export async function GET() {
 
         const coupons = Array.from(couponMap.values());
         return NextResponse.json({ coupons });
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: 'Failed to fetch coupons' }, { status: 500 });
     }
 }
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
         await redis.set(`coupon:${coupon.id}`, coupon);
         await redis.set(`coupon:${coupon.code}`, coupon);
         return NextResponse.json({ coupon }, { status: 201 });
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: 'Failed to create coupon' }, { status: 500 });
     }
 }

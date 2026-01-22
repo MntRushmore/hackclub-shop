@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 
 export default function UsersAdmin() {
-    const { data: session, status } = useSession();
+    const { status } = useSession();
     const [userId, setUserId] = useState('');
     const [amount, setAmount] = useState('');
     const [reason, setReason] = useState('');

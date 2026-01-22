@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import { requireAdminPermission } from '../../../../lib/adminAuth';
-import { setAdminRole, removeAdmin, listAdmins, getAdminRole } from '../../../../lib/adminAuth';
+import { setAdminRole, listAdmins } from '../../../../lib/adminAuth';
 import { AdminRole } from '../../../../types/Admin';
 
 function getGlobalAdmins(): string[] {
@@ -29,7 +29,7 @@ export async function GET() {
         }
 
         return NextResponse.json({ admins, globalAdmins });
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: 'Failed to fetch admins' }, { status: 500 });
     }
 }
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
             { success: true, userId, role },
             { status: 201 }
         );
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: 'Failed to invite admin' }, { status: 500 });
     }
 }

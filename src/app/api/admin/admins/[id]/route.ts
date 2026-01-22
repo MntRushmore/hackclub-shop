@@ -35,7 +35,7 @@ export async function PUT(
         await setAdminRole(params.id, role as AdminRole);
 
         return NextResponse.json({ success: true, userId: params.id, role });
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: 'Failed to update admin' }, { status: 500 });
     }
 }
@@ -59,7 +59,7 @@ export async function DELETE(
         await removeAdmin(params.id);
 
         return NextResponse.json({ success: true, userId: params.id });
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: 'Failed to remove admin' }, { status: 500 });
     }
 }

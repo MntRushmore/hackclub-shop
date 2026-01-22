@@ -9,6 +9,7 @@ import Icon from 'supercons';
 
 export default function AdminDashboard() {
     const { data: session, status } = useSession();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const router = useRouter();
     const [isAdmin, setIsAdmin] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -81,7 +82,7 @@ export default function AdminDashboard() {
                     </div>
                     <h2 className="text-2xl font-black text-hackclub-dark mb-2">Access Denied</h2>
                     <p className="text-hackclub-slate mb-6">
-                        You don't have permission to access the admin dashboard.
+                        You don&apos;t have permission to access the admin dashboard.
                     </p>
                     <Link
                         href="/"

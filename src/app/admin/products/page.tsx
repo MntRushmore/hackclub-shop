@@ -6,6 +6,14 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Product } from '../../../types/Admin';
 
+interface FormCheckoutField {
+    id: string;
+    name: string;
+    label: string;
+    type: string;
+    required: boolean;
+}
+
 export default function ProductsAdmin() {
     const { data: session, status } = useSession();
     const [products, setProducts] = useState<Product[]>([]);
@@ -21,7 +29,7 @@ export default function ProductsAdmin() {
         category: '',
         variants: [{ id: '', variant_id: '', name: '', price: '', size: '', color: '', image_url: '', stock: '' }],
         shippingOptions: [{ id: '', country: '', cost: '' }],
-        checkoutFields: [],
+        checkoutFields: [] as FormCheckoutField[],
     });
     const [submitting, setSubmitting] = useState(false);
 
