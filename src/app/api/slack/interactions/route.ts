@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
                                 break;
                             }
                         }
-                    } catch (error) {
+                    } catch {
                     }
                     
                     const userId = payload.user.id;
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
                                 text: `Message about your order #${orderId.slice(-8)}:\n\n${messageText}`,
                             }),
                         });
-                    } catch (error) {
+                    } catch {
                     }
                     
                     if (messageTs && channelId) {
@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
                                                 text: `Message about your order #${orderId.slice(-8)}:\n\n${messageText}`,
                                             }),
                                         });
-                                    } catch (error) {
+                                    } catch {
                                     }
                                 }
                                 const updatedBlocks = messageBlock.blocks.map((block: any) => {
