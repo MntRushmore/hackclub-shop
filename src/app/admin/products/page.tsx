@@ -27,7 +27,7 @@ export default function ProductsAdmin() {
         image_url: '',
         thumbnail_url: '',
         category: '',
-        variants: [{ id: '', variant_id: '', name: '', price: '', size: '', color: '', image_url: '', stock: '' }],
+        variants: [{ id: '', variant_id: '', name: '', price: '', pointsPrice: '', size: '', color: '', image_url: '', stock: '' }],
         shippingOptions: [{ id: '', country: '', cost: '' }],
         checkoutFields: [] as FormCheckoutField[],
     });
@@ -80,6 +80,7 @@ export default function ProductsAdmin() {
                     variants: formData.variants.filter(v => v.name && v.price).map(v => ({
                         ...v,
                         price: parseFloat(v.price),
+                        pointsPrice: parseFloat(v.pointsPrice || '0'),
                         stock: v.stock ? parseInt(v.stock) : undefined,
                     })),
                     shippingOptions: formData.shippingOptions.filter(s => s.country && s.cost).map(s => ({
@@ -108,7 +109,7 @@ export default function ProductsAdmin() {
                 image_url: '',
                 thumbnail_url: '',
                 category: '',
-                variants: [{ id: '', variant_id: '', name: '', price: '', size: '', color: '', image_url: '', stock: '' }],
+                variants: [{ id: '', variant_id: '', name: '', price: '', pointsPrice: '', size: '', color: '', image_url: '', stock: '' }],
                 shippingOptions: [{ id: '', country: '', cost: '' }],
                 checkoutFields: [],
             });
@@ -134,11 +135,12 @@ export default function ProductsAdmin() {
                 variant_id: v.variant_id,
                 name: v.name,
                 price: v.price.toString(),
+                pointsPrice: v.pointsPrice?.toString() || '',
                 size: v.size || '',
                 color: v.color || '',
                 image_url: v.image_url || '',
                 stock: v.stock?.toString() || '',
-            })) || [{ id: '', variant_id: '', name: '', price: '', size: '', color: '', image_url: '', stock: '' }],
+            })) || [{ id: '', variant_id: '', name: '', price: '', pointsPrice: '', size: '', color: '', image_url: '', stock: '' }],
             shippingOptions: (product.shippingOptions || []).map(s => ({
                 id: s.id,
                 country: s.country,
@@ -157,7 +159,7 @@ export default function ProductsAdmin() {
             image_url: '',
             thumbnail_url: '',
             category: '',
-            variants: [{ id: '', variant_id: '', name: '', price: '', size: '', color: '', image_url: '', stock: '' }],
+            variants: [{ id: '', variant_id: '', name: '', price: '', pointsPrice: '', size: '', color: '', image_url: '', stock: '' }],
             shippingOptions: [{ id: '', country: '', cost: '' }],
             checkoutFields: [],
         });
@@ -306,15 +308,27 @@ export default function ProductsAdmin() {
                                                         }}
                                                         className="w-full px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
                                                     />
-                                                    <div className="grid grid-cols-3 gap-2">
+                                                    <div className="grid grid-cols-4 gap-2">
                                                         <input
                                                             type="number"
-                                                            placeholder="Price"
+                                                            placeholder="Cash Price ($)"
                                                             step="0.01"
                                                             value={variant.price}
                                                             onChange={(e) => {
                                                                 const newVariants = [...formData.variants];
                                                                 newVariants[idx].price = e.target.value;
+                                                                setFormData({ ...formData, variants: newVariants });
+                                                            }}
+                                                            className="px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
+                                                        />
+                                                        <input
+                                                            type="number"
+                                                            placeholder="Points Price"
+                                                            step="1"
+                                                            value={variant.pointsPrice}
+                                                            onChange={(e) => {
+                                                                const newVariants = [...formData.variants];
+                                                                newVariants[idx].pointsPrice = e.target.value;
                                                                 setFormData({ ...formData, variants: newVariants });
                                                             }}
                                                             className="px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
@@ -384,7 +398,7 @@ export default function ProductsAdmin() {
                                                 type="button"
                                                 onClick={() => setFormData({
                                                     ...formData,
-                                                    variants: [...formData.variants, { id: '', variant_id: '', name: '', price: '', size: '', color: '', image_url: '', stock: '' }]
+                                                    variants: [...formData.variants, { id: '', variant_id: '', name: '', price: '', pointsPrice: '', size: '', color: '', image_url: '', stock: '' }]
                                                 })}
                                                 className="w-full px-4 py-2 border-2 border-dashed border-hackclub-green text-hackclub-green font-bold rounded-lg hover:bg-hackclub-green/10 transition-colors"
                                             >

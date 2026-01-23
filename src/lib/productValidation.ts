@@ -5,6 +5,7 @@ interface ProductVariant {
     variant_id: string;
     name: string;
     price: number;
+    pointsPrice?: number;
     size?: string;
     color?: string;
     image_url?: string;
@@ -48,11 +49,13 @@ export async function validateCartItems(items: { id: string; name: string; price
     valid: boolean;
     error?: string;
     verifiedTotal?: number;
-    items?: { id: string; name: string; price: string; quantity: number; thumbnail_url?: string }[];
+    verifiedPointsTotal?: number;
+    items?: { id: string; name: string; price: string; pointsPrice?: number; quantity: number; thumbnail_url?: string }[];
 }> {
     const products = await loadProducts();
     let verifiedTotal = 0;
-    const verifiedItems: { id: string; name: string; price: string; quantity: number; thumbnail_url?: string }[] = [];
+    let verifiedPointsTotal = 0;
+    const verifiedItems: { id: string; name: string; price: string; pointsPrice?: number; quantity: number; thumbnail_url?: string }[] = [];
 
     for (const item of items) {
         const product = products.find(p => p.id === item.id);
@@ -81,10 +84,12 @@ export async function validateCartItems(items: { id: string; name: string; price
         }
 
         verifiedTotal += variant.price * item.quantity;
+        verifiedPointsTotal += (variant.pointsPrice || 0) * item.quantity;
         verifiedItems.push({
             id: item.id,
             name: variant.name,
             price: variant.price.toString(),
+            pointsPrice: variant.pointsPrice,
             quantity: item.quantity,
             thumbnail_url: variant.image_url || product.image_url || product.thumbnail_url,
         });
@@ -93,6 +98,7 @@ export async function validateCartItems(items: { id: string; name: string; price
     return {
         valid: true,
         verifiedTotal,
+        verifiedPointsTotal,
         items: verifiedItems,
     };
 }

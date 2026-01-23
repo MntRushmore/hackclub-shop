@@ -96,7 +96,7 @@ export default function AdminProjectsPage() {
                 throw new Error(data.error || 'Failed to approve project');
             }
 
-            setSuccessMessage(`Approved "${projectName}" - ${hours} hours = $${data.creditsAwarded} awarded!`);
+            setSuccessMessage(`Approved "${projectName}" - ${hours} hours = ${data.pointsAwarded} pts awarded!`);
             setTimeout(() => setSuccessMessage(null), 5000);
             setHoursInput(prev => {
                 const newState = { ...prev };
@@ -209,7 +209,7 @@ export default function AdminProjectsPage() {
                                 Project Submissions
                             </h1>
                             <p className="text-hackclub-muted mt-2">
-                                $5 per approved hour
+                                5 points per approved hour
                             </p>
                             {pendingCount > 0 && filter !== 'pending' && (
                                 <p className="text-hackclub-orange font-bold mt-1">

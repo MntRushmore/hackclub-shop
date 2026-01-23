@@ -23,6 +23,7 @@ export async function GET() {
                     variant_id: variant.variant_id || `${product.id}_var_${idx}`,
                     name: variant.name,
                     retail_price: variant.price.toString(),
+                    points_price: variant.pointsPrice || variant.points_price || 0,
                     size: variant.size || 'One Size',
                     color: variant.color || 'Default',
                     product: {

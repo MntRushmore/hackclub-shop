@@ -6,6 +6,7 @@ interface CartItem {
     id: string | number;
     name: string;
     price: string;
+    pointsPrice?: number;
     thumbnail_url: string;
     variant_id?: string | number | null;
     quantity: number;

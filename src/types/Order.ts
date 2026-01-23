@@ -17,10 +17,12 @@ export interface Order {
     userId: string;
     items: OrderItem[];
     subtotal: number;
+    pointsRequired: number;
+    pointsSpent: number;
     couponDiscount?: number;
     shippingCost: number;
-    totalAmount: number;
-    creditsPaid: number;
+    totalAmount: number; // cash component
+    creditsPaid: number; // cash paid with credits
     shippingCountry?: string;
     checkoutData: Record<string, string>;
     status: 'pending' | 'approved' | 'fulfilled' | 'denied' | 'refunded';

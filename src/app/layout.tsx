@@ -1,5 +1,6 @@
 import { CartProvider } from '../context/CartContext';
 import { CreditsProvider } from '../context/CreditsContext';
+import { PointsProvider } from '../context/PointsContext';
 import AuthProvider from '../context/AuthProvider';
 import '../styles/globals.css';
 import Navigation from './components/Navigation';
@@ -21,10 +22,12 @@ export default function RootLayout({
       <body className="antialiased">
         <AuthProvider>
           <CreditsProvider>
-            <CartProvider>
-              <Navigation />
-              {children}
-            </CartProvider>
+            <PointsProvider>
+              <CartProvider>
+                <Navigation />
+                {children}
+              </CartProvider>
+            </PointsProvider>
           </CreditsProvider>
         </AuthProvider>
       </body>

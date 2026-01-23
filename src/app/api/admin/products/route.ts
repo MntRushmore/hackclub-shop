@@ -56,6 +56,11 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Missing required fields (need name and at least 1 variant)' }, { status: 400 });
         }
 
+        const variantsInvalid = variants.some((v: any) => v.pointsPrice === undefined || isNaN(parseFloat(v.pointsPrice)));
+        if (variantsInvalid) {
+            return NextResponse.json({ error: 'Each variant must include pointsPrice' }, { status: 400 });
+        }
+
         const product: Product = {
             id: `prod_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             name,
@@ -68,6 +73,7 @@ export async function POST(request: Request) {
                 variant_id: v.variant_id || `var_${Date.now()}_${idx}`,
                 name: v.name,
                 price: parseFloat(v.price),
+                pointsPrice: parseFloat(v.pointsPrice),
                 size: v.size,
                 color: v.color,
                 image_url: v.image_url,

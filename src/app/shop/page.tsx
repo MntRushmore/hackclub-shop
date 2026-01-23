@@ -12,6 +12,7 @@ interface Product {
     thumbnail_url: string;
     sync_variants: { 
         retail_price: string;
+        points_price?: number;
         variant_id: string | number;
         name: string;
         id?: string | number;
@@ -110,6 +111,7 @@ const Shop = () => {
                         id: product.id,
                         name: variant.name,
                         price: variant.retail_price,
+                        pointsPrice: variant.points_price ?? 0,
                         thumbnail_url: variant.product.image,
                         variant_id: variantId,
                     });
@@ -190,7 +192,7 @@ const Shop = () => {
                                         {product.name}
                                     </h2>
                                     <p className="text-2xl font-black text-hackclub-red mb-3">
-                                        ${parseFloat(product.sync_variants[0]?.retail_price || '0').toFixed(2)}
+                                        {product.sync_variants[0]?.points_price ?? 0} pts + ${parseFloat(product.sync_variants[0]?.retail_price || '0').toFixed(2)}
                                     </p>
                                 </Link>
                                 <div className="flex items-center gap-2">
@@ -217,6 +219,7 @@ const Shop = () => {
                                                     id: product.id,
                                                     name: variant.name,
                                                     price: variant.retail_price,
+                                                    pointsPrice: variant.points_price ?? 0,
                                                     thumbnail_url: variant.product.image,
                                                     variant_id: variantId,
                                                 });

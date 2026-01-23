@@ -3,6 +3,7 @@ export interface Variant {
     variant_id: number;
     name: string;
     retail_price: string;
+    points_price?: number;
     size: string;
     color: string;
     product: {

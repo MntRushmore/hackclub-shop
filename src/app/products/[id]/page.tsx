@@ -51,6 +51,7 @@ const ProductPage = () => {
                 id: product.id,
                 name: selectedVariant.name,
                 price: selectedVariant.retail_price,
+                pointsPrice: selectedVariant.points_price ?? 0,
                 thumbnail_url: selectedVariant.product.image,
                 variant_id: selectedVariant.variant_id || selectedVariant.id,
             };
@@ -122,8 +123,8 @@ const ProductPage = () => {
                             {product.name}
                         </h1>
                         
-                        <p className="text-4xl font-black text-hackclub-red mb-8">
-                            ${parseFloat(selectedVariant?.retail_price || '0.00').toFixed(2)}
+                        <p className="text-3xl font-black text-hackclub-red mb-8">
+                            {(selectedVariant?.points_price ?? 0)} pts + ${parseFloat(selectedVariant?.retail_price || '0.00').toFixed(2)}
                         </p>
 
                         {variants.length > 0 && (
@@ -146,7 +147,7 @@ const ProductPage = () => {
                                 >
                                     {variants.map((variant, idx) => (
                                         <option key={`${variant.id || variant.variant_id}_${idx}`} value={variant.id || variant.variant_id}>
-                                            {variant.size || 'Default'} / {variant.color || 'Default'} - ${parseFloat(variant.retail_price || '0').toFixed(2)}
+                                            {variant.size || 'Default'} / {variant.color || 'Default'} - {variant.points_price ?? 0} pts + ${parseFloat(variant.retail_price || '0').toFixed(2)}
                                         </option>
                                     ))}
                                 </select>

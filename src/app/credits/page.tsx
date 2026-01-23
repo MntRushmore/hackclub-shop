@@ -4,6 +4,7 @@ import { useContext, useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSession, signIn } from 'next-auth/react';
 import { CreditsContext } from '../../context/CreditsContext';
+import { PointsContext } from '../../context/PointsContext';
 import { CreditsSkeleton } from '../components/Skeleton';
 
 const HCB_DONATE_BASE = process.env.NEXT_PUBLIC_HCB_DONATE_BASE || 'https://hcb.hackclub.com/donations/start/hc-store';
@@ -11,6 +12,7 @@ const HCB_DONATE_BASE = process.env.NEXT_PUBLIC_HCB_DONATE_BASE || 'https://hcb.
 const CreditsPage = () => {
     const { data: session, status } = useSession();
     const creditsContext = useContext(CreditsContext);
+    const pointsContext = useContext(PointsContext);
     const [showAddCredits, setShowAddCredits] = useState(false);
     const [claimCode, setClaimCode] = useState('');
     const [verifying, setVerifying] = useState(false);
@@ -101,6 +103,8 @@ const CreditsPage = () => {
     }
 
     const { balance, transactions, refreshCredits } = creditsContext;
+    const pointsBalance = pointsContext?.balance ?? 0;
+    const pointsTransactions = pointsContext?.transactions ?? [];
 
     const formatDate = (date: Date) => {
         return new Date(date).toLocaleDateString('en-US', {
@@ -217,6 +221,31 @@ const CreditsPage = () => {
                             >
                                 + Add Credits
                             </motion.button>
+                        </div>
+                    </motion.div>
+
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.96 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.35, delay: 0.15 }}
+                        className="bg-white rounded-2xl p-6 shadow-lg border-2 border-hackclub-smoke mb-8"
+                    >
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-hackclub-muted font-bold text-sm uppercase tracking-wide mb-1">Points Balance</p>
+                                <motion.p
+                                    key={pointsBalance}
+                                    initial={{ scale: 1.05 }}
+                                    animate={{ scale: 1 }}
+                                    className="text-4xl sm:text-5xl font-black text-hackclub-dark"
+                                >
+                                    {pointsBalance} pts
+                                </motion.p>
+                            </div>
+                            <div className="text-right text-sm text-hackclub-slate font-medium">
+                                Earn 5 pts per approved project hour.<br/>
+                                Spend points with credits at checkout.
+                            </div>
                         </div>
                     </motion.div>
 

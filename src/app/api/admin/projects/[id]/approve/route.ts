@@ -10,7 +10,9 @@ const redis = new Redis({
     token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 });
 
-const HOURLY_RATE = 5;
+const POINTS_PER_HOUR = 5;
+const pointsBalanceKey = (userId: string) => `user:${userId}:pointsBalance`;
+const pointsTxKey = (userId: string) => `user:${userId}:pointsTransactions`;
 
 export async function POST(
     request: Request,
@@ -54,29 +56,29 @@ export async function POST(
             hoursApproved
         );
 
-        const creditsAwarded = hoursApproved * HOURLY_RATE;
+        const pointsAwarded = hoursApproved * POINTS_PER_HOUR;
         const userId = project.userId;
-        const currentBalance = (await redis.get<number>(`user:${userId}:balance`)) || 0;
-        const newBalance = currentBalance + creditsAwarded;
+        const currentBalance = (await redis.get<number>(pointsBalanceKey(userId))) || 0;
+        const newBalance = currentBalance + pointsAwarded;
 
-        await redis.set(`user:${userId}:balance`, newBalance);
+        await redis.set(pointsBalanceKey(userId), newBalance);
 
         const transaction = {
-            id: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            amount: creditsAwarded,
-            type: 'deposit',
-            description: `Project approved: ${project.firstName} ${project.lastName} - ${hoursApproved} hours @ $${HOURLY_RATE}/hr`,
+            id: `ptxn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            amount: pointsAwarded,
+            type: 'earn',
+            description: `Project approved: ${project.firstName} ${project.lastName} - ${hoursApproved} hours @ ${POINTS_PER_HOUR} pts/hr`,
             timestamp: new Date(),
         };
 
-        const transactions = (await redis.get<unknown[]>(`user:${userId}:transactions`)) || [];
-        await redis.set(`user:${userId}:transactions`, [transaction, ...transactions]);
+        const transactions = (await redis.get<unknown[]>(pointsTxKey(userId))) || [];
+        await redis.set(pointsTxKey(userId), [transaction, ...transactions]);
 
         return NextResponse.json({
             success: true,
             project: updatedProject,
             hoursApproved,
-            creditsAwarded,
+            pointsAwarded,
             newBalance,
         });
     } catch (error) {

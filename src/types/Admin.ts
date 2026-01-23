@@ -48,6 +48,7 @@ export interface ProductVariant {
     variant_id: string;
     name: string;
     price: number;
+    pointsPrice: number;
     size?: string;
     color?: string;
     image_url?: string;
