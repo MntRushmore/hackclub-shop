@@ -120,10 +120,13 @@ export async function POST(request: Request) {
         }
 
         // Check user has enough balances
-        const [creditsBalance, pointsBalance] = await Promise.all([
-            redis.get<number>(`user:${userId}:balance`) || 0,
-            redis.get<number>(`user:${userId}:pointsBalance`) || 0,
+        const [creditsBalanceRaw, pointsBalanceRaw] = await Promise.all([
+            redis.get<number>(`user:${userId}:balance`),
+            redis.get<number>(`user:${userId}:pointsBalance`),
         ]);
+
+        const creditsBalance = creditsBalanceRaw ?? 0;
+        const pointsBalance = pointsBalanceRaw ?? 0;
 
         if (pointsBalance < verifiedItemPointsTotal) {
             return NextResponse.json({ 
