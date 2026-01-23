@@ -72,6 +72,7 @@ export const ShippingPaymentSelector: React.FC<ShippingPaymentSelectorProps> = (
             cashTotal: totalCashRequired,
             pointsTotal: totalPointsRequired,
         });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [shippingPaymentMode, shippingPointsRatio, itemsCashTotal, itemsPointsTotal]);
 
     return (

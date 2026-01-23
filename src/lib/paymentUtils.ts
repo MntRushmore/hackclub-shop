@@ -1,4 +1,4 @@
-import { Variant, PaymentMode } from '../types/Product';
+import { PaymentMode } from '../types/Product';
 
 export function inferPaymentMode(variant: any): PaymentMode {
     if (variant.payment_mode) {

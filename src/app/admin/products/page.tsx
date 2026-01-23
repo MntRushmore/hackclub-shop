@@ -163,7 +163,7 @@ export default function ProductsAdmin() {
                     image_url: '',
                     stock: ''
                 }],
-                shippingOptions: [{ id: '', country: '', cost: '' }],
+                shippingOptions: [{ id: '', country: '', cost: '', costPoints: '' }],
                 checkoutFields: [],
             });
             setShowForm(false);

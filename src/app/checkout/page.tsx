@@ -20,10 +20,7 @@ const Checkout = () => {
     const pointsContext = useContext(PointsContext);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [couponCode, setCouponCode] = useState('');
-    const [couponDiscount, setCouponDiscount] = useState(0);
-    const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
-    const [couponLoading, setCouponLoading] = useState(false);
+    const [couponDiscount] = useState(0);
     const [selectedShipping, setSelectedShipping] = useState<ShippingOption | null>(null);
     const [checkoutData, setCheckoutData] = useState<Record<string, string>>({});
     const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
@@ -32,7 +29,6 @@ const Checkout = () => {
     const [showHCBModal, setShowHCBModal] = useState(false);
     const [claimCode, setClaimCode] = useState('');
     const [codeLoading, setCodeLoading] = useState(false);
-    const [updateTrigger, setUpdateTrigger] = useState(0);
     const [shippingPaymentCashTotal, setShippingPaymentCashTotal] = useState(0);
     const [shippingPaymentPointsTotal, setShippingPaymentPointsTotal] = useState(0);
     const router = useRouter();
@@ -132,7 +128,7 @@ const Checkout = () => {
 
     let totalBalance = 0;
     let totalPoints = 0;
-    let paymentModeCount = { balance_only: 0, points_only: 0, mixed: 0 };
+    const paymentModeCount = { balance_only: 0, points_only: 0, mixed: 0 };
 
     cart.forEach((item) => {
         paymentModeCount[item.paymentMode]++;
@@ -156,13 +152,6 @@ const Checkout = () => {
         totalPoints: Math.round(totalPoints),
     };
 
-    let overallPaymentMode: 'balance_only' | 'points_only' | 'mixed' = 'mixed';
-    if (paymentModeCount.balance_only > 0 && paymentModeCount.points_only === 0 && paymentModeCount.mixed === 0) {
-        overallPaymentMode = 'balance_only';
-    } else if (paymentModeCount.points_only > 0 && paymentModeCount.balance_only === 0 && paymentModeCount.mixed === 0) {
-        overallPaymentMode = 'points_only';
-    }
-
     const finalCashTotal = shippingPaymentCashTotal > 0 ? shippingPaymentCashTotal : Math.max(0, checkoutSummary.totalBalance - couponDiscount + shippingCost);
     const finalPointsTotal = shippingPaymentPointsTotal > 0 ? shippingPaymentPointsTotal : checkoutSummary.totalPoints;
 
@@ -177,49 +166,7 @@ const Checkout = () => {
     const remainingPointsNeeded = Math.max(0, requiredPoints - pointsBalance);
     const canCheckout = hasEnoughCredits && hasEnoughPoints;
 
-    const applyCoupon = async () => {
-        if (!couponCode.trim()) {
-            setError('Please enter a coupon code');
-            return;
-        }
 
-        setCouponLoading(true);
-        setError(null);
-
-        try {
-            const response = await fetch('/api/coupons/validate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    code: couponCode,
-                    cartTotal: checkoutSummary.totalBalance,
-                }),
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                setError(data.error || 'Failed to apply coupon');
-                setCouponLoading(false);
-                return;
-            }
-
-            setCouponDiscount(data.discount);
-            setAppliedCoupon(couponCode);
-            setCouponCode('');
-            setError(null);
-        } catch {
-            setError('Failed to apply coupon');
-        } finally {
-            setCouponLoading(false);
-        }
-    };
-
-    const removeCoupon = () => {
-        setCouponDiscount(0);
-        setAppliedCoupon(null);
-        setCouponCode('');
-    };
 
     const validateCheckoutFields = (): boolean => {
         for (const field of checkoutFields) {
@@ -456,7 +403,6 @@ const Checkout = () => {
                                                 item={item}
                                                 shippingCost={shippingCost}
                                                 shippingCostPoints={shippingCostPoints}
-                                                couponDiscount={couponDiscount}
                                                 userBalance={creditsContext?.balance || 0}
                                                 userPoints={pointsContext?.balance || 0}
                                                 onPointsChange={(points) => {
@@ -464,7 +410,6 @@ const Checkout = () => {
                                                         const idx = cartContext.cart.findIndex((c) => c.id === item.id);
                                                         if (idx !== -1) {
                                                             cartContext.cart[idx].pointsSpent = points;
-                                                            setUpdateTrigger((prev) => prev + 1);
                                                         }
                                                     }
                                                 }}

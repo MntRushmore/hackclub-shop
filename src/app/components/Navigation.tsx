@@ -13,7 +13,7 @@ import Lottie from 'lottie-react';
 import animationData from '../../../public/images/shopping-bag.json';
 import type { LottieRefCurrentProps } from 'lottie-react';
 
-const ShoppingBagIcon = forwardRef<{ closeAndWait: () => Promise<void> }, {}>((props, ref) => {
+const ShoppingBagIcon = forwardRef<{ closeAndWait: () => Promise<void> }, unknown>((props, ref) => {
   const lottieRef = useRef<LottieRefCurrentProps>(null);
   const [isHovered, setIsHovered] = useState(false);
   const isInitialMount = useRef(true);
@@ -60,6 +60,7 @@ const ShoppingBagIcon = forwardRef<{ closeAndWait: () => Promise<void> }, {}>((p
     </div>
   );
 });
+ShoppingBagIcon.displayName = 'ShoppingBagIcon';
 
 const Navigation = () => {
   const router = useRouter();

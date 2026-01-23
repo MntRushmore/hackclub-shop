@@ -7,7 +7,7 @@ interface UnifiedPaymentSliderProps {
     item: any;
     shippingCost: number;
     shippingCostPoints: number;
-    couponDiscount: number;
+    couponDiscount?: number;
     userBalance: number;
     userPoints: number;
     onPointsChange: (points: number) => void;
@@ -18,7 +18,6 @@ export const UnifiedPaymentSlider: React.FC<UnifiedPaymentSliderProps> = ({
     item,
     shippingCost,
     shippingCostPoints,
-    couponDiscount,
     userBalance,
     userPoints,
     onPointsChange,
@@ -26,7 +25,6 @@ export const UnifiedPaymentSlider: React.FC<UnifiedPaymentSliderProps> = ({
 }) => {
     // Total points available to spend across items and shipping
     const totalPointsCostFull = (item.pricePointsFull || 0) * item.quantity + (shippingCostPoints || 0);
-    const totalCashCostFull = (item.priceBalanceFull || 0) * item.quantity + shippingCost - couponDiscount;
 
     // User controls how many total points to "throw in"
     const [totalPointsSpent, setTotalPointsSpent] = useState(0);
@@ -35,8 +33,8 @@ export const UnifiedPaymentSlider: React.FC<UnifiedPaymentSliderProps> = ({
     const itemPointsMaxPerUnit = item.pricePointsFull || 0;
     const itemPointsMaxTotal = itemPointsMaxPerUnit * item.quantity;
 
-    let itemPointsSpent = Math.min(totalPointsSpent, itemPointsMaxTotal);
-    let shippingPointsSpent = Math.max(0, totalPointsSpent - itemPointsSpent);
+    const itemPointsSpent = Math.min(totalPointsSpent, itemPointsMaxTotal);
+    const shippingPointsSpent = Math.max(0, totalPointsSpent - itemPointsSpent);
 
     // Calculate balance costs based on points spent
     const { pointsToCharge: itemPointsCharged, balanceToCharge: itemBalancePerUnitCharged } =
@@ -57,10 +55,12 @@ export const UnifiedPaymentSlider: React.FC<UnifiedPaymentSliderProps> = ({
 
     useEffect(() => {
         onPointsChange(itemPointsSpent / item.quantity);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [itemPointsSpent, item.quantity]);
 
     useEffect(() => {
         onShippingPaymentChange(totalCashRequired, totalPointsRequired);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [totalCashRequired, totalPointsRequired]);
 
     return (

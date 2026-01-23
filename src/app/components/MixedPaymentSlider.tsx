@@ -22,7 +22,6 @@ export const MixedPaymentSlider: React.FC<MixedPaymentSliderProps> = ({
 }) => {
     const [pointsPerUnit, setPointsPerUnit] = useState(0);
     const maxPointsPerUnit = Math.max(0, pricePointsFull || 0);
-    const maxPointsTotal = maxPointsPerUnit * quantity;
 
     const { pointsToCharge: pointsPerUnitCharged, balanceToCharge: balancePerUnitCharged } =
         calculateMixedPayment(pointsPerUnit, priceBalanceFull, pricePointsFull);
@@ -36,7 +35,8 @@ export const MixedPaymentSlider: React.FC<MixedPaymentSliderProps> = ({
 
     useEffect(() => {
         onPointsChange(pointsPerUnit);
-    }, [pointsPerUnit, onPointsChange]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pointsPerUnit]);
 
     const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setPointsPerUnit(Math.floor(parseFloat(e.target.value)));

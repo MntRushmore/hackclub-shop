@@ -305,10 +305,9 @@ const CreditsPage = () => {
                                         ];
 
                                         return merged.map((group, index) => {
-                                            const mainTxn = group[0];
-                                            const creditTxn = group.find((t) => t.txnType === 'credit');
-                                            const pointsTxn = group.find((t) => t.txnType === 'points');
-                                            const hasBoth = creditTxn && pointsTxn;
+                                             const mainTxn = group[0];
+                                             const creditTxn = group.find((t) => t.txnType === 'credit');
+                                             const pointsTxn = group.find((t) => t.txnType === 'points');
 
                                             // Determine icon color based on transaction types
                                             let bgColor = 'bg-hackclub-red text-white';

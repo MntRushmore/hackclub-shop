@@ -372,7 +372,7 @@ export default function SubmitProjectPage() {
                                 <div className="mt-8 bg-hackclub-smoke rounded-xl p-4 border-2 border-gray-100">
                                     <div className="flex items-start gap-3">
                                         <div>
-                                            <p className="font-black text-hackclub-dark">Note: You'll earn 5 points per approved hour</p>
+                                            <p className="font-black text-hackclub-dark">Note: You&apos;ll earn 5 points per approved hour</p>
                                             <p className="text-sm text-hackclub-slate">
                                                 Once your project hours are reviewed and approved, you&apos;ll automatically receive points you can spend in the shop!
                                             </p>
