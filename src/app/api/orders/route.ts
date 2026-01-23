@@ -57,7 +57,7 @@ export async function POST(request: Request) {
 
     try {
         const { items, cashTotal, pointsRequired, shippingCost, shippingCountry, checkoutData, csrfToken, idempotencyKey, couponDiscount = 0 } = await request.json() as { 
-            items: { id: string; name: string; price: string; quantity: number; variant_id?: number }[]; 
+            items: { id: string; name: string; price: string; quantity: number; variant_id?: string | number; pointsSpent?: number }[]; 
             cashTotal: number;
             pointsRequired: number;
             shippingCost?: number | string;
@@ -91,9 +91,10 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'No items in order' }, { status: 400 });
         }
 
+        // Ensure all variant_ids are strings for consistent validation
         const itemsWithStringVariantId = items.map(item => ({
             ...item,
-            variant_id: item.variant_id !== undefined ? String(item.variant_id) : undefined,
+            variant_id: item.variant_id !== undefined && item.variant_id !== null ? String(item.variant_id) : undefined,
         }));
 
         // Validate products and prices server-side

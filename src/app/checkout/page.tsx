@@ -9,6 +9,7 @@ import { CartContext } from '../../context/CartContext';
 import { CreditsContext } from '../../context/CreditsContext';
 import { PointsContext } from '../../context/PointsContext';
 import { ShippingOption, CheckoutField } from '../../types/Admin';
+import { MixedPaymentSlider } from '../components/MixedPaymentSlider';
 
 const HCB_DONATE_BASE = process.env.NEXT_PUBLIC_HCB_DONATE_BASE || 'https://hcb.hackclub.com/donations/start/hc-store';
 
@@ -31,6 +32,7 @@ const Checkout = () => {
   const [showHCBModal, setShowHCBModal] = useState(false);
   const [claimCode, setClaimCode] = useState('');
   const [codeLoading, setCodeLoading] = useState(false);
+  const [updateTrigger, setUpdateTrigger] = useState(0);
   const router = useRouter();
 
   useEffect(() => {
@@ -122,10 +124,35 @@ const Checkout = () => {
   if (!cartContext || cartContext.cart === null) return null;
 
   const { cart, clearCart } = cartContext;
-  const subtotal = cart.reduce((total, item) => total + parseFloat(item.price) * (item.quantity || 1), 0);
-  const requiredPoints = cart.reduce((total, item) => total + (item.pointsPrice || 0) * (item.quantity || 1), 0);
   const shippingCost = selectedShipping?.cost || 0;
-  const cashTotal = Math.max(0, subtotal - couponDiscount + shippingCost);
+  
+  // Calculate checkout summary - recalculates on each render when updateTrigger changes
+  let totalBalance = 0;
+  let totalPoints = 0;
+  
+  cart.forEach(item => {
+    if (item.paymentMode === 'balance_only') {
+      totalBalance += (item.priceBalance || 0) * item.quantity;
+    } else if (item.paymentMode === 'points_only') {
+      totalPoints += (item.pricePoints || 0) * item.quantity;
+    } else if (item.paymentMode === 'mixed') {
+      const pointsPerUnit = item.pointsSpent || 0;
+      const pricePointsFull = item.pricePointsFull || 0;
+      const priceBalanceFull = item.priceBalanceFull || 0;
+      const ratio = pricePointsFull > 0 ? pointsPerUnit / pricePointsFull : 0;
+      const balancePerUnit = priceBalanceFull * (1 - ratio);
+      totalBalance += balancePerUnit * item.quantity;
+      totalPoints += pointsPerUnit * item.quantity;
+    }
+  });
+  
+  const checkoutSummary = {
+    totalBalance: parseFloat(totalBalance.toFixed(2)),
+    totalPoints: Math.round(totalPoints),
+  };
+  
+  const cashTotal = Math.max(0, checkoutSummary.totalBalance - couponDiscount + shippingCost);
+  const requiredPoints = checkoutSummary.totalPoints;
 
   const creditsBalance = creditsContext?.balance || 0;
   const pointsBalance = pointsContext?.balance || 0;
@@ -145,14 +172,14 @@ const Checkout = () => {
     setError(null);
 
     try {
-      const response = await fetch('/api/coupons/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: couponCode,
-          cartTotal: subtotal,
-        }),
-      });
+       const response = await fetch('/api/coupons/validate', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           code: couponCode,
+           cartTotal: checkoutSummary.totalBalance,
+         }),
+       });
 
       const data = await response.json();
 
@@ -218,6 +245,12 @@ const Checkout = () => {
             id: String(item.id),
             name: item.name,
             price: item.price,
+            paymentMode: item.paymentMode,
+            priceBalance: item.priceBalance,
+            pricePoints: item.pricePoints,
+            priceBalanceFull: item.priceBalanceFull,
+            pricePointsFull: item.pricePointsFull,
+            pointsSpent: item.pointsSpent || 0,
             quantity: item.quantity || 1,
             variant_id: item.variant_id,
             thumbnail_url: item.thumbnail_url,
@@ -310,6 +343,44 @@ const Checkout = () => {
               )}
             </AnimatePresence>
           </div>
+
+          {/* Mixed Payment Sliders */}
+          {cart.length > 0 && cart.some(item => item.paymentMode === 'mixed') && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-6 p-4 rounded-2xl bg-hackclub-blue/10 border-2 border-hackclub-blue"
+            >
+              <h3 className="font-bold text-hackclub-dark mb-4">Adjust Point Spending</h3>
+              <div className="space-y-4">
+                {cart.map((item) => 
+                  item.paymentMode === 'mixed' ? (
+                    <div key={item.id} className="bg-white rounded-lg p-4 border border-hackclub-smoke">
+                      <p className="font-bold text-hackclub-dark mb-3">{item.name} (Qty: {item.quantity})</p>
+                      <MixedPaymentSlider
+                        priceBalanceFull={item.priceBalanceFull || 0}
+                        pricePointsFull={item.pricePointsFull || 0}
+                        userBalance={creditsContext?.balance || 0}
+                        userPoints={pointsContext?.balance || 0}
+                        quantity={item.quantity}
+                        onPointsChange={(points) => {
+                          // Update the cart item's pointsSpent and trigger recalculation
+                          if (cartContext?.cart) {
+                            const idx = cartContext.cart.findIndex(c => c.id === item.id);
+                            if (idx !== -1) {
+                              cartContext.cart[idx].pointsSpent = points;
+                              // Force a re-render by updating updateTrigger
+                              setUpdateTrigger(prev => prev + 1);
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  ) : null
+                )}
+              </div>
+            </motion.div>
+          )}
 
           {cart.length > 0 && (
             <>
@@ -443,7 +514,7 @@ const Checkout = () => {
               <div className="mt-6 space-y-2">
                 <div className="flex justify-between items-center text-hackclub-slate">
                   <span>Subtotal (cash):</span>
-                  <span>${subtotal.toFixed(2)}</span>
+                  <span>${checkoutSummary.totalBalance.toFixed(2)}</span>
                 </div>
                 {couponDiscount > 0 && (
                   <div className="flex justify-between items-center text-hackclub-green">

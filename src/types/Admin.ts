@@ -48,7 +48,11 @@ export interface ProductVariant {
     variant_id: string;
     name: string;
     price: number;
-    pointsPrice: number;
+    payment_mode: 'balance_only' | 'points_only' | 'mixed';
+    price_balance?: number;
+    price_points?: number;
+    price_balance_full?: number;
+    price_points_full?: number;
     size?: string;
     color?: string;
     image_url?: string;

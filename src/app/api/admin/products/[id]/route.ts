@@ -51,9 +51,39 @@ export async function PUT(
         }
 
         const body = await request.json();
+        const { variants, ...rest } = body;
+
+        // Transform variants with payment mode support
+        const transformedVariants = variants ? (variants || []).map((v: any, idx: number) => {
+            const variant: any = {
+                id: v.id || product.variants?.[idx]?.id || `var_${Date.now()}_${idx}`,
+                variant_id: v.variant_id || product.variants?.[idx]?.variant_id || `var_${Date.now()}_${idx}`,
+                name: v.name,
+                price: parseFloat(v.price || '0'),
+                payment_mode: v.paymentMode || 'balance_only',
+                size: v.size,
+                color: v.color,
+                image_url: v.image_url,
+                stock: v.stock ? parseInt(v.stock) : undefined,
+            };
+
+            // Set appropriate price fields based on payment mode
+            if (v.paymentMode === 'balance_only') {
+                variant.price_balance = parseFloat(v.priceBalance || v.price || '0');
+            } else if (v.paymentMode === 'points_only') {
+                variant.price_points = parseInt(v.pricePoints || '0');
+            } else if (v.paymentMode === 'mixed') {
+                variant.price_balance_full = parseFloat(v.priceBalanceFull || '0');
+                variant.price_points_full = parseInt(v.pricePointsFull || '0');
+            }
+
+            return variant;
+        }) : product.variants;
+
         const updated: Product = {
             ...product,
-            ...body,
+            ...rest,
+            variants: transformedVariants,
             id: product.id,
             createdAt: product.createdAt,
             updatedAt: new Date(),
@@ -61,7 +91,8 @@ export async function PUT(
 
         await redis.set(`product:${params.id}`, updated);
         return NextResponse.json({ product: updated });
-    } catch {
+    } catch (error) {
+        console.error('Update error:', error);
         return NextResponse.json({ error: 'Failed to update product' }, { status: 500 });
     }
 }

@@ -56,9 +56,16 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Missing required fields (need name and at least 1 variant)' }, { status: 400 });
         }
 
-        const variantsInvalid = variants.some((v: any) => v.pointsPrice === undefined || isNaN(parseFloat(v.pointsPrice)));
+        const variantsInvalid = variants.some((v: any) => {
+            if (!v.name) return true;
+            // Validate based on payment mode
+            if (v.paymentMode === 'balance_only' && !v.price && !v.priceBalance) return true;
+            if (v.paymentMode === 'points_only' && !v.pricePoints) return true;
+            if (v.paymentMode === 'mixed' && (!v.priceBalanceFull || !v.pricePointsFull)) return true;
+            return false;
+        });
         if (variantsInvalid) {
-            return NextResponse.json({ error: 'Each variant must include pointsPrice' }, { status: 400 });
+            return NextResponse.json({ error: 'Each variant must have a name and valid prices for its payment mode' }, { status: 400 });
         }
 
         const product: Product = {
@@ -68,17 +75,31 @@ export async function POST(request: Request) {
             image_url,
             thumbnail_url,
             category,
-            variants: (variants || []).map((v: any, idx: number) => ({
-                id: v.id || `var_${Date.now()}_${idx}`,
-                variant_id: v.variant_id || `var_${Date.now()}_${idx}`,
-                name: v.name,
-                price: parseFloat(v.price),
-                pointsPrice: parseFloat(v.pointsPrice),
-                size: v.size,
-                color: v.color,
-                image_url: v.image_url,
-                stock: v.stock ? parseInt(v.stock) : undefined,
-            })),
+            variants: (variants || []).map((v: any, idx: number) => {
+                const variant: any = {
+                    id: v.id || `var_${Date.now()}_${idx}`,
+                    variant_id: v.variant_id || `var_${Date.now()}_${idx}`,
+                    name: v.name,
+                    price: parseFloat(v.price || '0'),
+                    payment_mode: v.paymentMode || 'balance_only',
+                    size: v.size,
+                    color: v.color,
+                    image_url: v.image_url,
+                    stock: v.stock ? parseInt(v.stock) : undefined,
+                };
+
+                // Set appropriate price fields based on payment mode
+                if (v.paymentMode === 'balance_only') {
+                    variant.price_balance = parseFloat(v.priceBalance || v.price || '0');
+                } else if (v.paymentMode === 'points_only') {
+                    variant.price_points = parseInt(v.pricePoints || '0');
+                } else if (v.paymentMode === 'mixed') {
+                    variant.price_balance_full = parseFloat(v.priceBalanceFull || '0');
+                    variant.price_points_full = parseInt(v.pricePointsFull || '0');
+                }
+
+                return variant;
+            }),
             shippingOptions: (body.shippingOptions || []).map((s: any, idx: number) => ({
                 id: s.id || `ship_${Date.now()}_${idx}`,
                 country: s.country,

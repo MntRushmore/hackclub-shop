@@ -1,9 +1,15 @@
+export type PaymentMode = 'balance_only' | 'points_only' | 'mixed';
+
 export interface Variant {
     id: number;
     variant_id: number;
     name: string;
     retail_price: string;
-    points_price?: number;
+    payment_mode: PaymentMode;
+    price_balance?: number;
+    price_points?: number;
+    price_balance_full?: number;
+    price_points_full?: number;
     size: string;
     color: string;
     product: {
