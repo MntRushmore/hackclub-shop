@@ -136,7 +136,7 @@ export default function SubmitProjectPage() {
                 >
                     <div className="text-center mb-12">
                         <h1 className="text-5xl sm:text-6xl font-black text-hackclub-dark mb-4">
-                            Submit Your <span className="text-hackclub-red">Project</span>
+                            Submit Your Project
                         </h1>
                         <p className="text-lg text-hackclub-slate max-w-xl mx-auto">
                             Share what you&apos;ve built and earn <span className="font-black text-hackclub-green">5 points per approved hour</span> to spend in the shop!
@@ -371,11 +371,8 @@ export default function SubmitProjectPage() {
 
                                 <div className="mt-8 bg-hackclub-smoke rounded-xl p-4 border-2 border-gray-100">
                                     <div className="flex items-start gap-3">
-                                        <div className="w-10 h-10 bg-hackclub-green/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                                            <Icon glyph="bolt-circle" size={20} style={{ color: 'var(--hackclub-green, #33d6a6)' }} />
-                                        </div>
                                         <div>
-                                            <p className="font-black text-hackclub-dark">Earn 5 points per approved hour</p>
+                                            <p className="font-black text-hackclub-dark">Note: You'll earn 5 points per approved hour</p>
                                             <p className="text-sm text-hackclub-slate">
                                                 Once your project hours are reviewed and approved, you&apos;ll automatically receive points you can spend in the shop!
                                             </p>

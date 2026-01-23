@@ -21,6 +21,8 @@ interface PurchaseNotification {
     shippingCountry?: string;
     checkoutData?: Record<string, string>;
     newBalance: number;
+    pointsSpent?: number;
+    newPointsBalance?: number;
 }
 
 export async function POST(request: NextRequest) {
@@ -84,6 +86,14 @@ export async function POST(request: NextRequest) {
                             type: 'mrkdwn',
                             text: `*Remaining Balance:*\n$${body.newBalance.toFixed(2)}`,
                         },
+                        ...(body.pointsSpent ? [{
+                            type: 'mrkdwn',
+                            text: `*Points Spent:*\n${body.pointsSpent} pts`,
+                        }] : []),
+                        ...(body.newPointsBalance !== undefined ? [{
+                            type: 'mrkdwn',
+                            text: `*Remaining Points:*\n${body.newPointsBalance} pts`,
+                        }] : []),
                     ],
                 },
                 {

@@ -104,6 +104,7 @@ export async function POST(request: Request) {
                 id: s.id || `ship_${Date.now()}_${idx}`,
                 country: s.country,
                 cost: parseFloat(s.cost),
+                costPoints: s.costPoints ? parseInt(s.costPoints) : undefined,
             })),
             checkoutFields: body.checkoutFields || [],
             createdAt: new Date(),

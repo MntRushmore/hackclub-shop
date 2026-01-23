@@ -16,7 +16,7 @@ const OrdersPage = () => {
     useEffect(() => {
         const fetchOrders = async () => {
             if (!session) return;
-            
+
             setLoading(true);
             setError(null);
             try {
@@ -194,10 +194,10 @@ const OrdersPage = () => {
                                         className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke overflow-hidden"
                                     >
                                         <div className="px-6 py-4 border-b-2 border-hackclub-smoke flex items-center justify-between">
-                                             <div>
-                                                 <p className="text-sm text-hackclub-muted font-bold">Order #{order.id.slice(-8)}</p>
-                                                 <p className="text-xs text-hackclub-slate">{formatDate(order.createdAt)}</p>
-                                             </div>
+                                            <div>
+                                                <p className="text-sm text-hackclub-muted font-bold">Order #{order.id.slice(-8)}</p>
+                                                <p className="text-xs text-hackclub-slate">{formatDate(order.createdAt)}</p>
+                                            </div>
                                             <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${getStatusColor(order.status)}`}>
                                                 {order.status}
                                             </span>
@@ -224,35 +224,59 @@ const OrdersPage = () => {
                                             ))}
                                         </div>
 
-                                        <div className="px-6 py-4 border-t-2 border-hackclub-smoke bg-hackclub-smoke/30 flex items-center justify-between">
-                                             <p className="font-bold text-hackclub-slate">Total</p>
-                                             <p className="text-xl font-black text-hackclub-dark">${order.totalAmount.toFixed(2)}</p>
+                                        <div className="px-6 py-4 border-t-2 border-hackclub-smoke space-y-2">
+                                             <div className="flex justify-between items-center">
+                                                 <p className="font-bold text-hackclub-slate">Subtotal (cash):</p>
+                                                 <p className="font-bold text-hackclub-dark">${(order.subtotal || 0).toFixed(2)}</p>
+                                             </div>
+                                             {order.couponDiscount ? (
+                                                 <div className="flex justify-between items-center text-hackclub-green">
+                                                     <p className="font-bold text-hackclub-slate">Discount:</p>
+                                                     <p className="font-bold">-${(order.couponDiscount || 0).toFixed(2)}</p>
+                                                 </div>
+                                             ) : null}
+                                             {order.shippingCost ? (
+                                                 <div className="flex justify-between items-center">
+                                                     <p className="font-bold text-hackclub-slate">Shipping:</p>
+                                                     <p className="font-bold text-hackclub-dark">${(order.shippingCost || 0).toFixed(2)}</p>
+                                                 </div>
+                                             ) : null}
+                                             <div className="flex justify-between items-center pt-2 border-t border-hackclub-smoke">
+                                                 <p className="font-bold text-hackclub-slate">Cash Due:</p>
+                                                 <p className="text-lg font-black text-hackclub-dark">${(order.totalAmount || 0).toFixed(2)}</p>
+                                             </div>
+                                             {order.pointsSpent ? (
+                                                 <div className="flex justify-between items-center text-hackclub-dark">
+                                                     <p className="font-bold text-hackclub-slate">Points Spent:</p>
+                                                     <p className="text-lg font-black">{order.pointsSpent} pts</p>
+                                                 </div>
+                                             ) : null}
                                          </div>
 
                                         {order.statusHistory && order.statusHistory.length > 0 && (
-                                             <div className="px-6 py-4 border-t-2 border-hackclub-smoke space-y-2">
-                                                 <p className="text-xs font-bold text-hackclub-muted uppercase">Status History</p>
-                                                 <div className="space-y-1">
-                                                     {order.statusHistory.map((update, index) => (
-                                                         <div key={index} className="text-xs">
-                                                             <p className="font-bold text-hackclub-dark capitalize">{update.status}</p>
-                                                             <p className="text-hackclub-muted">{formatDate(update.timestamp)}</p>
-                                                             {update.message && (
-                                                                 <p className="text-hackclub-slate italic mt-1">{update.message}</p>
-                                                             )}
-                                                         </div>
-                                                     ))}
-                                                 </div>
-                                             </div>
-                                         )}
-                                        </motion.div>
-                                        ))}
-                                        </AnimatePresence>
-                                        </div>
+                                            <div className="px-6 py-4 border-t-2 border-hackclub-smoke space-y-2">
+                                                <p className="text-xs font-bold text-hackclub-muted uppercase">Status History</p>
+                                                <div className="space-y-1">
+                                                    {order.statusHistory.map((update, index) => (
+                                                        <div key={index} className="text-xs">
+                                                            <p className="font-bold text-hackclub-dark capitalize">{update.status}</p>
+                                                            <p className="text-hackclub-muted">{formatDate(update.timestamp)}</p>
+                                                            {update.message && (
+                                                                <p className="text-hackclub-slate italic mt-1">{update.message}</p>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
                                         )}
-                                        </motion.div>
-                                        </div>
-                                        </div>
+                                    </motion.div>
+                                ))}
+                            </AnimatePresence>
+                        </div>
+                    )}
+                </motion.div>
+            </div>
+        </div>
     );
 };
 

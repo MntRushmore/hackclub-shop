@@ -80,10 +80,20 @@ export async function PUT(
             return variant;
         }) : product.variants;
 
+        const shippingOptions = body.shippingOptions
+            ? (body.shippingOptions || []).map((s: any, idx: number) => ({
+                  id: s.id || `ship_${Date.now()}_${idx}`,
+                  country: s.country,
+                  cost: parseFloat(s.cost),
+                  costPoints: s.costPoints ? parseInt(s.costPoints) : undefined,
+              }))
+            : product.shippingOptions;
+
         const updated: Product = {
             ...product,
             ...rest,
             variants: transformedVariants,
+            shippingOptions,
             id: product.id,
             createdAt: product.createdAt,
             updatedAt: new Date(),

@@ -242,7 +242,7 @@ const CreditsPage = () => {
                                 </motion.p>
                             </div>
                             <div className="text-right text-sm text-hackclub-slate font-medium">
-                                Earn 5 pts per approved project hour.<br/>
+                                Earn 5 pts per approved project hour.<br />
                                 Spend points with credits at checkout.
                             </div>
                         </div>
@@ -260,7 +260,7 @@ const CreditsPage = () => {
                             <h2 className="text-xl font-black text-hackclub-dark">Transaction History</h2>
                         </div>
 
-                        {transactions.length === 0 ? (
+                        {transactions.length === 0 && (!pointsContext?.transactions || pointsContext.transactions.length === 0) ? (
                             <div className="px-6 py-12 text-center">
                                 <div className="w-14 h-14 bg-hackclub-smoke rounded-full flex items-center justify-center mx-auto mb-3">
                                     <svg className="w-7 h-7 text-hackclub-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -268,45 +268,99 @@ const CreditsPage = () => {
                                     </svg>
                                 </div>
                                 <p className="text-hackclub-muted font-bold">No transactions yet</p>
-                                <p className="text-hackclub-slate text-sm mt-1">Add credits to get started</p>
+                                <p className="text-hackclub-slate text-sm mt-1">Your transactions will appear here</p>
                             </div>
                         ) : (
                             <div className="divide-y-2 divide-hackclub-smoke">
                                 <AnimatePresence initial={false}>
-                                    {transactions.map((transaction, index) => (
-                                        <motion.div
-                                            key={transaction.id}
-                                            initial={{ opacity: 0, x: -20 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            transition={{ delay: index * 0.03 }}
-                                            className="px-6 py-4 flex items-center gap-4 hover:bg-hackclub-smoke/30 transition-colors"
-                                        >
-                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                                                transaction.type === 'deposit' || transaction.type === 'refund'
-                                                    ? 'bg-hackclub-green text-white'
-                                                    : 'bg-hackclub-red text-white'
-                                            }`}>
-                                                {transaction.type === 'deposit' || transaction.type === 'refund' ? (
+                                    {(() => {
+                                        // Merge transactions by orderId where they have same order
+                                        const allTxns = [
+                                            ...transactions.map((txn) => ({ ...txn, txnType: 'credit' as const })),
+                                            ...(pointsContext?.transactions || []).map((txn) => ({ ...txn, txnType: 'points' as const })),
+                                        ];
+
+                                        // Sort by timestamp
+                                        const sorted = allTxns.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+                                        // Group by orderId (for purchases) or keep separate
+                                        const grouped: Record<string, typeof allTxns> = {};
+                                        const standalone: typeof allTxns = [];
+
+                                        sorted.forEach((txn) => {
+                                            if (txn.orderId) {
+                                                if (!grouped[txn.orderId]) {
+                                                    grouped[txn.orderId] = [];
+                                                }
+                                                grouped[txn.orderId].push(txn);
+                                            } else {
+                                                standalone.push(txn);
+                                            }
+                                        });
+
+                                        // Create merged entries
+                                        const merged = [
+                                            ...Object.values(grouped),
+                                            ...standalone.map((txn) => [txn]),
+                                        ];
+
+                                        return merged.map((group, index) => {
+                                            const mainTxn = group[0];
+                                            const creditTxn = group.find((t) => t.txnType === 'credit');
+                                            const pointsTxn = group.find((t) => t.txnType === 'points');
+                                            const hasBoth = creditTxn && pointsTxn;
+
+                                            // Determine icon color based on transaction types
+                                            let bgColor = 'bg-hackclub-red text-white';
+                                            let icon = null;
+
+                                            if (creditTxn?.type === 'deposit' || creditTxn?.type === 'refund' || pointsTxn?.type === 'earn' || pointsTxn?.type === 'refund') {
+                                                bgColor = 'bg-hackclub-green text-white';
+                                                icon = (
                                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 10l7-7m0 0l7 7m-7-7v18" />
                                                     </svg>
-                                                ) : (
+                                                );
+                                            } else {
+                                                bgColor = 'bg-hackclub-red text-white';
+                                                icon = (
                                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                                                     </svg>
-                                                )}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="font-bold text-hackclub-dark truncate">{transaction.description}</p>
-                                                <p className="text-xs text-hackclub-muted">{formatDate(transaction.timestamp)}</p>
-                                            </div>
-                                            <p className={`font-black text-lg flex-shrink-0 ${
-                                                transaction.amount > 0 ? 'text-hackclub-green' : 'text-hackclub-red'
-                                            }`}>
-                                                {transaction.amount > 0 ? '+' : '-'}${Math.abs(transaction.amount).toFixed(2)}
-                                            </p>
-                                        </motion.div>
-                                    ))}
+                                                );
+                                            }
+
+                                            return (
+                                                <motion.div
+                                                    key={mainTxn.id}
+                                                    initial={{ opacity: 0, x: -20 }}
+                                                    animate={{ opacity: 1, x: 0 }}
+                                                    transition={{ delay: index * 0.03 }}
+                                                    className="px-6 py-4 flex items-start gap-4 hover:bg-hackclub-smoke/30 transition-colors"
+                                                >
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${bgColor}`}>
+                                                        {icon}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-bold text-hackclub-dark truncate">{mainTxn.description}</p>
+                                                        <p className="text-xs text-hackclub-muted">{formatDate(mainTxn.timestamp)}</p>
+                                                    </div>
+                                                    <div className="text-right flex-shrink-0 space-y-0.5">
+                                                        {creditTxn && (
+                                                            <p className={`font-black text-sm ${creditTxn.amount > 0 ? 'text-hackclub-green' : 'text-hackclub-red'}`}>
+                                                                {creditTxn.amount > 0 ? '+' : '-'}${Math.abs(creditTxn.amount).toFixed(2)}
+                                                            </p>
+                                                        )}
+                                                        {pointsTxn && pointsTxn.amount !== 0 && (
+                                                            <p className={`font-black text-sm ${pointsTxn.amount > 0 ? 'text-hackclub-green' : 'text-hackclub-red'}`}>
+                                                                {pointsTxn.amount > 0 ? '+' : ''}{pointsTxn.amount} pts
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </motion.div>
+                                            );
+                                        });
+                                    })()}
                                 </AnimatePresence>
                             </div>
                         )}
@@ -416,11 +470,11 @@ const CreditsPage = () => {
                                         className="p-3 bg-hackclub-smoke hover:bg-hackclub-dark hover:text-white rounded-xl transition-colors border-2 border-gray-200 hover:border-hackclub-dark disabled:opacity-50 disabled:cursor-not-allowed"
                                         title="Generate new code"
                                     >
-                                        <motion.svg 
+                                        <motion.svg
                                             ref={refreshIconRef}
-                                            className="w-5 h-5" 
-                                            fill="none" 
-                                            stroke="currentColor" 
+                                            className="w-5 h-5"
+                                            fill="none"
+                                            stroke="currentColor"
                                             viewBox="0 0 24 24"
                                         >
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -494,7 +548,7 @@ const CreditsPage = () => {
                     </motion.div>
                 </div>
             )}
-            
+
         </div>
     );
 };

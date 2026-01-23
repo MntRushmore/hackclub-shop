@@ -27,22 +27,22 @@ export default function ProductsAdmin() {
         image_url: '',
         thumbnail_url: '',
         category: '',
-        variants: [{ 
-            id: '', 
-            variant_id: '', 
-            name: '', 
-            price: '', 
+        variants: [{
+            id: '',
+            variant_id: '',
+            name: '',
+            price: '',
             paymentMode: 'balance_only' as 'balance_only' | 'points_only' | 'mixed',
             priceBalance: '',
             pricePoints: '',
             priceBalanceFull: '',
             pricePointsFull: '',
-            size: '', 
-            color: '', 
-            image_url: '', 
-            stock: '' 
+            size: '',
+            color: '',
+            image_url: '',
+            stock: ''
         }],
-        shippingOptions: [{ id: '', country: '', cost: '' }],
+        shippingOptions: [{ id: '', country: '', cost: '', costPoints: '' }],
         checkoutFields: [] as FormCheckoutField[],
     });
     const [submitting, setSubmitting] = useState(false);
@@ -109,7 +109,7 @@ export default function ProductsAdmin() {
                             price: parseFloat(v.price || v.priceBalance || '0'),
                             stock: v.stock ? parseInt(v.stock) : undefined,
                         };
-                        
+
                         // Set appropriate price fields based on payment mode
                         if (v.paymentMode === 'balance_only') {
                             variantData.priceBalance = parseFloat(v.priceBalance || v.price || '0');
@@ -119,7 +119,7 @@ export default function ProductsAdmin() {
                             variantData.priceBalanceFull = parseFloat(v.priceBalanceFull || '0');
                             variantData.pricePointsFull = parseInt(v.pricePointsFull || '0');
                         }
-                        
+
                         return variantData;
                     }),
                     shippingOptions: formData.shippingOptions.filter(s => s.country && s.cost).map(s => ({
@@ -148,20 +148,20 @@ export default function ProductsAdmin() {
                 image_url: '',
                 thumbnail_url: '',
                 category: '',
-                variants: [{ 
-                    id: '', 
-                    variant_id: '', 
-                    name: '', 
+                variants: [{
+                    id: '',
+                    variant_id: '',
+                    name: '',
                     price: '',
                     paymentMode: 'balance_only',
                     priceBalance: '',
                     pricePoints: '',
                     priceBalanceFull: '',
                     pricePointsFull: '',
-                    size: '', 
-                    color: '', 
-                    image_url: '', 
-                    stock: '' 
+                    size: '',
+                    color: '',
+                    image_url: '',
+                    stock: ''
                 }],
                 shippingOptions: [{ id: '', country: '', cost: '' }],
                 checkoutFields: [],
@@ -180,12 +180,12 @@ export default function ProductsAdmin() {
         const formattedVariants = (product.variants || []).map(v => {
             // Load payment mode from API (which uses snake_case: payment_mode)
             let paymentMode = (v as any).payment_mode || v.paymentMode || 'balance_only';
-            console.log(`Loading variant ${v.name}:`, { 
-                payment_mode: (v as any).payment_mode, 
+            console.log(`Loading variant ${v.name}:`, {
+                payment_mode: (v as any).payment_mode,
                 paymentMode: v.paymentMode,
-                resolved: paymentMode 
+                resolved: paymentMode
             });
-            
+
             if (!paymentMode || paymentMode === 'balance_only') {
                 // Infer from price data if not explicitly set
                 const hasBalance = v.price || (v as any).price_balance;
@@ -198,7 +198,7 @@ export default function ProductsAdmin() {
                     paymentMode = 'balance_only';
                 }
             }
-            
+
             return {
                 id: v.id,
                 variant_id: v.variant_id,
@@ -215,33 +215,34 @@ export default function ProductsAdmin() {
                 stock: v.stock?.toString() || '',
             };
         });
-        
+
         setFormData({
             name: product.name,
             description: product.description,
             image_url: product.image_url || '',
             thumbnail_url: product.thumbnail_url || '',
             category: product.category || '',
-            variants: formattedVariants.length > 0 ? formattedVariants : [{ 
-                id: '', 
-                variant_id: '', 
-                name: '', 
+            variants: formattedVariants.length > 0 ? formattedVariants : [{
+                id: '',
+                variant_id: '',
+                name: '',
                 price: '',
                 paymentMode: 'balance_only',
                 priceBalance: '',
                 pricePoints: '',
                 priceBalanceFull: '',
                 pricePointsFull: '',
-                size: '', 
-                color: '', 
-                image_url: '', 
-                stock: '' 
+                size: '',
+                color: '',
+                image_url: '',
+                stock: ''
             }],
             shippingOptions: (product.shippingOptions || []).map(s => ({
                 id: s.id,
                 country: s.country,
                 cost: s.cost.toString(),
-            })) || [{ id: '', country: '', cost: '' }],
+                costPoints: s.costPoints?.toString() || '',
+            })) || [{ id: '', country: '', cost: '', costPoints: '' }],
             checkoutFields: product.checkoutFields || [],
         });
         setShowForm(true);
@@ -256,7 +257,7 @@ export default function ProductsAdmin() {
             thumbnail_url: '',
             category: '',
             variants: [{ id: '', variant_id: '', name: '', price: '', pointsPrice: '', size: '', color: '', image_url: '', stock: '' }],
-            shippingOptions: [{ id: '', country: '', cost: '' }],
+            shippingOptions: [{ id: '', country: '', cost: '', costPoints: '' }],
             checkoutFields: [],
         });
         setShowForm(false);
@@ -545,20 +546,20 @@ export default function ProductsAdmin() {
                                                 type="button"
                                                 onClick={() => setFormData({
                                                     ...formData,
-                                                    variants: [...formData.variants, { 
-                                                        id: '', 
-                                                        variant_id: '', 
-                                                        name: '', 
+                                                    variants: [...formData.variants, {
+                                                        id: '',
+                                                        variant_id: '',
+                                                        name: '',
                                                         price: '',
                                                         paymentMode: 'balance_only',
                                                         priceBalance: '',
                                                         pricePoints: '',
                                                         priceBalanceFull: '',
                                                         pricePointsFull: '',
-                                                        size: '', 
-                                                        color: '', 
-                                                        image_url: '', 
-                                                        stock: '' 
+                                                        size: '',
+                                                        color: '',
+                                                        image_url: '',
+                                                        stock: ''
                                                     }]
                                                 })}
                                                 className="w-full px-4 py-2 border-2 border-dashed border-hackclub-green text-hackclub-green font-bold rounded-lg hover:bg-hackclub-green/10 transition-colors"
@@ -574,7 +575,7 @@ export default function ProductsAdmin() {
                                         <div className="space-y-4">
                                             {formData.shippingOptions.map((shipping, idx) => (
                                                 <div key={idx} className="p-4 border-2 border-hackclub-smoke/50 rounded-lg space-y-2">
-                                                    <div className="grid grid-cols-2 gap-2">
+                                                    <div className="grid grid-cols-3 gap-2">
                                                         <input
                                                             type="text"
                                                             placeholder="Country"
@@ -588,12 +589,24 @@ export default function ProductsAdmin() {
                                                         />
                                                         <input
                                                             type="number"
-                                                            placeholder="Cost"
+                                                            placeholder="Cost ($)"
                                                             step="0.01"
                                                             value={shipping.cost}
                                                             onChange={(e) => {
                                                                 const newShipping = [...formData.shippingOptions];
                                                                 newShipping[idx].cost = e.target.value;
+                                                                setFormData({ ...formData, shippingOptions: newShipping });
+                                                            }}
+                                                            className="px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
+                                                        />
+                                                        <input
+                                                            type="number"
+                                                            placeholder="Cost (pts)"
+                                                            step="1"
+                                                            value={shipping.costPoints || ''}
+                                                            onChange={(e) => {
+                                                                const newShipping = [...formData.shippingOptions];
+                                                                newShipping[idx].costPoints = e.target.value ? parseInt(e.target.value) : undefined;
                                                                 setFormData({ ...formData, shippingOptions: newShipping });
                                                             }}
                                                             className="px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
@@ -617,7 +630,7 @@ export default function ProductsAdmin() {
                                                 type="button"
                                                 onClick={() => setFormData({
                                                     ...formData,
-                                                    shippingOptions: [...formData.shippingOptions, { id: '', country: '', cost: '' }]
+                                                    shippingOptions: [...formData.shippingOptions, { id: '', country: '', cost: '', costPoints: '' }]
                                                 })}
                                                 className="w-full px-4 py-2 border-2 border-dashed border-hackclub-green text-hackclub-green font-bold rounded-lg hover:bg-hackclub-green/10 transition-colors"
                                             >

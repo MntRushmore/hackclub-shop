@@ -56,18 +56,20 @@ export async function POST(request: Request) {
     }
 
     try {
-        const { items, cashTotal, pointsRequired, shippingCost, shippingCountry, checkoutData, csrfToken, idempotencyKey, couponDiscount = 0 } = await request.json() as { 
-            items: { id: string; name: string; price: string; quantity: number; variant_id?: string | number; pointsSpent?: number }[]; 
+        const { items, cashTotal, pointsRequired, shippingCost, shippingCountry, shippingPaymentCash, shippingPaymentPoints, checkoutData, csrfToken, idempotencyKey, couponDiscount = 0 } = await request.json() as {
+            items: { id: string; name: string; price: string; quantity: number; variant_id?: string | number; pointsSpent?: number }[];
             cashTotal: number;
             pointsRequired: number;
             shippingCost?: number | string;
+            shippingPaymentCash?: number;
+            shippingPaymentPoints?: number;
             shippingCountry?: string;
             checkoutData?: Record<string, string>;
             csrfToken?: string;
             idempotencyKey?: string;
             couponDiscount?: number;
         };
-        
+
         const shippingCostNum = typeof shippingCost === 'string' ? parseFloat(shippingCost) : (shippingCost || 0);
         const couponDiscountNum = typeof couponDiscount === 'string' ? parseFloat(couponDiscount as any) : (couponDiscount || 0);
 
@@ -105,17 +107,37 @@ export async function POST(request: Request) {
 
         const verifiedItemCashTotal = validation.verifiedTotal!;
         const verifiedItemPointsTotal = validation.verifiedPointsTotal || 0;
-        const verifiedCashTotal = Math.max(0, verifiedItemCashTotal - couponDiscountNum + shippingCostNum);
 
-        if (Math.abs(verifiedCashTotal - cashTotal) > 0.01 || pointsRequired !== verifiedItemPointsTotal) {
-            return NextResponse.json({ 
+        // Handle shipping payment breakdown (default to all cash if not provided)
+        const verifiedShippingCashPayment = shippingPaymentCash ?? shippingCostNum;
+        const verifiedShippingPointsPayment = shippingPaymentPoints ?? 0;
+
+        // Verify shipping payment breakdown adds up to shipping cost
+        const shippingPaymentTotal = verifiedShippingCashPayment + verifiedShippingPointsPayment;
+        if (Math.abs(shippingPaymentTotal - shippingCostNum) > 0.01) {
+            return NextResponse.json({
+                error: 'Shipping payment breakdown is invalid.',
+                expectedShippingTotal: shippingCostNum,
+                providedShippingTotal: shippingPaymentTotal,
+                shippingCash: verifiedShippingCashPayment,
+                shippingPoints: verifiedShippingPointsPayment
+            }, { status: 400 });
+        }
+
+        const verifiedCashTotal = Math.max(0, verifiedItemCashTotal - couponDiscountNum + verifiedShippingCashPayment);
+        const verifiedPointsTotal = verifiedItemPointsTotal + verifiedShippingPointsPayment;
+
+        if (Math.abs(verifiedCashTotal - cashTotal) > 0.01 || verifiedPointsTotal !== pointsRequired) {
+            return NextResponse.json({
                 error: 'Price mismatch detected. Please refresh your cart.',
                 expectedCash: verifiedCashTotal,
                 providedCash: cashTotal,
-                expectedPoints: verifiedItemPointsTotal,
+                expectedPoints: verifiedPointsTotal,
                 providedPoints: pointsRequired,
                 itemsCashTotal: verifiedItemCashTotal,
                 shippingCost: shippingCostNum,
+                shippingPaymentCash: verifiedShippingCashPayment,
+                shippingPaymentPoints: verifiedShippingPointsPayment,
                 couponDiscount: couponDiscountNum
             }, { status: 400 });
         }
@@ -130,18 +152,18 @@ export async function POST(request: Request) {
         const pointsBalance = pointsBalanceRaw ?? 0;
 
         if (pointsBalance < verifiedItemPointsTotal) {
-            return NextResponse.json({ 
-                error: 'Insufficient points', 
+            return NextResponse.json({
+                error: 'Insufficient points',
                 required: verifiedItemPointsTotal,
-                balance: pointsBalance 
+                balance: pointsBalance
             }, { status: 400 });
         }
 
         if (creditsBalance < verifiedCashTotal) {
-            return NextResponse.json({ 
-                error: 'Insufficient credits', 
+            return NextResponse.json({
+                error: 'Insufficient credits',
                 required: verifiedCashTotal,
-                balance: creditsBalance 
+                balance: creditsBalance
             }, { status: 400 });
         }
 
@@ -180,12 +202,12 @@ export async function POST(request: Request) {
 
         const currentCreditTransactions = await redis.get<CreditTransaction[]>(`user:${userId}:transactions`) || [];
         const currentPointsTransactions = await redis.get<PointsTransaction[]>(`user:${userId}:pointsTransactions`) || [];
-        
+
         const creditTransaction: CreditTransaction = {
             id: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             amount: -verifiedCashTotal,
             type: 'purchase',
-            description: `Order #${orderId.slice(-8)} (cash)`,
+            description: `Order #${orderId.slice(-8)}`,
             timestamp: new Date(),
             orderId,
         };
@@ -194,7 +216,7 @@ export async function POST(request: Request) {
             id: `ptxn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             amount: -verifiedItemPointsTotal,
             type: 'spend',
-            description: `Order #${orderId.slice(-8)} (points)`,
+            description: `Order #${orderId.slice(-8)}`,
             timestamp: new Date(),
             orderId,
         };
@@ -243,13 +265,15 @@ export async function POST(request: Request) {
                     shippingCountry: order.shippingCountry,
                     checkoutData: order.checkoutData,
                     newBalance: newCreditsBalance,
+                    pointsSpent: order.pointsSpent,
+                    newPointsBalance: newPointsBalance,
                 }),
             });
         } catch (error) {
             console.error('Failed to notify Slack about purchase:', error);
         }
 
-        return NextResponse.json({ 
+        return NextResponse.json({
             order,
             creditsBalance: newCreditsBalance,
             pointsBalance: newPointsBalance,

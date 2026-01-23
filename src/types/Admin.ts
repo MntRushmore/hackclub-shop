@@ -63,6 +63,7 @@ export interface ShippingOption {
     id: string;
     country: string;
     cost: number;
+    costPoints?: number;
 }
 
 export type CheckoutFieldType = 'text' | 'email' | 'phone' | 'address' | 'textarea';
