@@ -1,15 +1,69 @@
 'use client';
 
-import React, { useContext, useState, useEffect } from 'react';
+import React, { useContext, useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { CartContext } from '../../context/CartContext';
 import { CreditsContext } from '../../context/CreditsContext';
 import Image from 'next/image';
 import CartModal from './CartModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSession, signIn, signOut } from 'next-auth/react';
+import Lottie from 'lottie-react';
+import animationData from '../../../public/images/shopping-bag.json';
+import type { LottieRefCurrentProps } from 'lottie-react';
+
+const ShoppingBagIcon = forwardRef<{ closeAndWait: () => Promise<void> }, {}>((props, ref) => {
+  const lottieRef = useRef<LottieRefCurrentProps>(null);
+  const [isHovered, setIsHovered] = useState(false);
+  const isInitialMount = useRef(true);
+
+  useImperativeHandle(ref, () => ({
+    closeAndWait: async () => {
+      setIsHovered(false);
+      // Wait for close animation to finish
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+  }));
+
+  useEffect(() => {
+    if (!lottieRef.current) return;
+    if (isInitialMount.current) return;
+    
+    if (isHovered) {
+      lottieRef.current.playSegments([0, 40], true);
+    } else {
+      lottieRef.current.playSegments([67, 127], true);
+    }
+  }, [isHovered]);
+
+  useEffect(() => {
+    if (!lottieRef.current) return;
+    lottieRef.current.goToAndStop(67, true);
+    isInitialMount.current = false;
+  }, []);
+
+  return (
+    <div
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{ width: 40, height: 40, cursor: 'pointer' }}
+      className="h-8"
+    >
+      <Lottie
+        lottieRef={lottieRef}
+        animationData={animationData}
+        loop={false}
+        autoplay={false}
+        style={{ width: '100%', height: '100%' }}
+      />
+    </div>
+  );
+});
 
 const Navigation = () => {
+  const router = useRouter();
+  const bagIconRef = useRef<{ closeAndWait: () => Promise<void> }>(null);
   const cartContext = useContext(CartContext);
   const creditsContext = useContext(CreditsContext);
   const { data: session, status } = useSession();
@@ -86,22 +140,15 @@ const Navigation = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-8">
-              <a href="https://hackclub.com" target="_blank" rel="noopener noreferrer" className="flex items-center hover:opacity-80 transition-opacity">
-                <Image
-                  src="https://assets.hackclub.com/flag-standalone.svg"
-                  alt="Hack Club"
-                  width={40}
-                  height={40}
-                  className="h-8 w-auto"
-                />
-              </a>
-              
-              <Link 
-                href="/" 
-                className="text-hackclub-slate hover:text-hackclub-red font-bold text-xl transition-colors"
+              <button
+                className="flex items-center bg-none border-none p-0 cursor-pointer"
+                onClick={async () => {
+                  await bagIconRef.current?.closeAndWait();
+                  router.push('/');
+                }}
               >
-                Home
-              </Link>
+                <ShoppingBagIcon ref={bagIconRef} />
+              </button>
 
               <Link
                 href="/shop"
