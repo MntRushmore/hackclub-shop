@@ -9,6 +9,7 @@ import Icon from 'supercons';
 
 export default function AdminDashboard() {
     const { data: session, status } = useSession();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const router = useRouter();
     const [isAdmin, setIsAdmin] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -81,7 +82,7 @@ export default function AdminDashboard() {
                     </div>
                     <h2 className="text-2xl font-black text-hackclub-dark mb-2">Access Denied</h2>
                     <p className="text-hackclub-slate mb-6">
-                        You don't have permission to access the admin dashboard.
+                        You don&apos;t have permission to access the admin dashboard.
                     </p>
                     <Link
                         href="/"
@@ -118,6 +119,23 @@ export default function AdminDashboard() {
                     </p>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {/* Projects */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.05 }}
+                        >
+                            <Link href="/admin/projects">
+                                <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-6 hover:shadow-xl hover:border-hackclub-cyan transition-all cursor-pointer group">
+                                    <div className="w-12 h-12 bg-hackclub-cyan/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-hackclub-cyan/20 transition-colors">
+                                        <Icon glyph="code" size={24} style={{ color: 'var(--hackclub-cyan, #5bc0de)' }} />
+                                    </div>
+                                    <h3 className="text-xl font-black text-hackclub-dark mb-2">Projects</h3>
+                                    <p className="text-hackclub-slate text-sm">Review and approve project submissions</p>
+                                </div>
+                            </Link>
+                        </motion.div>
+
                         {/* Products */}
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}

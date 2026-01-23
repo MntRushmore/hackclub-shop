@@ -4,7 +4,6 @@ import { Redis } from '@upstash/redis';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import { requireAdminPermission } from '../../../../lib/adminAuth';
 import { Order } from '../../../../types/Order';
-import { CreditTransaction } from '../../../../types/Credits';
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -27,7 +26,7 @@ export async function GET(request: Request) {
         let orders: Order[] = [];
         let totalRevenue = 0;
         let totalOrders = 0;
-        let ordersByStatus: Record<string, number> = {};
+        const ordersByStatus: Record<string, number> = {};
 
         for (const key of orderKeys) {
             const userOrders = await redis.get<Order[]>(key);
@@ -87,7 +86,7 @@ export async function GET(request: Request) {
             topProducts,
             orders: filteredOrders,
         });
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
     }
 }

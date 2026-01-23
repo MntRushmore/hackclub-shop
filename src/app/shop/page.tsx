@@ -5,20 +5,28 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { CartContext } from '../../context/CartContext';
+import { getDisplayPrice, getPaymentModeBadge } from '../../lib/paymentUtils';
+
+interface Variant {
+    variant_id: string | number;
+    name: string;
+    id?: string | number;
+    size?: string;
+    color?: string;
+    retail_price: string;
+    payment_mode: 'balance_only' | 'points_only' | 'mixed';
+    price_balance?: number;
+    price_points?: number;
+    price_balance_full?: number;
+    price_points_full?: number;
+    product: { image: string };
+}
 
 interface Product {
     id: string | number;
     name: string;
     thumbnail_url: string;
-    sync_variants: { 
-        retail_price: string;
-        variant_id: string | number;
-        name: string;
-        id?: string | number;
-        size?: string;
-        color?: string;
-        product: { image: string };
-    }[];
+    sync_variants: Variant[];
 }
 
 const Shop = () => {
@@ -100,16 +108,25 @@ const Shop = () => {
                 if (isNearCart && product.sync_variants && product.sync_variants.length > 0 && cartContext) {
                     droppedOnCart = true;
                     const variant = product.sync_variants[0];
-                    let variantId: number | null = null;
-                    if (variant.variant_id !== undefined && variant.variant_id !== null) {
-                        variantId = typeof variant.variant_id === 'string' ? Number(variant.variant_id) : variant.variant_id;
-                    } else if (variant.id !== undefined && variant.id !== null) {
-                        variantId = typeof variant.id === 'string' ? Number(variant.id) : variant.id;
+                    
+                    // Set price based on payment mode
+                    let displayPrice = '0';
+                    if (variant.payment_mode === 'balance_only') {
+                        displayPrice = (variant.price_balance || 0).toString();
+                    } else if (variant.payment_mode === 'mixed') {
+                        displayPrice = (variant.price_balance_full || 0).toString();
                     }
+                    
+                    const variantId = variant.variant_id || variant.id || `${product.id}_var_0`;
                     cartContext.addToCart({
                         id: product.id,
                         name: variant.name,
-                        price: variant.retail_price,
+                        price: displayPrice,
+                        paymentMode: variant.payment_mode,
+                        priceBalance: variant.price_balance,
+                        pricePoints: variant.price_points,
+                        priceBalanceFull: variant.price_balance_full,
+                        pricePointsFull: variant.price_points_full,
                         thumbnail_url: variant.product.image,
                         variant_id: variantId,
                     });
@@ -187,11 +204,16 @@ const Shop = () => {
                             <div className="flex flex-col gap-2 p-5 bg-white">
                                 <Link href={`/products/${product.id}`} className="block">
                                     <h2 className="text-lg font-black text-hackclub-dark mb-2 line-clamp-2 group-hover:text-hackclub-red transition-colors">
-                                        {product.name}
-                                    </h2>
-                                    <p className="text-2xl font-black text-hackclub-red mb-3">
-                                        ${parseFloat(product.sync_variants[0]?.retail_price || '0').toFixed(2)}
-                                    </p>
+                                         {product.name}
+                                     </h2>
+                                     <div className="mb-3">
+                                         <p className="text-lg font-black text-hackclub-red">
+                                             {getDisplayPrice(product.sync_variants[0])}
+                                         </p>
+                                         <p className="text-xs text-gray-600 font-medium">
+                                             {getPaymentModeBadge(product.sync_variants[0].payment_mode)}
+                                         </p>
+                                     </div>
                                 </Link>
                                 <div className="flex items-center gap-2">
                                     <Link href={`/products/${product.id}`} className="text-hackclub-blue font-bold text-sm flex items-center gap-1">
@@ -203,26 +225,35 @@ const Shop = () => {
                                     <button
                                         className="bg-hackclub-red hover:bg-hackclub-orange text-white font-bold px-4 py-1 rounded-full shadow transition-colors transition-opacity duration-200 text-sm opacity-0 group-hover:opacity-100 focus:opacity-100 ml-auto"
                                         onClick={(e) => {
-                                            e.stopPropagation();
-                                            e.preventDefault();
-                                            if (product.sync_variants && product.sync_variants.length > 0 && cartContext) {
-                                                const variant = product.sync_variants[0];
-                                                let variantId: number | null = null;
-                                                if (variant.variant_id !== undefined && variant.variant_id !== null) {
-                                                    variantId = typeof variant.variant_id === 'string' ? Number(variant.variant_id) : variant.variant_id;
-                                                } else if (variant.id !== undefined && variant.id !== null) {
-                                                    variantId = typeof variant.id === 'string' ? Number(variant.id) : variant.id;
-                                                }
-                                                cartContext.addToCart({
-                                                    id: product.id,
-                                                    name: variant.name,
-                                                    price: variant.retail_price,
-                                                    thumbnail_url: variant.product.image,
-                                                    variant_id: variantId,
-                                                });
-                                            }
-                                            e.currentTarget.blur();
-                                        }}
+                                             e.stopPropagation();
+                                             e.preventDefault();
+                                             if (product.sync_variants && product.sync_variants.length > 0 && cartContext) {
+                                                  const variant = product.sync_variants[0];
+                                                  
+                                                  // Set price based on payment mode
+                                                  let displayPrice = '0';
+                                                  if (variant.payment_mode === 'balance_only') {
+                                                      displayPrice = (variant.price_balance || 0).toString();
+                                                  } else if (variant.payment_mode === 'mixed') {
+                                                      displayPrice = (variant.price_balance_full || 0).toString();
+                                                  }
+                                                  
+                                                  const variantId = variant.variant_id || variant.id || `${product.id}_var_0`;
+                                                   cartContext.addToCart({
+                                                       id: product.id,
+                                                       name: variant.name,
+                                                       price: displayPrice,
+                                                       paymentMode: variant.payment_mode,
+                                                       priceBalance: variant.price_balance,
+                                                       pricePoints: variant.price_points,
+                                                       priceBalanceFull: variant.price_balance_full,
+                                                       pricePointsFull: variant.price_points_full,
+                                                       thumbnail_url: variant.product.image,
+                                                       variant_id: variantId,
+                                                   });
+                                             }
+                                             e.currentTarget.blur();
+                                         }}
                                     >
                                         Add to Cart
                                     </button>

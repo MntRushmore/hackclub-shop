@@ -6,6 +6,7 @@ import { CartContext } from "../../../context/CartContext";
 import Image from 'next/image';
 import { ProductDetail, Variant } from '../../../types/Product';
 import { motion } from 'framer-motion';
+import { getDisplayPrice, getPaymentModeBadge } from '../../../lib/paymentUtils';
 
 
 const ProductPage = () => {
@@ -47,10 +48,23 @@ const ProductPage = () => {
 
     const handleAddToCart = () => {
         if (product && selectedVariant) {
+            // Set price based on payment mode
+            let displayPrice = '0';
+            if (selectedVariant.payment_mode === 'balance_only') {
+                displayPrice = (selectedVariant.price_balance || 0).toString();
+            } else if (selectedVariant.payment_mode === 'mixed') {
+                displayPrice = (selectedVariant.price_balance_full || 0).toString();
+            }
+            
             const cartItem = {
                 id: product.id,
                 name: selectedVariant.name,
-                price: selectedVariant.retail_price,
+                price: displayPrice,
+                paymentMode: selectedVariant.payment_mode,
+                priceBalance: selectedVariant.price_balance,
+                pricePoints: selectedVariant.price_points,
+                priceBalanceFull: selectedVariant.price_balance_full,
+                pricePointsFull: selectedVariant.price_points_full,
                 thumbnail_url: selectedVariant.product.image,
                 variant_id: selectedVariant.variant_id || selectedVariant.id,
             };
@@ -122,9 +136,16 @@ const ProductPage = () => {
                             {product.name}
                         </h1>
                         
-                        <p className="text-4xl font-black text-hackclub-red mb-8">
-                            ${parseFloat(selectedVariant?.retail_price || '0.00').toFixed(2)}
-                        </p>
+                        {selectedVariant && (
+                            <div className="mb-8">
+                                <p className="text-3xl font-black text-hackclub-red">
+                                    {getDisplayPrice(selectedVariant)}
+                                </p>
+                                <p className="text-sm text-gray-600 font-medium mt-2">
+                                    {getPaymentModeBadge(selectedVariant.payment_mode)}
+                                </p>
+                            </div>
+                        )}
 
                         {variants.length > 0 && (
                             <div className="mb-8">
@@ -146,7 +167,7 @@ const ProductPage = () => {
                                 >
                                     {variants.map((variant, idx) => (
                                         <option key={`${variant.id || variant.variant_id}_${idx}`} value={variant.id || variant.variant_id}>
-                                            {variant.size || 'Default'} / {variant.color || 'Default'} - ${parseFloat(variant.retail_price || '0').toFixed(2)}
+                                            {variant.size || 'Default'} / {variant.color || 'Default'} - {getDisplayPrice(variant)}
                                         </option>
                                     ))}
                                 </select>

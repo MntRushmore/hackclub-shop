@@ -6,6 +6,14 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Product } from '../../../types/Admin';
 
+interface FormCheckoutField {
+    id: string;
+    name: string;
+    label: string;
+    type: string;
+    required: boolean;
+}
+
 export default function ProductsAdmin() {
     const { data: session, status } = useSession();
     const [products, setProducts] = useState<Product[]>([]);
@@ -19,9 +27,23 @@ export default function ProductsAdmin() {
         image_url: '',
         thumbnail_url: '',
         category: '',
-        variants: [{ id: '', variant_id: '', name: '', price: '', size: '', color: '', image_url: '', stock: '' }],
+        variants: [{ 
+            id: '', 
+            variant_id: '', 
+            name: '', 
+            price: '', 
+            paymentMode: 'balance_only' as 'balance_only' | 'points_only' | 'mixed',
+            priceBalance: '',
+            pricePoints: '',
+            priceBalanceFull: '',
+            pricePointsFull: '',
+            size: '', 
+            color: '', 
+            image_url: '', 
+            stock: '' 
+        }],
         shippingOptions: [{ id: '', country: '', cost: '' }],
-        checkoutFields: [],
+        checkoutFields: [] as FormCheckoutField[],
     });
     const [submitting, setSubmitting] = useState(false);
 
@@ -69,11 +91,37 @@ export default function ProductsAdmin() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     ...formData,
-                    variants: formData.variants.filter(v => v.name && v.price).map(v => ({
-                        ...v,
-                        price: parseFloat(v.price),
-                        stock: v.stock ? parseInt(v.stock) : undefined,
-                    })),
+                    variants: formData.variants.filter(v => {
+                        if (!v.name) return false;
+                        // Filter based on payment mode
+                        if (v.paymentMode === 'balance_only') {
+                            return v.priceBalance || v.price;
+                        } else if (v.paymentMode === 'points_only') {
+                            return v.pricePoints;
+                        } else if (v.paymentMode === 'mixed') {
+                            return v.priceBalanceFull && v.pricePointsFull;
+                        }
+                        return false;
+                    }).map(v => {
+                        const variantData: any = {
+                            ...v,
+                            paymentMode: v.paymentMode,
+                            price: parseFloat(v.price || v.priceBalance || '0'),
+                            stock: v.stock ? parseInt(v.stock) : undefined,
+                        };
+                        
+                        // Set appropriate price fields based on payment mode
+                        if (v.paymentMode === 'balance_only') {
+                            variantData.priceBalance = parseFloat(v.priceBalance || v.price || '0');
+                        } else if (v.paymentMode === 'points_only') {
+                            variantData.pricePoints = parseInt(v.pricePoints || '0');
+                        } else if (v.paymentMode === 'mixed') {
+                            variantData.priceBalanceFull = parseFloat(v.priceBalanceFull || '0');
+                            variantData.pricePointsFull = parseInt(v.pricePointsFull || '0');
+                        }
+                        
+                        return variantData;
+                    }),
                     shippingOptions: formData.shippingOptions.filter(s => s.country && s.cost).map(s => ({
                         ...s,
                         cost: parseFloat(s.cost),
@@ -100,7 +148,21 @@ export default function ProductsAdmin() {
                 image_url: '',
                 thumbnail_url: '',
                 category: '',
-                variants: [{ id: '', variant_id: '', name: '', price: '', size: '', color: '', image_url: '', stock: '' }],
+                variants: [{ 
+                    id: '', 
+                    variant_id: '', 
+                    name: '', 
+                    price: '',
+                    paymentMode: 'balance_only',
+                    priceBalance: '',
+                    pricePoints: '',
+                    priceBalanceFull: '',
+                    pricePointsFull: '',
+                    size: '', 
+                    color: '', 
+                    image_url: '', 
+                    stock: '' 
+                }],
                 shippingOptions: [{ id: '', country: '', cost: '' }],
                 checkoutFields: [],
             });
@@ -115,22 +177,66 @@ export default function ProductsAdmin() {
 
     const handleEdit = (product: Product) => {
         setEditingId(product.id);
+        const formattedVariants = (product.variants || []).map(v => {
+            // Load payment mode from API (which uses snake_case: payment_mode)
+            let paymentMode = (v as any).payment_mode || v.paymentMode || 'balance_only';
+            console.log(`Loading variant ${v.name}:`, { 
+                payment_mode: (v as any).payment_mode, 
+                paymentMode: v.paymentMode,
+                resolved: paymentMode 
+            });
+            
+            if (!paymentMode || paymentMode === 'balance_only') {
+                // Infer from price data if not explicitly set
+                const hasBalance = v.price || (v as any).price_balance;
+                const hasPoints = (v as any).pointsPrice || (v as any).price_points;
+                if (hasBalance && hasPoints) {
+                    paymentMode = 'mixed';
+                } else if (hasPoints && !hasBalance) {
+                    paymentMode = 'points_only';
+                } else {
+                    paymentMode = 'balance_only';
+                }
+            }
+            
+            return {
+                id: v.id,
+                variant_id: v.variant_id,
+                name: v.name,
+                price: v.price?.toString() || '',
+                paymentMode,
+                priceBalance: (v as any).price_balance?.toString() || '',
+                pricePoints: ((v as any).price_points || (v as any).pointsPrice)?.toString() || '',
+                priceBalanceFull: (v as any).price_balance_full?.toString() || '',
+                pricePointsFull: ((v as any).price_points_full)?.toString() || '',
+                size: v.size || '',
+                color: v.color || '',
+                image_url: v.image_url || '',
+                stock: v.stock?.toString() || '',
+            };
+        });
+        
         setFormData({
             name: product.name,
             description: product.description,
             image_url: product.image_url || '',
             thumbnail_url: product.thumbnail_url || '',
             category: product.category || '',
-            variants: (product.variants || []).map(v => ({
-                id: v.id,
-                variant_id: v.variant_id,
-                name: v.name,
-                price: v.price.toString(),
-                size: v.size || '',
-                color: v.color || '',
-                image_url: v.image_url || '',
-                stock: v.stock?.toString() || '',
-            })) || [{ id: '', variant_id: '', name: '', price: '', size: '', color: '', image_url: '', stock: '' }],
+            variants: formattedVariants.length > 0 ? formattedVariants : [{ 
+                id: '', 
+                variant_id: '', 
+                name: '', 
+                price: '',
+                paymentMode: 'balance_only',
+                priceBalance: '',
+                pricePoints: '',
+                priceBalanceFull: '',
+                pricePointsFull: '',
+                size: '', 
+                color: '', 
+                image_url: '', 
+                stock: '' 
+            }],
             shippingOptions: (product.shippingOptions || []).map(s => ({
                 id: s.id,
                 country: s.country,
@@ -149,7 +255,7 @@ export default function ProductsAdmin() {
             image_url: '',
             thumbnail_url: '',
             category: '',
-            variants: [{ id: '', variant_id: '', name: '', price: '', size: '', color: '', image_url: '', stock: '' }],
+            variants: [{ id: '', variant_id: '', name: '', price: '', pointsPrice: '', size: '', color: '', image_url: '', stock: '' }],
             shippingOptions: [{ id: '', country: '', cost: '' }],
             checkoutFields: [],
         });
@@ -287,30 +393,93 @@ export default function ProductsAdmin() {
                                         <div className="space-y-4">
                                             {formData.variants.map((variant, idx) => (
                                                 <div key={idx} className="p-4 border-2 border-hackclub-smoke/50 rounded-lg space-y-2">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Variant Name"
-                                                        value={variant.name}
-                                                        onChange={(e) => {
-                                                            const newVariants = [...formData.variants];
-                                                            newVariants[idx].name = e.target.value;
-                                                            setFormData({ ...formData, variants: newVariants });
-                                                        }}
-                                                        className="w-full px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
-                                                    />
-                                                    <div className="grid grid-cols-3 gap-2">
+                                                    <div className="grid grid-cols-2 gap-2">
                                                         <input
-                                                            type="number"
-                                                            placeholder="Price"
-                                                            step="0.01"
-                                                            value={variant.price}
+                                                            type="text"
+                                                            placeholder="Variant Name"
+                                                            value={variant.name}
                                                             onChange={(e) => {
                                                                 const newVariants = [...formData.variants];
-                                                                newVariants[idx].price = e.target.value;
+                                                                newVariants[idx].name = e.target.value;
                                                                 setFormData({ ...formData, variants: newVariants });
                                                             }}
-                                                            className="px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
+                                                            className="col-span-2 px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
                                                         />
+                                                        <select
+                                                            value={variant.paymentMode}
+                                                            onChange={(e) => {
+                                                                const newVariants = [...formData.variants];
+                                                                newVariants[idx].paymentMode = e.target.value as any;
+                                                                setFormData({ ...formData, variants: newVariants });
+                                                            }}
+                                                            className="col-span-2 px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
+                                                        >
+                                                            <option value="balance_only">Balance Only ($)</option>
+                                                            <option value="points_only">Points Only</option>
+                                                            <option value="mixed">Mixed ($ + Points)</option>
+                                                        </select>
+                                                    </div>
+                                                    <div className="grid grid-cols-4 gap-2">
+                                                        {variant.paymentMode === 'balance_only' && (
+                                                            <>
+                                                                <input
+                                                                    type="number"
+                                                                    placeholder="Price ($)"
+                                                                    step="0.01"
+                                                                    value={variant.priceBalance}
+                                                                    onChange={(e) => {
+                                                                        const newVariants = [...formData.variants];
+                                                                        newVariants[idx].priceBalance = e.target.value;
+                                                                        setFormData({ ...formData, variants: newVariants });
+                                                                    }}
+                                                                    className="col-span-2 px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
+                                                                />
+                                                            </>
+                                                        )}
+                                                        {variant.paymentMode === 'points_only' && (
+                                                            <>
+                                                                <input
+                                                                    type="number"
+                                                                    placeholder="Points"
+                                                                    step="1"
+                                                                    value={variant.pricePoints}
+                                                                    onChange={(e) => {
+                                                                        const newVariants = [...formData.variants];
+                                                                        newVariants[idx].pricePoints = e.target.value;
+                                                                        setFormData({ ...formData, variants: newVariants });
+                                                                    }}
+                                                                    className="col-span-2 px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
+                                                                />
+                                                            </>
+                                                        )}
+                                                        {variant.paymentMode === 'mixed' && (
+                                                            <>
+                                                                <input
+                                                                    type="number"
+                                                                    placeholder="Price ($)"
+                                                                    step="0.01"
+                                                                    value={variant.priceBalanceFull}
+                                                                    onChange={(e) => {
+                                                                        const newVariants = [...formData.variants];
+                                                                        newVariants[idx].priceBalanceFull = e.target.value;
+                                                                        setFormData({ ...formData, variants: newVariants });
+                                                                    }}
+                                                                    className="px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
+                                                                />
+                                                                <input
+                                                                    type="number"
+                                                                    placeholder="Points"
+                                                                    step="1"
+                                                                    value={variant.pricePointsFull}
+                                                                    onChange={(e) => {
+                                                                        const newVariants = [...formData.variants];
+                                                                        newVariants[idx].pricePointsFull = e.target.value;
+                                                                        setFormData({ ...formData, variants: newVariants });
+                                                                    }}
+                                                                    className="px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
+                                                                />
+                                                            </>
+                                                        )}
                                                         <input
                                                             type="text"
                                                             placeholder="Size"
@@ -376,7 +545,21 @@ export default function ProductsAdmin() {
                                                 type="button"
                                                 onClick={() => setFormData({
                                                     ...formData,
-                                                    variants: [...formData.variants, { id: '', variant_id: '', name: '', price: '', size: '', color: '', image_url: '', stock: '' }]
+                                                    variants: [...formData.variants, { 
+                                                        id: '', 
+                                                        variant_id: '', 
+                                                        name: '', 
+                                                        price: '',
+                                                        paymentMode: 'balance_only',
+                                                        priceBalance: '',
+                                                        pricePoints: '',
+                                                        priceBalanceFull: '',
+                                                        pricePointsFull: '',
+                                                        size: '', 
+                                                        color: '', 
+                                                        image_url: '', 
+                                                        stock: '' 
+                                                    }]
                                                 })}
                                                 className="w-full px-4 py-2 border-2 border-dashed border-hackclub-green text-hackclub-green font-bold rounded-lg hover:bg-hackclub-green/10 transition-colors"
                                             >

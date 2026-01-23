@@ -1,14 +1,15 @@
 'use client';
 
-import { useContext, useState, useEffect } from 'react';
+import { useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession, signIn } from 'next-auth/react';
 import Image from 'next/image';
-import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CartContext } from '../../context/CartContext';
 import { CreditsContext } from '../../context/CreditsContext';
+import { PointsContext } from '../../context/PointsContext';
 import { ShippingOption, CheckoutField } from '../../types/Admin';
+import { MixedPaymentSlider } from '../components/MixedPaymentSlider';
 
 const HCB_DONATE_BASE = process.env.NEXT_PUBLIC_HCB_DONATE_BASE || 'https://hcb.hackclub.com/donations/start/hc-store';
 
@@ -16,6 +17,7 @@ const Checkout = () => {
   const { data: session, status } = useSession();
   const cartContext = useContext(CartContext);
   const creditsContext = useContext(CreditsContext);
+  const pointsContext = useContext(PointsContext);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [couponCode, setCouponCode] = useState('');
@@ -30,6 +32,7 @@ const Checkout = () => {
   const [showHCBModal, setShowHCBModal] = useState(false);
   const [claimCode, setClaimCode] = useState('');
   const [codeLoading, setCodeLoading] = useState(false);
+  const [updateTrigger, setUpdateTrigger] = useState(0);
   const router = useRouter();
 
   useEffect(() => {
@@ -38,7 +41,7 @@ const Checkout = () => {
     }
   }, [status]);
 
-  const loadClaimCode = async () => {
+  const loadClaimCode = useCallback(async () => {
     setCodeLoading(true);
     try {
       const res = await fetch('/api/credits/claim-code');
@@ -51,7 +54,11 @@ const Checkout = () => {
     } finally {
       setCodeLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadClaimCode();
+  }, [loadClaimCode]);
 
   useEffect(() => {
     if (cartContext?.cart && cartContext.cart.length > 0) {
@@ -117,15 +124,43 @@ const Checkout = () => {
   if (!cartContext || cartContext.cart === null) return null;
 
   const { cart, clearCart } = cartContext;
-  const subtotal = cart.reduce((total, item) => total + parseFloat(item.price) * (item.quantity || 1), 0);
   const shippingCost = selectedShipping?.cost || 0;
-  const totalBeforeCredits = Math.max(0, subtotal - couponDiscount + shippingCost);
-  const totalPrice = totalBeforeCredits;
+  
+  // Calculate checkout summary - recalculates on each render when updateTrigger changes
+  let totalBalance = 0;
+  let totalPoints = 0;
+  
+  cart.forEach(item => {
+    if (item.paymentMode === 'balance_only') {
+      totalBalance += (item.priceBalance || 0) * item.quantity;
+    } else if (item.paymentMode === 'points_only') {
+      totalPoints += (item.pricePoints || 0) * item.quantity;
+    } else if (item.paymentMode === 'mixed') {
+      const pointsPerUnit = item.pointsSpent || 0;
+      const pricePointsFull = item.pricePointsFull || 0;
+      const priceBalanceFull = item.priceBalanceFull || 0;
+      const ratio = pricePointsFull > 0 ? pointsPerUnit / pricePointsFull : 0;
+      const balancePerUnit = priceBalanceFull * (1 - ratio);
+      totalBalance += balancePerUnit * item.quantity;
+      totalPoints += pointsPerUnit * item.quantity;
+    }
+  });
+  
+  const checkoutSummary = {
+    totalBalance: parseFloat(totalBalance.toFixed(2)),
+    totalPoints: Math.round(totalPoints),
+  };
+  
+  const cashTotal = Math.max(0, checkoutSummary.totalBalance - couponDiscount + shippingCost);
+  const requiredPoints = checkoutSummary.totalPoints;
 
   const creditsBalance = creditsContext?.balance || 0;
-  const hasEnoughCredits = creditsBalance >= totalPrice;
-  const creditsToUse = Math.min(creditsBalance, totalPrice);
-  const remainingAfterCredits = Math.max(0, totalPrice - creditsToUse);
+  const pointsBalance = pointsContext?.balance || 0;
+  const hasEnoughCredits = creditsBalance >= cashTotal;
+  const hasEnoughPoints = pointsBalance >= requiredPoints;
+  const remainingCreditsNeeded = Math.max(0, cashTotal - creditsBalance);
+  const remainingPointsNeeded = Math.max(0, requiredPoints - pointsBalance);
+  const canCheckout = hasEnoughCredits && hasEnoughPoints;
 
   const applyCoupon = async () => {
     if (!couponCode.trim()) {
@@ -137,14 +172,14 @@ const Checkout = () => {
     setError(null);
 
     try {
-      const response = await fetch('/api/coupons/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: couponCode,
-          cartTotal: subtotal,
-        }),
-      });
+       const response = await fetch('/api/coupons/validate', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           code: couponCode,
+           cartTotal: checkoutSummary.totalBalance,
+         }),
+       });
 
       const data = await response.json();
 
@@ -191,8 +226,8 @@ const Checkout = () => {
       return;
     }
 
-    if (!hasEnoughCredits) {
-      setError('Insufficient credits. Please add more credits to complete your purchase.');
+    if (!hasEnoughPoints || !hasEnoughCredits) {
+      setError(!hasEnoughPoints ? 'Not enough points to cover the item requirements.' : 'Insufficient credits for the cash portion. Please add more credits.');
       return;
     }
 
@@ -210,11 +245,18 @@ const Checkout = () => {
             id: String(item.id),
             name: item.name,
             price: item.price,
+            paymentMode: item.paymentMode,
+            priceBalance: item.priceBalance,
+            pricePoints: item.pricePoints,
+            priceBalanceFull: item.priceBalanceFull,
+            pricePointsFull: item.pricePointsFull,
+            pointsSpent: item.pointsSpent || 0,
             quantity: item.quantity || 1,
             variant_id: item.variant_id,
             thumbnail_url: item.thumbnail_url,
           })),
-          totalAmount: totalPrice,
+          cashTotal,
+          pointsRequired: requiredPoints,
           shippingCost: selectedShipping?.cost || 0,
           shippingCountry: selectedShipping?.country,
           checkoutData,
@@ -234,6 +276,9 @@ const Checkout = () => {
 
       if (creditsContext?.refreshCredits) {
         await creditsContext.refreshCredits();
+      }
+      if (pointsContext?.refreshPoints) {
+        await pointsContext.refreshPoints();
       }
 
       clearCart();
@@ -298,6 +343,44 @@ const Checkout = () => {
               )}
             </AnimatePresence>
           </div>
+
+          {/* Mixed Payment Sliders */}
+          {cart.length > 0 && cart.some(item => item.paymentMode === 'mixed') && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-6 p-4 rounded-2xl bg-hackclub-blue/10 border-2 border-hackclub-blue"
+            >
+              <h3 className="font-bold text-hackclub-dark mb-4">Adjust Point Spending</h3>
+              <div className="space-y-4">
+                {cart.map((item) => 
+                  item.paymentMode === 'mixed' ? (
+                    <div key={item.id} className="bg-white rounded-lg p-4 border border-hackclub-smoke">
+                      <p className="font-bold text-hackclub-dark mb-3">{item.name} (Qty: {item.quantity})</p>
+                      <MixedPaymentSlider
+                        priceBalanceFull={item.priceBalanceFull || 0}
+                        pricePointsFull={item.pricePointsFull || 0}
+                        userBalance={creditsContext?.balance || 0}
+                        userPoints={pointsContext?.balance || 0}
+                        quantity={item.quantity}
+                        onPointsChange={(points) => {
+                          // Update the cart item's pointsSpent and trigger recalculation
+                          if (cartContext?.cart) {
+                            const idx = cartContext.cart.findIndex(c => c.id === item.id);
+                            if (idx !== -1) {
+                              cartContext.cart[idx].pointsSpent = points;
+                              // Force a re-render by updating updateTrigger
+                              setUpdateTrigger(prev => prev + 1);
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  ) : null
+                )}
+              </div>
+            </motion.div>
+          )}
 
           {cart.length > 0 && (
             <>
@@ -430,8 +513,8 @@ const Checkout = () => {
 
               <div className="mt-6 space-y-2">
                 <div className="flex justify-between items-center text-hackclub-slate">
-                  <span>Subtotal:</span>
-                  <span>${subtotal.toFixed(2)}</span>
+                  <span>Subtotal (cash):</span>
+                  <span>${checkoutSummary.totalBalance.toFixed(2)}</span>
                 </div>
                 {couponDiscount > 0 && (
                   <div className="flex justify-between items-center text-hackclub-green">
@@ -444,37 +527,33 @@ const Checkout = () => {
                   <span>${shippingCost.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center text-xl font-black pt-2 border-t border-hackclub-smoke">
-                  <span>Total:</span>
-                  <span className="text-hackclub-dark">${totalPrice.toFixed(2)}</span>
+                  <span>Cash Due:</span>
+                  <span className="text-hackclub-dark">${cashTotal.toFixed(2)}</span>
                 </div>
-                {creditsToUse > 0 && (
-                  <div className="flex justify-between items-center text-hackclub-green">
-                    <span>Credits Applied:</span>
-                    <span>-${creditsToUse.toFixed(2)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between items-center text-xl font-black pt-2 border-t border-hackclub-smoke">
-                  <span>Amount Due:</span>
-                  <span className="text-hackclub-red">${remainingAfterCredits.toFixed(2)}</span>
+                <div className="flex justify-between items-center text-xl font-black">
+                  <span>Points Required:</span>
+                  <span className="text-hackclub-dark">{requiredPoints} pts</span>
+                </div>
+                <div className="flex justify-between items-center text-sm text-hackclub-slate">
+                  <span>Your credits:</span>
+                  <span>${creditsBalance.toFixed(2)} {remainingCreditsNeeded > 0 ? `(need $${remainingCreditsNeeded.toFixed(2)} more)` : ''}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm text-hackclub-slate">
+                  <span>Your points:</span>
+                  <span>{pointsBalance} pts {remainingPointsNeeded > 0 ? `(need ${remainingPointsNeeded} more)` : ''}</span>
                 </div>
               </div>
 
               <motion.button
-                whileHover={(hasEnoughCredits || remainingAfterCredits > 0) && cart.length > 0 ? { scale: 1.03 } : {}}
-                whileTap={(hasEnoughCredits || remainingAfterCredits > 0) && cart.length > 0 ? { scale: 0.97 } : {}}
+                whileHover={canCheckout && cart.length > 0 ? { scale: 1.03 } : {}}
+                whileTap={canCheckout && cart.length > 0 ? { scale: 0.97 } : {}}
                 className={`w-full font-black text-lg py-3 rounded-full transition-all shadow-lg mt-6 ${
-                  hasEnoughCredits && cart.length > 0
+                  canCheckout && cart.length > 0
                     ? 'bg-hackclub-red hover:bg-hackclub-orange text-white hover:shadow-xl'
-                    : remainingAfterCredits > 0 && cart.length > 0
-                    ? 'bg-hackclub-blue hover:bg-hackclub-cyan text-white hover:shadow-xl'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
-                onClick={hasEnoughCredits ? handleCheckout : () => {
-                  setClaimCode('');
-                  setShowHCBModal(true);
-                  loadClaimCode();
-                }}
-                disabled={loading || cart.length === 0}
+                onClick={canCheckout ? handleCheckout : undefined}
+                disabled={loading || cart.length === 0 || !canCheckout}
               >
                 <AnimatePresence mode="wait" initial={false}>
                   {loading ? (
@@ -487,7 +566,7 @@ const Checkout = () => {
                     >
                       <span className="inline-block animate-pulse">Processing…</span>
                     </motion.span>
-                  ) : hasEnoughCredits ? (
+                  ) : canCheckout ? (
                     <motion.span
                       key="checkout"
                       initial={{ opacity: 0 }}
@@ -497,25 +576,17 @@ const Checkout = () => {
                     >
                       Checkout →
                     </motion.span>
-                  ) : remainingAfterCredits > 0 ? (
-                    <motion.span
-                      key="hcb"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      Pay ${remainingAfterCredits.toFixed(2)} with HCB →
-                    </motion.span>
                   ) : (
                     <motion.span
-                      key="empty"
+                      key="insufficient"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
                       transition={{ duration: 0.2 }}
                     >
-                      Add items to cart
+                      {remainingPointsNeeded > 0
+                        ? `Need ${remainingPointsNeeded} more points`
+                        : `Need $${remainingCreditsNeeded.toFixed(2)} more credits`}
                     </motion.span>
                   )}
                 </AnimatePresence>
@@ -556,7 +627,7 @@ const Checkout = () => {
               <div>
                 <h2 className="text-3xl font-black text-hackclub-dark mb-1">Pay with HCB</h2>
                 <p className="text-hackclub-slate font-medium">
-                  Amount due: <span className="text-hackclub-red font-bold">${remainingAfterCredits.toFixed(2)}</span>
+                  Amount due: <span className="text-hackclub-red font-bold">${remainingCreditsNeeded.toFixed(2)}</span>
                 </p>
               </div>
               <motion.button
@@ -610,7 +681,7 @@ const Checkout = () => {
                 <motion.a
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  href={`${HCB_DONATE_BASE}?message=${encodeURIComponent(claimCode)}&amount=${Math.round(remainingAfterCredits * 100)}&goods=true&name=${encodeURIComponent(claimCode)}`}
+                  href={`${HCB_DONATE_BASE}?message=${encodeURIComponent(claimCode)}&amount=${Math.round(remainingCreditsNeeded * 100)}&goods=true&name=${encodeURIComponent(claimCode)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="block w-full bg-hackclub-blue hover:bg-hackclub-cyan text-white font-bold py-3 rounded-full text-center transition-colors"

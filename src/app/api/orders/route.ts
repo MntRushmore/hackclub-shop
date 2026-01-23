@@ -5,6 +5,7 @@ import { authOptions } from '../auth/[...nextauth]/route';
 import { Order } from '../../../types/Order';
 import { rateLimit, rateLimitResponse } from '../../../lib/rateLimit';
 import { CreditTransaction } from '../../../types/Credits';
+import { PointsTransaction } from '../../../types/Points';
 import { validateCSRFToken } from '../../../lib/csrf';
 import { validateCartItems } from '../../../lib/productValidation';
 
@@ -55,9 +56,10 @@ export async function POST(request: Request) {
     }
 
     try {
-        const { items, totalAmount, shippingCost, shippingCountry, checkoutData, csrfToken, idempotencyKey, couponDiscount = 0 } = await request.json() as { 
-            items: { id: string; name: string; price: string; quantity: number; variant_id?: number }[]; 
-            totalAmount: number;
+        const { items, cashTotal, pointsRequired, shippingCost, shippingCountry, checkoutData, csrfToken, idempotencyKey, couponDiscount = 0 } = await request.json() as { 
+            items: { id: string; name: string; price: string; quantity: number; variant_id?: string | number; pointsSpent?: number }[]; 
+            cashTotal: number;
+            pointsRequired: number;
             shippingCost?: number | string;
             shippingCountry?: string;
             checkoutData?: Record<string, string>;
@@ -89,9 +91,10 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'No items in order' }, { status: 400 });
         }
 
+        // Ensure all variant_ids are strings for consistent validation
         const itemsWithStringVariantId = items.map(item => ({
             ...item,
-            variant_id: item.variant_id !== undefined ? String(item.variant_id) : undefined,
+            variant_id: item.variant_id !== undefined && item.variant_id !== null ? String(item.variant_id) : undefined,
         }));
 
         // Validate products and prices server-side
@@ -100,28 +103,45 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: validation.error }, { status: 400 });
         }
 
-        const verifiedItemTotal = validation.verifiedTotal!;
-        const verifiedTotal = Math.max(0, verifiedItemTotal - couponDiscountNum + shippingCostNum);
+        const verifiedItemCashTotal = validation.verifiedTotal!;
+        const verifiedItemPointsTotal = validation.verifiedPointsTotal || 0;
+        const verifiedCashTotal = Math.max(0, verifiedItemCashTotal - couponDiscountNum + shippingCostNum);
 
-        if (Math.abs(verifiedTotal - totalAmount) > 0.01) {
+        if (Math.abs(verifiedCashTotal - cashTotal) > 0.01 || pointsRequired !== verifiedItemPointsTotal) {
             return NextResponse.json({ 
                 error: 'Price mismatch detected. Please refresh your cart.',
-                expectedTotal: verifiedTotal,
-                providedTotal: totalAmount,
-                itemsTotal: verifiedItemTotal,
+                expectedCash: verifiedCashTotal,
+                providedCash: cashTotal,
+                expectedPoints: verifiedItemPointsTotal,
+                providedPoints: pointsRequired,
+                itemsCashTotal: verifiedItemCashTotal,
                 shippingCost: shippingCostNum,
                 couponDiscount: couponDiscountNum
             }, { status: 400 });
         }
 
-        // Check user has enough credits
-        const currentBalance = await redis.get<number>(`user:${userId}:balance`) || 0;
+        // Check user has enough balances
+        const [creditsBalanceRaw, pointsBalanceRaw] = await Promise.all([
+            redis.get<number>(`user:${userId}:balance`),
+            redis.get<number>(`user:${userId}:pointsBalance`),
+        ]);
 
-        if (currentBalance < verifiedTotal) {
+        const creditsBalance = creditsBalanceRaw ?? 0;
+        const pointsBalance = pointsBalanceRaw ?? 0;
+
+        if (pointsBalance < verifiedItemPointsTotal) {
+            return NextResponse.json({ 
+                error: 'Insufficient points', 
+                required: verifiedItemPointsTotal,
+                balance: pointsBalance 
+            }, { status: 400 });
+        }
+
+        if (creditsBalance < verifiedCashTotal) {
             return NextResponse.json({ 
                 error: 'Insufficient credits', 
-                required: verifiedTotal,
-                balance: currentBalance 
+                required: verifiedCashTotal,
+                balance: creditsBalance 
             }, { status: 400 });
         }
 
@@ -138,11 +158,13 @@ export async function POST(request: Request) {
                 quantity: item.quantity,
                 thumbnail_url: item.thumbnail_url,
             })),
-            subtotal: verifiedItemTotal,
+            subtotal: verifiedItemCashTotal,
+            pointsRequired: verifiedItemPointsTotal,
+            pointsSpent: verifiedItemPointsTotal,
             couponDiscount: couponDiscountNum > 0 ? couponDiscountNum : undefined,
             shippingCost: shippingCostNum,
-            totalAmount: verifiedTotal,
-            creditsPaid: verifiedTotal,
+            totalAmount: verifiedCashTotal,
+            creditsPaid: verifiedCashTotal,
             shippingCountry,
             checkoutData: checkoutData || {},
             status: 'pending',
@@ -152,28 +174,43 @@ export async function POST(request: Request) {
             createdAt: now,
         };
 
-        // Deduct credits
-        const newBalance = currentBalance - verifiedTotal;
-        const currentTransactions = await redis.get<CreditTransaction[]>(`user:${userId}:transactions`) || [];
+        // Deduct balances
+        const newCreditsBalance = creditsBalance - verifiedCashTotal;
+        const newPointsBalance = pointsBalance - verifiedItemPointsTotal;
+
+        const currentCreditTransactions = await redis.get<CreditTransaction[]>(`user:${userId}:transactions`) || [];
+        const currentPointsTransactions = await redis.get<PointsTransaction[]>(`user:${userId}:pointsTransactions`) || [];
         
-        const transaction: CreditTransaction = {
+        const creditTransaction: CreditTransaction = {
             id: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            amount: -verifiedTotal,
+            amount: -verifiedCashTotal,
             type: 'purchase',
-            description: `Order #${orderId.slice(-8)}`,
+            description: `Order #${orderId.slice(-8)} (cash)`,
             timestamp: new Date(),
             orderId,
         };
 
-        const newTransactions = [transaction, ...currentTransactions];
+        const pointsTransaction: PointsTransaction = {
+            id: `ptxn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            amount: -verifiedItemPointsTotal,
+            type: 'spend',
+            description: `Order #${orderId.slice(-8)} (points)`,
+            timestamp: new Date(),
+            orderId,
+        };
+
+        const newCreditTransactions = [creditTransaction, ...currentCreditTransactions];
+        const newPointsTransactions = [pointsTransaction, ...currentPointsTransactions];
 
         // Save everything atomically
         const currentOrders = await redis.get<Order[]>(`user:${userId}:orders`) || [];
         const newOrders = [order, ...currentOrders];
 
         const savePromises: Promise<unknown>[] = [
-            redis.set(`user:${userId}:balance`, newBalance),
-            redis.set(`user:${userId}:transactions`, newTransactions),
+            redis.set(`user:${userId}:balance`, newCreditsBalance),
+            redis.set(`user:${userId}:transactions`, newCreditTransactions),
+            redis.set(`user:${userId}:pointsBalance`, newPointsBalance),
+            redis.set(`user:${userId}:pointsTransactions`, newPointsTransactions),
             redis.set(`user:${userId}:orders`, newOrders),
         ];
 
@@ -205,7 +242,7 @@ export async function POST(request: Request) {
                     shippingCost: order.shippingCost,
                     shippingCountry: order.shippingCountry,
                     checkoutData: order.checkoutData,
-                    newBalance,
+                    newBalance: newCreditsBalance,
                 }),
             });
         } catch (error) {
@@ -214,8 +251,10 @@ export async function POST(request: Request) {
 
         return NextResponse.json({ 
             order,
-            newBalance,
-            transaction,
+            creditsBalance: newCreditsBalance,
+            pointsBalance: newPointsBalance,
+            creditTransaction,
+            pointsTransaction,
         });
     } catch (error) {
         console.error('[Orders API] Error creating order:', error);

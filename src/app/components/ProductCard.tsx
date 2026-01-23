@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { CartContext } from '../../context/CartContext';
 import { Product } from '../../types/Product';
+import { getDisplayPrice, getPaymentModeBadge } from '../../lib/paymentUtils';
 
 interface ProductCardProps {
     product: Product;
@@ -18,7 +19,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
     gradientTo,
 }) => {
     const [selectedVariantId, setSelectedVariantId] = useState<
-        number | undefined
+        string | number | undefined
     >(
         product.sync_variants && product.sync_variants.length > 0
             ? product.sync_variants[0].variant_id
@@ -27,15 +28,30 @@ const ProductCard: React.FC<ProductCardProps> = ({
 
     const { addToCart } = useContext(CartContext)!;
 
+    const selectedVariant = product.sync_variants?.find(
+        (variant) => variant.variant_id === selectedVariantId
+    );
+
     const handleAddToCart = () => {
-        const selectedVariant = product.sync_variants?.find(
-            (variant) => variant.variant_id === selectedVariantId
-        );
         if (selectedVariant) {
+            // Set price based on payment mode
+            let displayPrice = '0';
+            if (selectedVariant.payment_mode === 'balance_only') {
+                displayPrice = (selectedVariant.price_balance || 0).toString();
+            } else if (selectedVariant.payment_mode === 'mixed') {
+                displayPrice = (selectedVariant.price_balance_full || 0).toString();
+            }
+            // For points_only, price is 0 in dollars
+            
             const cartItem = {
                 id: product.id,
                 name: selectedVariant.name,
-                price: selectedVariant.retail_price,
+                price: displayPrice,
+                paymentMode: selectedVariant.payment_mode,
+                priceBalance: selectedVariant.price_balance,
+                pricePoints: selectedVariant.price_points,
+                priceBalanceFull: selectedVariant.price_balance_full,
+                pricePointsFull: selectedVariant.price_points_full,
                 thumbnail_url: selectedVariant.product.image,
                 variant_id: selectedVariant.variant_id,
             };
@@ -63,37 +79,36 @@ const ProductCard: React.FC<ProductCardProps> = ({
                 </Link>
             </div>
 
-            < h3 className="text-xl font-semibold mt-4 text-hackclub-text text-center" >
+            <h3 className="text-xl font-semibold mt-4 text-hackclub-text text-center">
                 {product.name}
-            </h3 >
-            <p className="text-lg text-gray-800 mt-2">
-                $
-                {selectedVariantId
-                    ? parseFloat(
-                        product.sync_variants?.find(
-                            (variant) => variant.variant_id === selectedVariantId
-                        )?.retail_price || '0.00'
-                    ).toFixed(2)
-                    : 'N/A'}
-            </p>
+            </h3>
 
-            {
-                product.sync_variants && (
-                    <div className="flex justify-center mt-2 mb-2">
-                        <select
-                            value={selectedVariantId}
-                            onChange={(e) => setSelectedVariantId(parseInt(e.target.value))}
-                            className="px-4 py-2 rounded-full border bg-white text-gray-700 focus:outline-none"
-                        >
-                            {product.sync_variants.map((variant) => (
-                                <option key={variant.variant_id} value={variant.variant_id}>
-                                    {variant.size} / {variant.color}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                )
-            }
+            {selectedVariant && (
+                <div className="flex flex-col items-center mt-2">
+                    <p className="text-lg font-semibold text-gray-900">
+                        {getDisplayPrice(selectedVariant)}
+                    </p>
+                    <span className="text-xs text-gray-600 mt-1 font-medium">
+                        {getPaymentModeBadge(selectedVariant.payment_mode)}
+                    </span>
+                </div>
+            )}
+
+            {product.sync_variants && (
+                <div className="flex justify-center mt-3 mb-2">
+                    <select
+                        value={selectedVariantId}
+                        onChange={(e) => setSelectedVariantId(isNaN(Number(e.target.value)) ? e.target.value : Number(e.target.value))}
+                        className="px-4 py-2 rounded-full border bg-white text-gray-700 focus:outline-none"
+                    >
+                        {product.sync_variants.map((variant) => (
+                            <option key={variant.variant_id} value={variant.variant_id}>
+                                {variant.size} / {variant.color}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+            )}
 
             <button
                 className="mt-2 bg-[#338eda] text-white py-2 px-4 rounded-full hover:bg-[#2a6bb8] transition-colors shadow-sm"
@@ -104,7 +119,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
             >
                 Add to Cart
             </button>
-        </div >
+        </div>
     );
 };
 

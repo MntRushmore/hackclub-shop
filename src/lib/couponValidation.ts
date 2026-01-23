@@ -15,8 +15,7 @@ export interface CouponValidationResult {
 
 export async function validateAndApplyCoupon(
     code: string,
-    cartTotal: number,
-    userId?: string
+    cartTotal: number
 ): Promise<CouponValidationResult> {
     try {
         const coupon = await redis.get<Coupon>(`coupon:${code.toUpperCase().trim()}`);
