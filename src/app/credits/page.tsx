@@ -104,7 +104,6 @@ const CreditsPage = () => {
 
     const { balance, transactions, refreshCredits } = creditsContext;
     const pointsBalance = pointsContext?.balance ?? 0;
-    const pointsTransactions = pointsContext?.transactions ?? [];
 
     const formatDate = (date: Date) => {
         return new Date(date).toLocaleDateString('en-US', {

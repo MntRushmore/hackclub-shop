@@ -1,6 +1,6 @@
 'use client';
 
-import { useContext, useState, useEffect } from 'react';
+import { useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession, signIn } from 'next-auth/react';
 import Image from 'next/image';
@@ -39,7 +39,7 @@ const Checkout = () => {
     }
   }, [status]);
 
-  const loadClaimCode = async () => {
+  const loadClaimCode = useCallback(async () => {
     setCodeLoading(true);
     try {
       const res = await fetch('/api/credits/claim-code');
@@ -52,7 +52,11 @@ const Checkout = () => {
     } finally {
       setCodeLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadClaimCode();
+  }, [loadClaimCode]);
 
   useEffect(() => {
     if (cartContext?.cart && cartContext.cart.length > 0) {
