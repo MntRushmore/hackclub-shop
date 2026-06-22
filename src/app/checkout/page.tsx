@@ -11,7 +11,7 @@ import { PointsContext } from '../../context/PointsContext';
 import { ShippingOption, CheckoutField } from '../../types/Admin';
 import { UnifiedPaymentSlider } from '../components/UnifiedPaymentSlider';
 
-const HCB_DONATE_BASE = process.env.NEXT_PUBLIC_HCB_DONATE_BASE || 'https://hcb.hackclub.com/donations/start/hc-store';
+const HCB_DONATE_BASE = process.env.NEXT_PUBLIC_HCB_DONATE_BASE || 'https://hcb.hackclub.com/donations/start/ysws-combinator';
 
 const Checkout = () => {
     const { data: session, status } = useSession();

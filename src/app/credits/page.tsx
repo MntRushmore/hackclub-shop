@@ -7,7 +7,7 @@ import { CreditsContext } from '../../context/CreditsContext';
 import { PointsContext } from '../../context/PointsContext';
 import { CreditsSkeleton } from '../components/Skeleton';
 
-const HCB_DONATE_BASE = process.env.NEXT_PUBLIC_HCB_DONATE_BASE || 'https://hcb.hackclub.com/donations/start/hc-store';
+const HCB_DONATE_BASE = process.env.NEXT_PUBLIC_HCB_DONATE_BASE || 'https://hcb.hackclub.com/donations/start/ysws-combinator';
 
 const CreditsPage = () => {
     const { data: session, status } = useSession();

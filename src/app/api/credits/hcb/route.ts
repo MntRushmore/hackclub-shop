@@ -4,8 +4,8 @@ import { Redis } from '@upstash/redis';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import { CreditTransaction } from '../../../../types/Credits';
 
-const HCB_ORG_SLUG = process.env.HCB_ORG_SLUG || 'hc-store';
-const HCB_API_BASE = process.env.HCB_API_BASE || 'https://hcb.zoe.rocks/api/v3';
+const HCB_ORG_SLUG = process.env.HCB_ORG_SLUG || 'ysws-combinator';
+const HCB_API_BASE = process.env.HCB_API_BASE || 'https://hcb.hackclub.com/api/v3';
 
 // Initialize Upstash Redis
 const redis = new Redis({
