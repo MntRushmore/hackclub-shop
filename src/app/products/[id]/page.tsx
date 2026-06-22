@@ -6,7 +6,7 @@ import { CartContext } from "../../../context/CartContext";
 import Image from 'next/image';
 import { ProductDetail, Variant } from '../../../types/Product';
 import { motion } from 'framer-motion';
-import { getCashPrice, getPointsPrice, getDisplayPrice } from '../../../lib/paymentUtils';
+import { getCashPrice, getPointsPrice, getDisplayPrice, isAvailableOn } from '../../../lib/paymentUtils';
 import { usePathway } from '../../../lib/usePathway';
 
 
@@ -15,7 +15,7 @@ const ProductPage = () => {
     const productId = params.id;
 
     const { addToCart } = useContext(CartContext)!;
-    const { pathway } = usePathway();
+    const { pathway, isGuest } = usePathway();
 
     const [product, setProduct] = useState<ProductDetail | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
@@ -49,7 +49,7 @@ const ProductPage = () => {
     }, [productId]);
 
     const handleAddToCart = () => {
-        if (product && selectedVariant) {
+        if (product && selectedVariant && isAvailableOn(selectedVariant, pathway)) {
             const cartItem = {
                 id: product.id,
                 name: selectedVariant.name,
@@ -99,9 +99,15 @@ const ProductPage = () => {
         );
     }
 
+    // Strict path separation: a variant is buyable only if it's priced for the
+    // active pathway, and the product is only purchasable at all if at least one
+    // variant is.
+    const selectedAvailable = !!selectedVariant && isAvailableOn(selectedVariant, pathway);
+    const anyVariantAvailable = variants.some((variant) => isAvailableOn(variant, pathway));
+
     return (
-        <div 
-            className="min-h-screen bg-white" 
+        <div
+            className="min-h-screen bg-white"
             style={{
                 backgroundImage: `
                   linear-gradient(to right, #e0f2fe 1px, transparent 1px),
@@ -167,14 +173,32 @@ const ProductPage = () => {
                             </div>
                         )}
 
-                        <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            className="w-full bg-hackclub-red hover:bg-hackclub-orange text-white font-black text-lg py-4 rounded-full transition-all shadow-lg hover:shadow-xl"
-                            onClick={handleAddToCart}
-                        >
-                            Add to Cart
-                        </motion.button>
+                        {anyVariantAvailable ? (
+                            <motion.button
+                                whileHover={selectedAvailable ? { scale: 1.05 } : undefined}
+                                whileTap={selectedAvailable ? { scale: 0.95 } : undefined}
+                                disabled={!selectedAvailable}
+                                className={
+                                    selectedAvailable
+                                        ? "w-full bg-hackclub-red hover:bg-hackclub-orange text-white font-black text-lg py-4 rounded-full transition-all shadow-lg hover:shadow-xl"
+                                        : "w-full bg-gray-200 text-gray-400 font-black text-lg py-4 rounded-full cursor-not-allowed"
+                                }
+                                onClick={handleAddToCart}
+                            >
+                                {selectedAvailable ? 'Add to Cart' : 'Not available'}
+                            </motion.button>
+                        ) : (
+                            <div className="rounded-2xl border-2 border-gray-200 bg-hackclub-smoke p-5 text-center">
+                                <p className="text-hackclub-dark font-bold">
+                                    This item isn&apos;t available for {isGuest ? 'card purchase' : 'points'}.
+                                </p>
+                                {isGuest && (
+                                    <p className="mt-1 text-sm text-hackclub-slate font-medium">
+                                        Sign in with Hack Club to buy with points.
+                                    </p>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

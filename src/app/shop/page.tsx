@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { CartContext } from '../../context/CartContext';
-import { getCashPrice, getPointsPrice, getDisplayPrice } from '../../lib/paymentUtils';
+import { getCashPrice, getPointsPrice, getDisplayPrice, isAvailableOn } from '../../lib/paymentUtils';
 import { usePathway } from '../../lib/usePathway';
 
 interface Variant {
@@ -38,7 +38,16 @@ const Shop = () => {
     const [isReleasing, setIsReleasing] = useState(false);
     const [releaseOnCart, setReleaseOnCart] = useState(false);
     const cartContext = useContext(CartContext);
-    const { pathway } = usePathway();
+    const { pathway, loading: pathwayLoading } = usePathway();
+
+    // Strict path separation: while auth resolves, show everything; once
+    // resolved, only show products with at least one variant the active
+    // pathway can actually buy.
+    const visibleProducts = pathwayLoading
+        ? products
+        : products.filter((product) =>
+              (product.sync_variants || []).some((variant) => isAvailableOn(variant, pathway))
+          );
 
     useEffect(() => {
         const fetchProducts = async () => {
@@ -104,7 +113,7 @@ const Shop = () => {
                     upEvent.clientY >= rect.top - 100 &&
                     upEvent.clientY <= rect.bottom + 100;
 
-                if (isNearCart && product.sync_variants && product.sync_variants.length > 0 && cartContext) {
+                if (isNearCart && product.sync_variants && product.sync_variants.length > 0 && isAvailableOn(product.sync_variants[0], pathway) && cartContext) {
                     droppedOnCart = true;
                     const variant = product.sync_variants[0];
 
@@ -167,7 +176,10 @@ const Shop = () => {
                 )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {products.map((product) => (
+                    {visibleProducts.map((product) => {
+                      const firstVariant = product.sync_variants?.[0];
+                      const canBuy = firstVariant ? isAvailableOn(firstVariant, pathway) : false;
+                      return (
                         <motion.div
                             key={product.id}
                             whileHover={{ scale: 1.02 }}
@@ -212,12 +224,17 @@ const Shop = () => {
                                         </svg>
                                     </Link>
                                     <button
-                                        className="bg-hackclub-red hover:bg-hackclub-orange text-white font-bold px-4 py-1 rounded-full shadow transition-colors transition-opacity duration-200 text-sm opacity-0 group-hover:opacity-100 focus:opacity-100 ml-auto"
+                                        disabled={!canBuy}
+                                        className={
+                                            canBuy
+                                                ? "bg-hackclub-red hover:bg-hackclub-orange text-white font-bold px-4 py-1 rounded-full shadow transition-colors transition-opacity duration-200 text-sm opacity-0 group-hover:opacity-100 focus:opacity-100 ml-auto"
+                                                : "bg-gray-200 text-gray-400 font-bold px-4 py-1 rounded-full transition-opacity duration-200 text-sm opacity-0 group-hover:opacity-100 focus:opacity-100 ml-auto cursor-not-allowed"
+                                        }
                                         onClick={(e) => {
                                              e.stopPropagation();
                                              e.preventDefault();
-                                             if (product.sync_variants && product.sync_variants.length > 0 && cartContext) {
-                                                  const variant = product.sync_variants[0];
+                                             if (canBuy && firstVariant && cartContext) {
+                                                  const variant = firstVariant;
 
                                                   const variantId = variant.variant_id || variant.id || `${product.id}_var_0`;
                                                    cartContext.addToCart({
@@ -233,12 +250,13 @@ const Shop = () => {
                                              e.currentTarget.blur();
                                          }}
                                     >
-                                        Add to Cart
+                                        {canBuy ? 'Add to Cart' : 'Not available'}
                                     </button>
                                 </div>
                             </div>
                         </motion.div>
-                    ))}
+                      );
+                    })}
                 </div>
 
                 {draggingProduct && (

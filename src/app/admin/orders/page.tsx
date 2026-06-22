@@ -127,25 +127,39 @@ export default function OrdersAdmin() {
                                         <div className="flex items-center justify-between mb-4">
                                             <div>
                                                 <p className="text-sm text-hackclub-muted font-bold">Order #{order.id.slice(-8)}</p>
-                                                <p className="text-xs text-hackclub-slate">User: {order.userId}</p>
+                                                <p className="text-xs text-hackclub-slate">{order.pathway === 'guest' ? `Guest: ${order.guestEmail || '—'}` : `User: ${order.userId}`}</p>
                                             </div>
-                                            <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${getStatusColor(order.status)}`}>
-                                                {order.status}
-                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                {order.pathway && (
+                                                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${order.pathway === 'guest' ? 'bg-purple-100 text-purple-800' : 'bg-cyan-100 text-cyan-800'}`}>
+                                                        {order.pathway === 'guest' ? 'Card' : 'Points'}
+                                                    </span>
+                                                )}
+                                                {order.paymentStatus && order.pathway === 'guest' && (
+                                                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${order.paymentStatus === 'paid' ? 'bg-green-100 text-green-800' : order.paymentStatus === 'refunded' ? 'bg-orange-100 text-orange-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                                        {order.paymentStatus}
+                                                    </span>
+                                                )}
+                                                <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${getStatusColor(order.status)}`}>
+                                                    {order.status}
+                                                </span>
+                                            </div>
                                         </div>
 
                                         <div className="space-y-2 mb-4">
                                             {order.items.map((item) => (
                                                 <div key={item.id} className="flex justify-between text-sm">
                                                     <span className="text-hackclub-dark font-bold">{item.name} x{item.quantity}</span>
-                                                    <span className="text-hackclub-slate">${(parseFloat(item.price) * item.quantity).toFixed(2)}</span>
+                                                    <span className="text-hackclub-slate">{order.pathway === 'guest' ? `$${(parseFloat(item.price) * item.quantity).toFixed(2)}` : ''}</span>
                                                 </div>
                                             ))}
                                         </div>
 
                                         <div className="pt-4 border-t-2 border-hackclub-smoke flex justify-between items-center">
                                             <span className="text-hackclub-slate font-bold">Total</span>
-                                            <span className="text-lg font-black text-hackclub-dark">${order.totalAmount.toFixed(2)}</span>
+                                            <span className="text-lg font-black text-hackclub-dark">
+                                                {order.pathway === 'guest' ? `$${order.totalAmount.toFixed(2)}` : `${order.pointsSpent} pts`}
+                                            </span>
                                         </div>
 
                                         {selectedOrder?.id === order.id && order.statusHistory && order.statusHistory.length > 0 && (

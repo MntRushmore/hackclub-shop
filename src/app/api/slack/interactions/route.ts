@@ -1,11 +1,68 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { mirrorOrder, mirrorUser } from '../../../../lib/airtableMirror';
+import { getGuestOrder, updateGuestOrder } from '../../../../lib/guestOrders';
 
 /** Mirror the single order matching orderId out of an updated orders array (best-effort). */
 function mirrorUpdatedOrder(updatedOrders: any[], orderId: string, userId: string) {
     const updated = (updatedOrders || []).find((o: any) => o.id === orderId);
     if (updated) void mirrorOrder({ ...updated, userId }, undefined);
+}
+
+/** Best-effort Slack post (chat.postMessage) used for staff notes and customer DMs. */
+async function postSlackMessage(channel: string, text: string) {
+    try {
+        await fetch('https://slack.com/api/chat.postMessage', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`,
+                'Content-Type': 'application/json; charset=utf-8',
+            },
+            body: JSON.stringify({ channel, text }),
+        });
+    } catch {
+    }
+}
+
+/**
+ * Refund an order's POINTS back to the student's points balance and record a
+ * points refund transaction. Reads `pointsSpent` from the order itself — never
+ * a dollar amount parsed from Slack text. Returns the new points balance, or
+ * null if nothing was refunded.
+ */
+async function refundStudentPoints(
+    redis: any,
+    userId: string,
+    orderId: string,
+    pointsSpent: number,
+): Promise<number | null> {
+    if (!userId || !(pointsSpent > 0)) return null;
+
+    const currentPoints = ((await redis.get(`user:${userId}:pointsBalance`)) as number) || 0;
+    const currentTransactions = ((await redis.get(`user:${userId}:pointsTransactions`)) as any[]) || [];
+
+    const refundTransaction = {
+        id: `ptxn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        amount: pointsSpent,
+        type: 'refund',
+        description: `Order #${orderId.slice(-8)} refunded`,
+        timestamp: new Date(),
+        orderId,
+    };
+
+    const newPointsBalance = currentPoints + pointsSpent;
+    await redis.set(`user:${userId}:pointsBalance`, newPointsBalance);
+    await redis.set(`user:${userId}:pointsTransactions`, [refundTransaction, ...currentTransactions]);
+    void mirrorUser({ userId, pointsBalance: newPointsBalance });
+
+    return newPointsBalance;
+}
+
+/** Staff-facing note telling them to refund a card (Stripe) order manually. */
+function manualStripeRefundNote(order: any): string {
+    const amount = typeof order?.totalAmount === 'number' ? order.totalAmount.toFixed(2) : '0.00';
+    const pi = order?.stripePaymentIntentId ? ` (payment ${order.stripePaymentIntentId})` : '';
+    return `⚠️ This is a CARD order ($${amount}). Refund it manually in the Stripe dashboard${pi}.`;
 }
 
 const SLACK_SIGNING_SECRET = process.env.SLACK_SIGNING_SECRET;
@@ -193,69 +250,30 @@ export async function POST(request: NextRequest) {
                         const customerText = customerField?.text || '';
                         const slackMatch = customerText.match(/<@([A-Z0-9]+)>/);
                         const slackId = slackMatch?.[1];
-                        
-                        const totalField = fieldsBlock?.fields?.find((f: any) => f.text?.includes('*Total:*'));
-                        const totalText = totalField?.text || '';
-                        const amountMatch = totalText.match(/\$([0-9.]+)/);
-                        const refundAmount = amountMatch ? parseFloat(amountMatch[1]) : 0;
-                        
-                        
-                        if (refundAmount > 0 && slackId) {
-                            try {
-                                const { Redis } = await import('@upstash/redis');
-                                const redis = new Redis({
-                                    url: process.env.UPSTASH_REDIS_REST_URL!,
-                                    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-                                });
-                                
-                                const keys = await redis.keys('user:*:slackId');
-                                let userId: string | null = null;
-                                
-                                for (const key of keys) {
-                                    const stored_slackId = await redis.get<string>(key);
-                                    if (stored_slackId === slackId) {
-                                        userId = key.split(':')[1];
-                                        break;
-                                    }
-                                }
-                                
-                                if (userId) {
-                                    const currentBalance = await redis.get<number>(`user:${userId}:balance`) || 0;
-                                    const currentTransactions = await redis.get<any[]>(`user:${userId}:transactions`) || [];
-                                    
-                                    const refundTransaction = {
-                                        id: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                                        amount: refundAmount,
-                                        type: 'refund',
-                                        description: `Order #${orderId.slice(-8)} denied`,
-                                        timestamp: new Date(),
-                                    };
-                                    
-                                    const newBalance = currentBalance + refundAmount;
-                                    const newTransactions = [refundTransaction, ...currentTransactions];
-                                    
-                                    await redis.set(`user:${userId}:balance`, newBalance);
-                                    await redis.set(`user:${userId}:transactions`, newTransactions);
-                                    void mirrorUser({ userId, balance: newBalance });
 
-                                }
-                            } catch {
-                            }
-                        }
-                        
+                        // Pathway-aware refund + status update on deny.
+                        // - Student (points): return pointsSpent to the user's points balance.
+                        // - Guest (Stripe): never auto-refund; post a manual-refund note for staff.
+                        // We default to the safe (manual-refund) branch if we cannot determine pathway.
+                        let denyConfirmationText = `❌ Your order #${orderId.slice(-8)} has been denied.\n\n*Reason:* ${denialReason}`;
                         try {
                             const { Redis } = await import('@upstash/redis');
                             const redis = new Redis({
                                 url: process.env.UPSTASH_REDIS_REST_URL!,
                                 token: process.env.UPSTASH_REDIS_REST_TOKEN!,
                             });
-                            
+
+                            // Try to find the order as a student order first.
+                            let studentUserId: string | null = null;
+                            let studentOrder: any = null;
                             const userKeys = await redis.keys('user:*:orders');
                             for (const key of userKeys) {
                                 const orders = await redis.get<any[]>(key);
-                                if (orders && orders.some((o: any) => o.id === orderId)) {
-                                    const userId = key.split(':')[1];
-                                    const updatedOrders = orders.map((o: any) => {
+                                const match = orders?.find((o: any) => o.id === orderId);
+                                if (match) {
+                                    studentUserId = key.split(':')[1];
+                                    studentOrder = match;
+                                    const updatedOrders = orders!.map((o: any) => {
                                         if (o.id === orderId) {
                                             return {
                                                 ...o,
@@ -265,14 +283,58 @@ export async function POST(request: NextRequest) {
                                         }
                                         return o;
                                     });
-                                    await redis.set(`user:${userId}:orders`, updatedOrders);
-                                    mirrorUpdatedOrder(updatedOrders, orderId, userId);
+                                    await redis.set(`user:${studentUserId}:orders`, updatedOrders);
+                                    mirrorUpdatedOrder(updatedOrders, orderId, studentUserId);
                                     break;
                                 }
                             }
+
+                            // Resolve userId from slackId if the order didn't carry one.
+                            if (!studentUserId && slackId) {
+                                const slackKeys = await redis.keys('user:*:slackId');
+                                for (const key of slackKeys) {
+                                    const stored_slackId = await redis.get<string>(key);
+                                    if (stored_slackId === slackId) {
+                                        studentUserId = key.split(':')[1];
+                                        break;
+                                    }
+                                }
+                            }
+
+                            const guestOrder = await getGuestOrder(orderId);
+                            const isGuest = (studentOrder?.pathway === 'guest')
+                                || (guestOrder?.pathway === 'guest')
+                                || (!studentOrder && !!guestOrder);
+
+                            if (isGuest) {
+                                // Card order: mark denied via the guest store; do NOT touch any balance.
+                                const order = guestOrder || studentOrder;
+                                try {
+                                    const updated = await updateGuestOrder(orderId, {
+                                        status: 'denied',
+                                        statusHistory: [...((order?.statusHistory) || []), { status: 'denied', timestamp: new Date(), message: denialReason }],
+                                    });
+                                    if (updated) void mirrorOrder(updated as any, undefined);
+                                } catch {
+                                }
+                                // Tell staff to refund manually in Stripe.
+                                if (channelId) {
+                                    await postSlackMessage(channelId, manualStripeRefundNote(order));
+                                }
+                            } else if (studentOrder || studentUserId) {
+                                // Student order: refund POINTS from the order's pointsSpent.
+                                const pointsSpent = Number(studentOrder?.pointsSpent) || 0;
+                                if (studentUserId && pointsSpent > 0) {
+                                    await refundStudentPoints(redis, studentUserId, orderId, pointsSpent);
+                                    denyConfirmationText += `\n\n${pointsSpent} points have been returned to your account.`;
+                                }
+                            } else if (channelId) {
+                                // Pathway unknown: safe default — post manual-refund note, never write a balance.
+                                await postSlackMessage(channelId, manualStripeRefundNote({ totalAmount: 0 }));
+                            }
                         } catch {
                         }
-                        
+
                         const updatedBlocks = messageBlock.blocks.map((block: any) => {
                             if (block.type === 'header') {
                                 return {
@@ -309,20 +371,7 @@ export async function POST(request: NextRequest) {
                         });
                         
                         if (slackId) {
-                            try {
-                                await fetch('https://slack.com/api/chat.postMessage', {
-                                    method: 'POST',
-                                    headers: {
-                                        'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`,
-                                        'Content-Type': 'application/json; charset=utf-8',
-                                    },
-                                    body: JSON.stringify({
-                                        channel: slackId,
-                                        text: `❌ Your order #${orderId.slice(-8)} has been denied.\n\n*Reason:* ${denialReason}\n\nThe order amount has been refunded to your account.`,
-                                    }),
-                                });
-                            } catch {
-                            }
+                            await postSlackMessage(slackId, denyConfirmationText);
                         }
                     }
                 } catch {
@@ -707,161 +756,145 @@ export async function POST(request: NextRequest) {
 
             if (actionId.startsWith('refund_order_')) {
                 const orderId = action.value;
-                
+
                 const originalBlocks = payload.message.blocks || [];
                 const channelId = payload.container?.channel_id || SLACK_CHANNEL_ID;
-                
+
                 const fieldsBlock = originalBlocks.find((b: any) => b.fields && b.fields.length > 0);
-                 
-                const totalField = fieldsBlock?.fields?.find((f: any) => f.text?.includes('*Total:*'));
-                const totalText = totalField?.text || '';
-                const amountMatch = totalText.match(/\$([0-9.]+)/);
-                const refundAmount = amountMatch ? parseFloat(amountMatch[1]) : 0;
-                
+
                 const customerField = fieldsBlock?.fields?.find((f: any) => f.text?.includes('*Customer:*'));
                 const customerText = customerField?.text || '';
                 const slackMatch = customerText.match(/<@([A-Z0-9]+)>/);
                 const slackId = slackMatch?.[1];
-                
-                
-                let refundSucceeded = false;
-                
-                if (refundAmount > 0 && slackId) {
-                    try {
-                        const { Redis } = await import('@upstash/redis');
-                        const redis = new Redis({
-                            url: process.env.UPSTASH_REDIS_REST_URL!,
-                            token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-                        });
-                        
-                        const keys = await redis.keys('user:*:slackId');
-                        let userId: string | null = null;
-                        
-                        for (const key of keys) {
+
+                // Pathway-aware refund. Read the order to decide:
+                // - Student (points): return pointsSpent to the user's points balance.
+                // - Guest (Stripe): never auto-refund; post a manual-refund note for staff.
+                // Always flip the order/Slack message to "Refunded".
+                let customerRefundText = `↩️ Your order #${orderId.slice(-8)} has been refunded.`;
+                try {
+                    const { Redis } = await import('@upstash/redis');
+                    const redis = new Redis({
+                        url: process.env.UPSTASH_REDIS_REST_URL!,
+                        token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+                    });
+
+                    // Try to find the order as a student order first, and mark it refunded.
+                    let studentUserId: string | null = null;
+                    let studentOrder: any = null;
+                    const userKeys = await redis.keys('user:*:orders');
+                    for (const key of userKeys) {
+                        const orders = await redis.get<any[]>(key);
+                        const match = orders?.find((o: any) => o.id === orderId);
+                        if (match) {
+                            studentUserId = key.split(':')[1];
+                            studentOrder = match;
+                            const updatedOrders = orders!.map((o: any) => {
+                                if (o.id === orderId) {
+                                    return {
+                                        ...o,
+                                        status: 'refunded',
+                                        statusHistory: [...(o.statusHistory || []), { status: 'refunded', timestamp: new Date() }]
+                                    };
+                                }
+                                return o;
+                            });
+                            await redis.set(`user:${studentUserId}:orders`, updatedOrders);
+                            mirrorUpdatedOrder(updatedOrders, orderId, studentUserId);
+                            break;
+                        }
+                    }
+
+                    // Resolve userId from slackId if the order didn't carry one.
+                    if (!studentUserId && slackId) {
+                        const slackKeys = await redis.keys('user:*:slackId');
+                        for (const key of slackKeys) {
                             const stored_slackId = await redis.get<string>(key);
                             if (stored_slackId === slackId) {
-                                userId = key.split(':')[1];
+                                studentUserId = key.split(':')[1];
                                 break;
                             }
                         }
-                        
-                        if (userId) {
-                            const currentBalance = await redis.get<number>(`user:${userId}:balance`) || 0;
-                            const currentTransactions = await redis.get<any[]>(`user:${userId}:transactions`) || [];
-                            
-                            const refundTransaction = {
-                                id: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                                amount: refundAmount,
-                                type: 'refund',
-                                description: `Order #${orderId.slice(-8)} refunded`,
-                                timestamp: new Date(),
-                            };
-                            
-                            const newBalance = currentBalance + refundAmount;
-                            const newTransactions = [refundTransaction, ...currentTransactions];
-                            
-                            await redis.set(`user:${userId}:balance`, newBalance);
-                            await redis.set(`user:${userId}:transactions`, newTransactions);
-                            void mirrorUser({ userId, balance: newBalance });
+                    }
 
-                            refundSucceeded = true;
-                        } else {
-                        }
-                    } catch {
-                    }
-                } else {
-                }
-                
-                if (refundSucceeded) {
-                    try {
-                        const { Redis } = await import('@upstash/redis');
-                        const redis = new Redis({
-                            url: process.env.UPSTASH_REDIS_REST_URL!,
-                            token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-                        });
-                        
-                        const userKeys = await redis.keys('user:*:orders');
-                        for (const key of userKeys) {
-                            const orders = await redis.get<any[]>(key);
-                            if (orders && orders.some((o: any) => o.id === orderId)) {
-                                const userId = key.split(':')[1];
-                                const updatedOrders = orders.map((o: any) => {
-                                    if (o.id === orderId) {
-                                        return {
-                                            ...o,
-                                            status: 'refunded',
-                                            statusHistory: [...(o.statusHistory || []), { status: 'refunded', timestamp: new Date() }]
-                                        };
-                                    }
-                                    return o;
-                                });
-                                await redis.set(`user:${userId}:orders`, updatedOrders);
-                                mirrorUpdatedOrder(updatedOrders, orderId, userId);
-                                break;
-                            }
-                        }
-                    } catch {
-                    }
-                    
-                    const updatedBlocks = [
-                        {
-                            type: 'header',
-                            text: {
-                                type: 'plain_text',
-                                text: '↩️ Order Refunded',
-                            },
-                        },
-                        ...(fieldsBlock?.fields && fieldsBlock.fields.length > 0 ? [{
-                            type: 'section',
-                            fields: fieldsBlock.fields,
-                        }] : []),
-                        ...(originalBlocks.find((b: any) => b.text?.text?.includes('*Items:*')) ? [{
-                            type: 'section',
-                            text: originalBlocks.find((b: any) => b.text?.text?.includes('*Items:*')).text,
-                        }] : []),
-                        {
-                            type: 'section',
-                            text: {
-                                type: 'mrkdwn',
-                                text: '📋 *Status:* ↩️ Refunded',
-                            },
-                        },
-                    ];
-                    
-                    try {
-                        await fetch('https://slack.com/api/chat.update', {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`,
-                                'Content-Type': 'application/json; charset=utf-8',
-                            },
-                            body: JSON.stringify({
-                                channel: channelId,
-                                ts: payload.message.ts,
-                                blocks: updatedBlocks,
-                            }),
-                        });
-                    } catch {
-                    }
-                    
-                    if (slackId) {
+                    const guestOrder = await getGuestOrder(orderId);
+                    const isGuest = (studentOrder?.pathway === 'guest')
+                        || (guestOrder?.pathway === 'guest')
+                        || (!studentOrder && !!guestOrder);
+
+                    if (isGuest) {
+                        // Card order: mark refunded via the guest store; do NOT touch any balance.
+                        const order = guestOrder || studentOrder;
                         try {
-                            await fetch('https://slack.com/api/chat.postMessage', {
-                                method: 'POST',
-                                headers: {
-                                    'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`,
-                                    'Content-Type': 'application/json; charset=utf-8',
-                                },
-                                body: JSON.stringify({
-                                    channel: slackId,
-                                    text: `↩️ Your order #${orderId.slice(-8)} has been refunded. $${refundAmount.toFixed(2)} in credits has been returned to your account.`,
-                                }),
+                            const updated = await updateGuestOrder(orderId, {
+                                status: 'refunded',
+                                statusHistory: [...((order?.statusHistory) || []), { status: 'refunded', timestamp: new Date() }],
                             });
+                            if (updated) void mirrorOrder(updated as any, undefined);
                         } catch {
                         }
+                        if (channelId) {
+                            await postSlackMessage(channelId, manualStripeRefundNote(order));
+                        }
+                    } else if (studentOrder || studentUserId) {
+                        // Student order: refund POINTS from the order's pointsSpent.
+                        const pointsSpent = Number(studentOrder?.pointsSpent) || 0;
+                        if (studentUserId && pointsSpent > 0) {
+                            await refundStudentPoints(redis, studentUserId, orderId, pointsSpent);
+                            customerRefundText += ` ${pointsSpent} points have been returned to your account.`;
+                        }
+                    } else if (channelId) {
+                        // Pathway unknown: safe default — post manual-refund note, never write a balance.
+                        await postSlackMessage(channelId, manualStripeRefundNote({ totalAmount: 0 }));
                     }
+                } catch {
                 }
-                
+
+                const updatedBlocks = [
+                    {
+                        type: 'header',
+                        text: {
+                            type: 'plain_text',
+                            text: '↩️ Order Refunded',
+                        },
+                    },
+                    ...(fieldsBlock?.fields && fieldsBlock.fields.length > 0 ? [{
+                        type: 'section',
+                        fields: fieldsBlock.fields,
+                    }] : []),
+                    ...(originalBlocks.find((b: any) => b.text?.text?.includes('*Items:*')) ? [{
+                        type: 'section',
+                        text: originalBlocks.find((b: any) => b.text?.text?.includes('*Items:*')).text,
+                    }] : []),
+                    {
+                        type: 'section',
+                        text: {
+                            type: 'mrkdwn',
+                            text: '📋 *Status:* ↩️ Refunded',
+                        },
+                    },
+                ];
+
+                try {
+                    await fetch('https://slack.com/api/chat.update', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`,
+                            'Content-Type': 'application/json; charset=utf-8',
+                        },
+                        body: JSON.stringify({
+                            channel: channelId,
+                            ts: payload.message.ts,
+                            blocks: updatedBlocks,
+                        }),
+                    });
+                } catch {
+                }
+
+                if (slackId) {
+                    await postSlackMessage(slackId, customerRefundText);
+                }
+
                 return NextResponse.json({ ok: true });
             }
 
@@ -959,69 +992,33 @@ export async function POST(request: NextRequest) {
 
             if (actionId.startsWith('refund_')) {
                 const transactionId = action.value;
-                
+
                 const originalBlocks = payload.message.blocks || [];
-                
-                const amountBlock = originalBlocks.find((b: any) => 
+
+                const amountBlock = originalBlocks.find((b: any) =>
                     b.fields?.some((f: any) => f.text?.includes('*Amount:*'))
                 );
                 const amountField = amountBlock?.fields?.find((f: any) => f.text?.includes('*Amount:*'));
                 const amountText = amountField?.text || '';
                 const amountMatch = amountText.match(/\$([0-9.]+)/);
                 const refundAmount = amountMatch ? parseFloat(amountMatch[1]) : 0;
-                
-                const userBlock = originalBlocks.find((b: any) => 
-                    b.fields?.some((f: any) => f.text?.includes('*User:*'))
-                );
-                const userField = userBlock?.fields?.find((f: any) => f.text?.includes('*User:*'));
-                const userText = userField?.text || '';
-                const userMatch = userText.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-                const userEmail = userMatch?.[1];
-                
-                
-                if (refundAmount > 0 && userEmail) {
-                    try {
-                        const { Redis } = await import('@upstash/redis');
-                        const redis = new Redis({
-                            url: process.env.UPSTASH_REDIS_REST_URL!,
-                            token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-                        });
-                        
-                        const keys = await redis.keys('user:*:email');
-                        let userId: string | null = null;
-                        
-                        for (const key of keys) {
-                            const email = await redis.get<string>(key);
-                            if (email === userEmail) {
-                                userId = key.split(':')[1];
-                                break;
-                            }
-                        }
-                        
-                        if (userId) {
-                            const currentBalance = await redis.get<number>(`user:${userId}:balance`) || 0;
-                            const currentTransactions = await redis.get<any[]>(`user:${userId}:transactions`) || [];
-                            
-                            const refundTransaction = {
-                                id: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                                amount: refundAmount,
-                                type: 'refund',
-                                description: `Donation #${transactionId.slice(-8)} refunded`,
-                                timestamp: new Date(),
-                            };
-                            
-                            const newBalance = currentBalance + refundAmount;
-                            const newTransactions = [refundTransaction, ...currentTransactions];
-                            
-                            await redis.set(`user:${userId}:balance`, newBalance);
-                            await redis.set(`user:${userId}:transactions`, newTransactions);
-                            void mirrorUser({ userId, balance: newBalance });
 
-                        }
+                const channelId = payload.container?.channel_id || SLACK_CHANNEL_ID;
+
+                // Credits are retired: do NOT write any user balance/transaction here.
+                // This is a card (Stripe) transaction — refund must be done manually.
+                // Resolve the transaction as a guest order if possible to surface the
+                // Stripe payment intent, otherwise fall back to the parsed dollar amount.
+                if (channelId) {
+                    let order: any = null;
+                    try {
+                        order = await getGuestOrder(transactionId);
                     } catch {
                     }
+                    const note = manualStripeRefundNote(order || { totalAmount: refundAmount });
+                    await postSlackMessage(channelId, note);
                 }
-                
+
                 const updatedBlocks = [
                     {
                         type: 'header',
@@ -1032,9 +1029,7 @@ export async function POST(request: NextRequest) {
                     },
                     ...(originalBlocks.slice(1)),
                 ];
-                
-                const channelId = payload.container?.channel_id || SLACK_CHANNEL_ID;
-                
+
                 await fetch('https://slack.com/api/chat.update', {
                     method: 'POST',
                     headers: {

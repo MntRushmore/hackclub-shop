@@ -11,14 +11,13 @@ const redis = new Redis({
 
 interface AdminUserRow {
     userId: string;
-    balance: number;
     pointsBalance: number;
     slackId: string | null;
     role: string | null;
     orderCount: number;
 }
 
-// GET - list every known user with balance/points/role (admin view).
+// GET - list every known user with points/role (admin view).
 // Users are implied by the existence of user:{id}:* keys.
 export async function GET() {
     const session = await getServerSession(authOptions);
@@ -29,8 +28,8 @@ export async function GET() {
     }
 
     try {
-        // Collect distinct user ids from balance, points, and order keys.
-        const keyPatterns = ['user:*:balance', 'user:*:pointsBalance', 'user:*:orders'];
+        // Collect distinct user ids from points and order keys.
+        const keyPatterns = ['user:*:pointsBalance', 'user:*:orders'];
         const userIds = new Set<string>();
         for (const pattern of keyPatterns) {
             const keys = await redis.keys(pattern);
@@ -41,8 +40,7 @@ export async function GET() {
 
         const users: AdminUserRow[] = [];
         for (const userId of userIds) {
-            const [balance, pointsBalance, slackId, orders, role] = await Promise.all([
-                redis.get<number>(`user:${userId}:balance`),
+            const [pointsBalance, slackId, orders, role] = await Promise.all([
                 redis.get<number>(`user:${userId}:pointsBalance`),
                 redis.get<string>(`user:${userId}:slackId`),
                 redis.get<unknown[]>(`user:${userId}:orders`),
@@ -51,7 +49,6 @@ export async function GET() {
 
             users.push({
                 userId,
-                balance: balance ?? 0,
                 pointsBalance: pointsBalance ?? 0,
                 slackId: slackId ?? null,
                 role: role ?? null,
@@ -59,7 +56,7 @@ export async function GET() {
             });
         }
 
-        users.sort((a, b) => b.balance - a.balance);
+        users.sort((a, b) => b.pointsBalance - a.pointsBalance);
 
         return NextResponse.json({ users });
     } catch (error) {
