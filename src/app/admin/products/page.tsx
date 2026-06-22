@@ -260,10 +260,10 @@ export default function ProductsAdmin() {
         setEditingId(product.id);
         const formattedVariants = (product.variants || []).map(v => {
             // Load payment mode from API (which uses snake_case: payment_mode)
-            let paymentMode = (v as any).payment_mode || v.paymentMode || 'balance_only';
+            let paymentMode = (v as any).payment_mode || (v as any).paymentMode || 'balance_only';
             console.log(`Loading variant ${v.name}:`, {
                 payment_mode: (v as any).payment_mode,
-                paymentMode: v.paymentMode,
+                paymentMode: (v as any).paymentMode,
                 resolved: paymentMode
             });
 
@@ -337,7 +337,21 @@ export default function ProductsAdmin() {
             image_url: '',
             thumbnail_url: '',
             category: '',
-            variants: [{ id: '', variant_id: '', name: '', price: '', pointsPrice: '', size: '', color: '', image_url: '', stock: '' }],
+            variants: [{
+                id: '',
+                variant_id: '',
+                name: '',
+                price: '',
+                paymentMode: 'balance_only',
+                priceBalance: '',
+                pricePoints: '',
+                priceBalanceFull: '',
+                pricePointsFull: '',
+                size: '',
+                color: '',
+                image_url: '',
+                stock: ''
+            }],
             shippingOptions: [{ id: '', country: '', cost: '', costPoints: '' }],
             checkoutFields: [],
         });
@@ -699,7 +713,7 @@ export default function ProductsAdmin() {
                                                             value={shipping.costPoints || ''}
                                                             onChange={(e) => {
                                                                 const newShipping = [...formData.shippingOptions];
-                                                                newShipping[idx].costPoints = e.target.value ? parseInt(e.target.value) : undefined;
+                                                                newShipping[idx].costPoints = e.target.value;
                                                                 setFormData({ ...formData, shippingOptions: newShipping });
                                                             }}
                                                             className="px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"

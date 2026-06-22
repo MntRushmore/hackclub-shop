@@ -28,6 +28,8 @@ export function getDisplayPrice(variant: any): string {
             const balance = variant.price_balance_full || parseFloat(variant.retail_price || '0');
             const points = variant.price_points_full || variant.points_price || 0;
             return `$${balance.toFixed(2)} or ${points} points`;
+        default:
+            return `$${(variant.price_balance || parseFloat(variant.retail_price || '0')).toFixed(2)}`;
     }
 }
 
@@ -99,6 +101,11 @@ export function calculateItemCost(
                 return {
                     balanceNeeded: balanceToCharge,
                     pointsNeeded: pointsToCharge,
+                };
+            default:
+                return {
+                    balanceNeeded: variant.price_balance || parseFloat(variant.retail_price || '0'),
+                    pointsNeeded: 0,
                 };
         }
     })();

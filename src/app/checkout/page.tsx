@@ -21,6 +21,7 @@ const Checkout = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [couponDiscount] = useState(0);
+    const [appliedCoupon] = useState<string | null>(null);
     const [selectedShipping, setSelectedShipping] = useState<ShippingOption | null>(null);
     const [checkoutData, setCheckoutData] = useState<Record<string, string>>({});
     const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);

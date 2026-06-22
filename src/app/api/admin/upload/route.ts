@@ -4,6 +4,8 @@ import { put } from '@vercel/blob';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import { requireAdminPermission } from '../../../../lib/adminAuth';
 
+export const runtime = 'nodejs';
+
 const MAX_BYTES = 8 * 1024 * 1024; // 8MB
 const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml'];
 
