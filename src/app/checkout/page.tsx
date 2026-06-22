@@ -269,8 +269,8 @@ const Checkout = () => {
                             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-2xl bg-hackclub-smoke/30 border-2 border-hackclub-smoke">
                                 <label className="block font-bold text-hackclub-dark mb-3">Shipping Country</label>
                                 {shippingOptions.length === 0 ? (
-                                    <div className="w-full px-4 py-3 text-center text-hackclub-red font-bold bg-hackclub-red/10 border-2 border-hackclub-red rounded-lg">
-                                        No shipping options
+                                    <div className="w-full px-4 py-3 text-center text-hackclub-slate font-bold bg-hackclub-smoke/50 border-2 border-hackclub-smoke rounded-lg">
+                                        Free shipping
                                     </div>
                                 ) : (
                                     <select

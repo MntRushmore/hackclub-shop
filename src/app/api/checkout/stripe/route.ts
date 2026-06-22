@@ -82,17 +82,26 @@ export async function POST(request: Request) {
 
         const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-        const lineItems = validation.items!.map(item => ({
-            quantity: item.quantity,
-            price_data: {
-                currency: 'usd',
-                unit_amount: Math.round((item.priceCash || 0) * 100),
-                product_data: {
-                    name: item.name,
-                    ...(item.thumbnail_url ? { images: [item.thumbnail_url] } : {}),
+        // Stripe only accepts absolute http(s) image URLs; a relative path (e.g.
+        // "/images/x.svg") makes session creation fail entirely. Pass images only
+        // when the thumbnail is a valid absolute URL.
+        const absoluteImage = (url?: string): string | undefined =>
+            url && /^https?:\/\//i.test(url) ? url : undefined;
+
+        const lineItems = validation.items!.map(item => {
+            const img = absoluteImage(item.thumbnail_url);
+            return {
+                quantity: item.quantity,
+                price_data: {
+                    currency: 'usd',
+                    unit_amount: Math.round((item.priceCash || 0) * 100),
+                    product_data: {
+                        name: item.name,
+                        ...(img ? { images: [img] } : {}),
+                    },
                 },
-            },
-        }));
+            };
+        });
 
         const session = await stripe.checkout.sessions.create({
             mode: 'payment',
