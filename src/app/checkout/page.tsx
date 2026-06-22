@@ -2,7 +2,7 @@
 
 import { useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSession, signIn } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CartContext } from '../../context/CartContext';
@@ -10,28 +10,25 @@ import { PointsContext } from '../../context/PointsContext';
 import { ShippingOption, CheckoutField } from '../../types/Admin';
 import { ShippingAddress } from '../../types/Order';
 import { COUNTRIES, EMPTY_ADDRESS, validateAddress } from '../../lib/address';
-import { formatPoints } from '../../lib/paymentUtils';
+import { formatPoints, formatCash } from '../../lib/paymentUtils';
+import { usePathway } from '../../lib/usePathway';
 
 type CheckoutValue = string | ShippingAddress;
 
 const Checkout = () => {
-    const { data: session, status } = useSession();
+    const { status } = useSession();
+    const { isStudent } = usePathway();
     const cartContext = useContext(CartContext);
     const pointsContext = useContext(PointsContext);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [selectedShipping, setSelectedShipping] = useState<ShippingOption | null>(null);
     const [checkoutData, setCheckoutData] = useState<Record<string, CheckoutValue>>({});
+    const [guestEmail, setGuestEmail] = useState('');
     const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
     const [checkoutFields, setCheckoutFields] = useState<CheckoutField[]>([]);
     const [loadingCheckoutInfo, setLoadingCheckoutInfo] = useState(true);
     const router = useRouter();
-
-    useEffect(() => {
-        if (status === 'unauthenticated') {
-            signIn('hackclub', { callbackUrl: '/checkout' });
-        }
-    }, [status]);
 
     useEffect(() => {
         if (cartContext?.cart && cartContext.cart.length > 0) {
@@ -85,6 +82,8 @@ const Checkout = () => {
         }
     }, [cartContext?.cart]);
 
+    // Wait for auth to resolve before committing to a pathway, so a logged-in
+    // student never briefly sees the guest (cash) checkout.
     if (status === 'loading' || loadingCheckoutInfo) {
         return (
             <div className="bg-hackclub-smoke min-h-screen flex items-center justify-center">
@@ -93,22 +92,27 @@ const Checkout = () => {
         );
     }
 
-    if (!session) return null;
-
     if (!cartContext || cartContext.cart === null) return null;
 
     const { cart, clearCart } = cartContext;
 
-    // Points-only totals.
+    // Student (points) totals.
     const itemsPoints = cart.reduce((total, item) => total + (item.price_points || 0) * item.quantity, 0);
     const shippingPointsCost = selectedShipping?.costPoints || 0;
     const requiredPoints = itemsPoints + shippingPointsCost;
+
+    // Guest (cash) totals.
+    const itemsCash = cart.reduce((total, item) => total + (item.price_cash || 0) * item.quantity, 0);
+    const shippingCash = selectedShipping?.cost || 0;
+    const cashTotal = itemsCash + shippingCash;
 
     const pointsBalance = pointsContext?.balance || 0;
     const hasEnoughPoints = pointsBalance >= requiredPoints;
     const remainingPointsNeeded = Math.max(0, requiredPoints - pointsBalance);
     const shippingSelected = shippingOptions.length === 0 || !!selectedShipping;
-    const canCheckout = hasEnoughPoints && cart.length > 0 && shippingSelected;
+    const canCheckout = isStudent
+        ? hasEnoughPoints && cart.length > 0 && shippingSelected
+        : cashTotal > 0 && cart.length > 0 && shippingSelected;
 
     const validateCheckoutFields = (): boolean => {
         for (const field of checkoutFields) {
@@ -143,16 +147,16 @@ const Checkout = () => {
         setCheckoutData({ ...checkoutData, [fieldName]: { ...current, [key]: val } });
     };
 
-    const handleCheckout = async () => {
-        if (shippingOptions.length > 0 && !selectedShipping) {
-            setError('Please select a shipping option');
-            return;
-        }
+    const itemsPayload = () => cart.map((item) => ({
+        id: String(item.id),
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity || 1,
+        variant_id: item.variant_id,
+    }));
 
-        if (!validateCheckoutFields()) {
-            return;
-        }
-
+    // Student path: pay with points via /api/orders.
+    const handleStudentCheckout = async () => {
         if (!hasEnoughPoints) {
             setError('Not enough points to cover the item requirements.');
             return;
@@ -160,21 +164,13 @@ const Checkout = () => {
 
         setLoading(true);
         setError(null);
-
         try {
             const idempotencyKey = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
             const response = await fetch('/api/orders', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    items: cart.map((item) => ({
-                        id: String(item.id),
-                        name: item.name,
-                        price: item.price,
-                        quantity: item.quantity || 1,
-                        variant_id: item.variant_id,
-                    })),
+                    items: itemsPayload(),
                     pointsRequired: requiredPoints,
                     shippingCountry: selectedShipping?.country,
                     shippingPointsCost,
@@ -182,24 +178,72 @@ const Checkout = () => {
                     idempotencyKey,
                 }),
             });
-
             const data = await response.json();
-
             if (!response.ok) {
                 setError(data.error || 'Failed to process order');
                 setLoading(false);
                 return;
             }
-
             if (pointsContext?.refreshPoints) {
                 await pointsContext.refreshPoints();
             }
-
             clearCart();
             router.push('/thank-you');
         } catch {
             setError('Failed to connect to server. Please try again.');
             setLoading(false);
+        }
+    };
+
+    // Guest path: pay real money via Stripe Checkout.
+    const handleGuestCheckout = async () => {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(guestEmail)) {
+            setError('Please enter a valid email for your receipt.');
+            return;
+        }
+
+        setLoading(true);
+        setError(null);
+        try {
+            const response = await fetch('/api/checkout/stripe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    items: itemsPayload(),
+                    email: guestEmail,
+                    shippingCountry: selectedShipping?.country,
+                    checkoutData,
+                }),
+            });
+            const data = await response.json();
+            if (!response.ok || !data.url) {
+                setError(data.error || 'Failed to start checkout');
+                setLoading(false);
+                return;
+            }
+            // Hand off to Stripe's hosted checkout. The cart is cleared only after
+            // the webhook confirms payment (on the thank-you page), so a cancelled
+            // payment keeps the cart intact.
+            window.location.href = data.url;
+        } catch {
+            setError('Failed to connect to server. Please try again.');
+            setLoading(false);
+        }
+    };
+
+    const handleCheckout = async () => {
+        if (shippingOptions.length > 0 && !selectedShipping) {
+            setError('Please select a shipping option');
+            return;
+        }
+        if (!validateCheckoutFields()) {
+            return;
+        }
+        if (isStudent) {
+            await handleStudentCheckout();
+        } else {
+            await handleGuestCheckout();
         }
     };
 
@@ -216,7 +260,9 @@ const Checkout = () => {
                     <div className="space-y-6">
                         <div>
                             <h1 className="text-3xl font-black mb-2 text-hackclub-red">Checkout</h1>
-                            <h2 className="text-lg font-bold text-hackclub-slate">Review your order.</h2>
+                            <h2 className="text-lg font-bold text-hackclub-slate">
+                                {isStudent ? 'Pay with your points.' : 'Pay securely by card.'}
+                            </h2>
                         </div>
 
                         {cart.length > 0 && (
@@ -237,7 +283,7 @@ const Checkout = () => {
                                     >
                                         {shippingOptions.map((option, idx) => (
                                             <option key={option.id || `ship_${idx}`} value={option.id || `ship_${idx}`}>
-                                                {option.country} - {formatPoints(option.costPoints || 0)}
+                                                {option.country} - {isStudent ? formatPoints(option.costPoints || 0) : formatCash(option.cost || 0)}
                                             </option>
                                         ))}
                                     </select>
@@ -311,6 +357,21 @@ const Checkout = () => {
                                 })}
                             </motion.div>
                         )}
+
+                        {!isStudent && cart.length > 0 && (
+                            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-2xl bg-hackclub-smoke/30 border-2 border-hackclub-smoke space-y-2">
+                                <label className="block font-bold text-hackclub-dark">Email for receipt</label>
+                                <input
+                                    type="email"
+                                    placeholder="you@example.com"
+                                    autoComplete="email"
+                                    value={guestEmail}
+                                    onChange={(e) => setGuestEmail(e.target.value)}
+                                    className="w-full px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
+                                />
+                                <p className="text-xs text-hackclub-muted">We&apos;ll send your order confirmation here. Payment is processed securely by Stripe.</p>
+                            </motion.div>
+                        )}
                     </div>
 
                     {/* RIGHT COLUMN */}
@@ -325,7 +386,11 @@ const Checkout = () => {
                                                 <div className="font-bold text-hackclub-dark">{item.name}</div>
                                                 <div className="text-hackclub-muted text-sm">Qty: {item.quantity || 1}</div>
                                             </div>
-                                            <div className="font-black text-hackclub-red text-lg">{formatPoints((item.price_points || 0) * (item.quantity || 1))}</div>
+                                            <div className="font-black text-hackclub-red text-lg">
+                                                {isStudent
+                                                    ? formatPoints((item.price_points || 0) * (item.quantity || 1))
+                                                    : formatCash((item.price_cash || 0) * (item.quantity || 1))}
+                                            </div>
                                         </motion.div>
                                     ))}
                                 </AnimatePresence>
@@ -335,22 +400,24 @@ const Checkout = () => {
                         <div className="bg-hackclub-smoke/30 rounded-2xl p-6 border-2 border-hackclub-smoke space-y-2">
                             <div className="flex justify-between items-center text-hackclub-slate">
                                 <span>Items:</span>
-                                <span>{formatPoints(itemsPoints)}</span>
+                                <span>{isStudent ? formatPoints(itemsPoints) : formatCash(itemsCash)}</span>
                             </div>
                             {shippingOptions.length > 0 && (
                                 <div className="flex justify-between items-center text-hackclub-slate">
                                     <span>Shipping ({selectedShipping?.country}):</span>
-                                    <span>{formatPoints(shippingPointsCost)}</span>
+                                    <span>{isStudent ? formatPoints(shippingPointsCost) : formatCash(shippingCash)}</span>
                                 </div>
                             )}
                             <div className="flex justify-between items-center text-xl font-black pt-2 border-t border-hackclub-smoke">
-                                <span>Points Required:</span>
-                                <span className="text-hackclub-dark">{formatPoints(requiredPoints)}</span>
+                                <span>{isStudent ? 'Points Required:' : 'Total:'}</span>
+                                <span className="text-hackclub-dark">{isStudent ? formatPoints(requiredPoints) : formatCash(cashTotal)}</span>
                             </div>
-                            <div className="flex justify-between items-center text-sm text-hackclub-slate">
-                                <span>Your points:</span>
-                                <span>{formatPoints(pointsBalance)}</span>
-                            </div>
+                            {isStudent && (
+                                <div className="flex justify-between items-center text-sm text-hackclub-slate">
+                                    <span>Your points:</span>
+                                    <span>{formatPoints(pointsBalance)}</span>
+                                </div>
+                            )}
                         </div>
 
                         <AnimatePresence>
@@ -372,15 +439,17 @@ const Checkout = () => {
                             <AnimatePresence mode="wait" initial={false}>
                                 {loading ? (
                                     <motion.span key="processing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                                        <span className="inline-block animate-pulse">Processing…</span>
+                                        <span className="inline-block animate-pulse">{isStudent ? 'Processing…' : 'Redirecting to payment…'}</span>
                                     </motion.span>
                                 ) : canCheckout ? (
                                     <motion.span key="checkout" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                                        Checkout →
+                                        {isStudent ? 'Checkout →' : 'Pay with card →'}
                                     </motion.span>
                                 ) : (
                                     <motion.span key="insufficient" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                                        {`Need ${remainingPointsNeeded} more points`}
+                                        {isStudent
+                                            ? `Need ${remainingPointsNeeded} more points`
+                                            : (cart.length === 0 ? 'Cart is empty' : 'Not available for card purchase')}
                                     </motion.span>
                                 )}
                             </AnimatePresence>

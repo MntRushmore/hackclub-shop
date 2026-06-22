@@ -1,22 +1,87 @@
-
 'use client';
-import { useEffect } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
-const ThankYou = () => {
+type GuestStatus = 'loading' | 'processing' | 'paid' | 'notfound';
+
+const ThankYouInner = () => {
+  const searchParams = useSearchParams();
+  const sessionId = searchParams.get('session_id');
+  const isGuest = Boolean(sessionId);
+  const [status, setStatus] = useState<GuestStatus>(isGuest ? 'loading' : 'paid');
+
   useEffect(() => {
+    if (!isGuest) {
+      // Student order: cart was already cleared at checkout.
+      return;
+    }
 
+    // Guest landed here after Stripe. Reaching this page means they completed
+    // payment, so clear the cart. The webhook finalizes the order asynchronously,
+    // so poll the status until it flips to paid.
     localStorage.removeItem('cart');
-  }, []);
+
+    let cancelled = false;
+    let attempts = 0;
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/checkout/stripe/status?session_id=${encodeURIComponent(sessionId!)}`);
+        if (cancelled) return;
+        if (res.status === 404) {
+          setStatus('notfound');
+          return;
+        }
+        const data = await res.json();
+        if (data.paymentStatus === 'paid') {
+          setStatus('paid');
+          return;
+        }
+        setStatus('processing');
+      } catch {
+        if (!cancelled) setStatus('processing');
+      }
+
+      attempts += 1;
+      if (!cancelled && attempts < 10) {
+        setTimeout(poll, 1500);
+      }
+    };
+
+    poll();
+    return () => {
+      cancelled = true;
+    };
+  }, [isGuest, sessionId]);
+
+  const heading = status === 'paid' ? 'Thank You!' : status === 'notfound' ? 'Order not found' : 'Almost there…';
+  const sub =
+    status === 'paid'
+      ? 'Your order has been successfully placed.'
+      : status === 'notfound'
+        ? "We couldn't find that order. If you were charged, contact us and we'll sort it out."
+        : 'Your payment is being confirmed. This usually takes a few seconds.';
 
   return (
     <div className="bg-white min-h-screen flex flex-col items-center justify-center text-hackclub-dark text-center px-4">
-      <h1 className="text-5xl font-black text-hackclub-red mb-4">Thank You!</h1>
-      <p className="text-2xl font-bold mb-2">Your order has been successfully placed.</p>
-      <p className="text-hackclub-muted mb-8">Redirecting to the home page...</p>
+      <h1 className="text-5xl font-black text-hackclub-red mb-4">{heading}</h1>
+      <p className="text-2xl font-bold mb-2">{sub}</p>
+      {status === 'processing' && (
+        <p className="text-hackclub-muted mb-8 animate-pulse">Confirming payment…</p>
+      )}
+      {status === 'paid' && (
+        <p className="text-hackclub-muted mb-8">A confirmation has been sent to your email.</p>
+      )}
       <Link href="/shop" className="inline-block bg-hackclub-red hover:bg-hackclub-orange text-white font-bold px-8 py-3 rounded-full shadow-lg transition-colors">Continue Shopping</Link>
     </div>
   );
 };
+
+const ThankYou = () => (
+  <Suspense fallback={<div className="bg-white min-h-screen flex items-center justify-center text-hackclub-dark font-bold">Loading…</div>}>
+    <ThankYouInner />
+  </Suspense>
+);
 
 export default ThankYou;
