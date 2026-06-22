@@ -29,10 +29,10 @@ export async function PUT(
         }
 
         const userId = params.id;
-        const currentBalance = (await redis.get<number>(`user:${userId}:credits`)) || 0;
+        const currentBalance = (await redis.get<number>(`user:${userId}:balance`)) || 0;
         const newBalance = Math.max(0, currentBalance + amount);
 
-        await redis.set(`user:${userId}:credits`, newBalance);
+        await redis.set(`user:${userId}:balance`, newBalance);
 
         const transaction = {
             id: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
