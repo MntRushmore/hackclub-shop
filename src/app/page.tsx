@@ -124,7 +124,7 @@ const MainPage = () => {
   const stickers: DraggableSticker[] = [
     {
       id: '1',
-      src: 'https://hackclub.com/stickers/orpheus_flag.svg',
+      src: '/images/orpheus_flag.svg',
       alt: 'Orpheus flag',
       width: 150,
       height: 150,
@@ -134,8 +134,8 @@ const MainPage = () => {
     },
     {
       id: '2',
-      src: 'https://hackclub.com/stickers/orpheus-having-boba.png',
-      alt: 'Orpheus with boba',
+      src: '/images/hack_camp_fire_sticker.svg',
+      alt: 'Hack camp fire',
       width: 120,
       height: 120,
       initialX: typeof window !== 'undefined' ? window.innerWidth - 250 : 1200,
@@ -144,23 +144,13 @@ const MainPage = () => {
     },
     {
       id: '3',
-      src: 'https://hackclub.com/stickers/hack_to_the_future.svg',
+      src: '/images/hack_to_the_future.svg',
       alt: 'Hack to the future',
       width: 140,
       height: 140,
       initialX: 200,
       initialY: 500,
       rotation: 6,
-    },
-    {
-      id: '4',
-      src: 'https://hackclub.com/stickers/macintosh.svg',
-      alt: 'Macintosh',
-      width: 100,
-      height: 120,
-      initialX: typeof window !== 'undefined' ? window.innerWidth - 300 : 1000,
-      initialY: 550,
-      rotation: -8,
     },
   ];
 
