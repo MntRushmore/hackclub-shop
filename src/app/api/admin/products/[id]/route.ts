@@ -54,29 +54,23 @@ export async function PUT(
         const body = await request.json();
         const { variants, ...rest } = body;
 
-        // Transform variants with payment mode support
+        // Transform variants to the dual-price model (cash for adults, points for students).
         const transformedVariants = variants ? (variants || []).map((v: any, idx: number) => {
+            const cash = v.priceCash != null && v.priceCash !== '' ? parseFloat(v.priceCash) : undefined;
+            const points = v.pricePoints != null && v.pricePoints !== '' ? parseInt(v.pricePoints) : undefined;
             const variant: any = {
                 id: v.id || product.variants?.[idx]?.id || `var_${Date.now()}_${idx}`,
                 variant_id: v.variant_id || product.variants?.[idx]?.variant_id || `var_${Date.now()}_${idx}`,
                 name: v.name,
-                price: parseFloat(v.price || '0'),
-                payment_mode: v.paymentMode || 'balance_only',
+                price: cash ?? parseFloat(v.price || '0'),
                 size: v.size,
                 color: v.color,
                 image_url: v.image_url,
                 stock: v.stock ? parseInt(v.stock) : undefined,
             };
 
-            // Set appropriate price fields based on payment mode
-            if (v.paymentMode === 'balance_only') {
-                variant.price_balance = parseFloat(v.priceBalance || v.price || '0');
-            } else if (v.paymentMode === 'points_only') {
-                variant.price_points = parseInt(v.pricePoints || '0');
-            } else if (v.paymentMode === 'mixed') {
-                variant.price_balance_full = parseFloat(v.priceBalanceFull || '0');
-                variant.price_points_full = parseInt(v.pricePointsFull || '0');
-            }
+            if (cash !== undefined && cash > 0) variant.price_cash = cash;
+            if (points !== undefined && points > 0) variant.price_points = points;
 
             return variant;
         }) : product.variants;

@@ -47,12 +47,10 @@ export interface ProductVariant {
     id: string;
     variant_id: string;
     name: string;
-    price: number;
-    payment_mode: 'balance_only' | 'points_only' | 'mixed';
-    price_balance?: number;
-    price_points?: number;
-    price_balance_full?: number;
-    price_points_full?: number;
+    price: number; // legacy USD field, kept for backward-compat reads
+    // Dual pricing. A variant is buyable on a pathway iff its price is set.
+    price_cash?: number;   // USD — adult/Stripe path
+    price_points?: number; // points — student path
     size?: string;
     color?: string;
     image_url?: string;

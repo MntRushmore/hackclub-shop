@@ -6,7 +6,8 @@ import { CartContext } from "../../../context/CartContext";
 import Image from 'next/image';
 import { ProductDetail, Variant } from '../../../types/Product';
 import { motion } from 'framer-motion';
-import { getDisplayPrice, getPaymentModeBadge } from '../../../lib/paymentUtils';
+import { getCashPrice, getPointsPrice, getDisplayPrice } from '../../../lib/paymentUtils';
+import { usePathway } from '../../../lib/usePathway';
 
 
 const ProductPage = () => {
@@ -14,6 +15,7 @@ const ProductPage = () => {
     const productId = params.id;
 
     const { addToCart } = useContext(CartContext)!;
+    const { pathway } = usePathway();
 
     const [product, setProduct] = useState<ProductDetail | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
@@ -48,23 +50,12 @@ const ProductPage = () => {
 
     const handleAddToCart = () => {
         if (product && selectedVariant) {
-            // Set price based on payment mode
-            let displayPrice = '0';
-            if (selectedVariant.payment_mode === 'balance_only') {
-                displayPrice = (selectedVariant.price_balance || 0).toString();
-            } else if (selectedVariant.payment_mode === 'mixed') {
-                displayPrice = (selectedVariant.price_balance_full || 0).toString();
-            }
-            
             const cartItem = {
                 id: product.id,
                 name: selectedVariant.name,
-                price: displayPrice,
-                paymentMode: selectedVariant.payment_mode,
-                priceBalance: selectedVariant.price_balance,
-                pricePoints: selectedVariant.price_points,
-                priceBalanceFull: selectedVariant.price_balance_full,
-                pricePointsFull: selectedVariant.price_points_full,
+                price: String(getCashPrice(selectedVariant)),
+                price_cash: getCashPrice(selectedVariant) || undefined,
+                price_points: getPointsPrice(selectedVariant) || undefined,
                 thumbnail_url: selectedVariant.product.image,
                 variant_id: selectedVariant.variant_id || selectedVariant.id,
             };
@@ -138,12 +129,13 @@ const ProductPage = () => {
                         
                         {selectedVariant && (
                             <div className="mb-8">
-                                <p className="text-3xl font-black text-hackclub-red">
-                                    {getDisplayPrice(selectedVariant)}
-                                </p>
-                                <p className="text-sm text-gray-600 font-medium mt-2">
-                                    {getPaymentModeBadge(selectedVariant.payment_mode)}
-                                </p>
+                                {getDisplayPrice(selectedVariant, pathway) ? (
+                                    <p className="text-3xl font-black text-hackclub-red">
+                                        {getDisplayPrice(selectedVariant, pathway)}
+                                    </p>
+                                ) : (
+                                    <p className="text-lg text-gray-400 font-medium">Not available</p>
+                                )}
                             </div>
                         )}
 
@@ -167,7 +159,8 @@ const ProductPage = () => {
                                 >
                                     {variants.map((variant, idx) => (
                                         <option key={`${variant.id || variant.variant_id}_${idx}`} value={variant.id || variant.variant_id}>
-                                            {variant.size || 'Default'} / {variant.color || 'Default'} - {getDisplayPrice(variant)}
+                                            {variant.size || 'Default'} / {variant.color || 'Default'}
+                                            {getDisplayPrice(variant, pathway) ? ` - ${getDisplayPrice(variant, pathway)}` : ''}
                                         </option>
                                     ))}
                                 </select>

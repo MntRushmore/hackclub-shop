@@ -27,17 +27,32 @@ export interface OrderStatusUpdate {
     message?: string;
 }
 
+/** Which storefront an order came through. */
+export type OrderPathway = 'student' | 'guest';
+/** How the order was paid. */
+export type OrderPaymentMethod = 'points' | 'stripe';
+/** Settlement state of the money/points charge. */
+export type OrderPaymentStatus = 'unpaid' | 'paid' | 'refunded';
+
 export interface Order {
     id: string;
-    userId: string;
+    userId: string; // Hack Club user id for students; '' / guest email for guests
+    pathway: OrderPathway;
+    paymentMethod: OrderPaymentMethod;
+    paymentStatus: OrderPaymentStatus;
+    guestEmail?: string; // set for guest (Stripe) orders
     items: OrderItem[];
     subtotal: number;
     pointsRequired: number;
     pointsSpent: number;
     couponDiscount?: number;
-    shippingCost: number;
-    totalAmount: number; // cash component
-    creditsPaid: number; // cash paid with credits
+    shippingCost: number;        // USD shipping (guest/Stripe orders)
+    shippingPointsCost?: number; // points shipping (student orders)
+    totalAmount: number;         // cash total charged (USD)
+    creditsPaid: number;         // legacy; always 0 now that credits are retired
+    // Stripe linkage (guest orders only).
+    stripeSessionId?: string;
+    stripePaymentIntentId?: string;
     shippingCountry?: string;
     shippingAddress?: ShippingAddress;
     checkoutData: Record<string, string | ShippingAddress>;

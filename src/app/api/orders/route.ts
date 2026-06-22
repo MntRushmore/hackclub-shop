@@ -5,7 +5,6 @@ import { authOptions } from '../auth/[...nextauth]/route';
 import { Order, ShippingAddress } from '../../../types/Order';
 import { isStructuredAddress, validateAddress } from '../../../lib/address';
 import { rateLimit, rateLimitResponse } from '../../../lib/rateLimit';
-import { CreditTransaction } from '../../../types/Credits';
 import { PointsTransaction } from '../../../types/Points';
 import { validateCSRFToken } from '../../../lib/csrf';
 import { validateCartItems } from '../../../lib/productValidation';
@@ -41,7 +40,8 @@ export async function GET() {
     }
 }
 
-// POST - Create a new order (requires full payment via credits)
+// POST - Create a new student order (paid entirely in points).
+// Adult/guest orders go through the Stripe checkout route instead.
 export async function POST(request: Request) {
     const session = await getServerSession(authOptions);
 
@@ -58,22 +58,17 @@ export async function POST(request: Request) {
     }
 
     try {
-        const { items, cashTotal, pointsRequired, shippingCost, shippingCountry, shippingPaymentCash, shippingPaymentPoints, checkoutData, csrfToken, idempotencyKey, couponDiscount = 0 } = await request.json() as {
-            items: { id: string; name: string; price: string; quantity: number; variant_id?: string | number; pointsSpent?: number }[];
-            cashTotal: number;
+        const { items, pointsRequired, shippingCountry, shippingPointsCost, checkoutData, csrfToken, idempotencyKey } = await request.json() as {
+            items: { id: string; name: string; price: string; quantity: number; variant_id?: string | number }[];
             pointsRequired: number;
-            shippingCost?: number | string;
-            shippingPaymentCash?: number;
-            shippingPaymentPoints?: number;
+            shippingPointsCost?: number;
             shippingCountry?: string;
             checkoutData?: Record<string, string | ShippingAddress>;
             csrfToken?: string;
             idempotencyKey?: string;
-            couponDiscount?: number;
         };
 
-        const shippingCostNum = typeof shippingCost === 'string' ? parseFloat(shippingCost) : (shippingCost || 0);
-        const couponDiscountNum = typeof couponDiscount === 'string' ? parseFloat(couponDiscount as any) : (couponDiscount || 0);
+        const shippingPointsNum = typeof shippingPointsCost === 'number' ? shippingPointsCost : 0;
 
         // Validate CSRF token
         if (csrfToken) {
@@ -107,65 +102,33 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: validation.error }, { status: 400 });
         }
 
-        const verifiedItemCashTotal = validation.verifiedTotal!;
         const verifiedItemPointsTotal = validation.verifiedPointsTotal || 0;
 
-        // Handle shipping payment breakdown (default to all cash if not provided)
-        const verifiedShippingCashPayment = shippingPaymentCash ?? shippingCostNum;
-        const verifiedShippingPointsPayment = shippingPaymentPoints ?? 0;
-
-        // Verify shipping payment breakdown adds up to shipping cost
-        const shippingPaymentTotal = verifiedShippingCashPayment + verifiedShippingPointsPayment;
-        if (Math.abs(shippingPaymentTotal - shippingCostNum) > 0.01) {
-            return NextResponse.json({
-                error: 'Shipping payment breakdown is invalid.',
-                expectedShippingTotal: shippingCostNum,
-                providedShippingTotal: shippingPaymentTotal,
-                shippingCash: verifiedShippingCashPayment,
-                shippingPoints: verifiedShippingPointsPayment
-            }, { status: 400 });
+        // Every item a student buys must be points-priced.
+        const nonPointsItem = validation.items!.find(i => !i.pricePoints || i.pricePoints <= 0);
+        if (nonPointsItem) {
+            return NextResponse.json({ error: `${nonPointsItem.name} can't be bought with points.` }, { status: 400 });
         }
 
-        const verifiedCashTotal = Math.max(0, verifiedItemCashTotal - couponDiscountNum + verifiedShippingCashPayment);
-        const verifiedPointsTotal = verifiedItemPointsTotal + verifiedShippingPointsPayment;
+        const verifiedPointsTotal = verifiedItemPointsTotal + shippingPointsNum;
 
-        if (Math.abs(verifiedCashTotal - cashTotal) > 0.01 || verifiedPointsTotal !== pointsRequired) {
+        if (verifiedPointsTotal !== pointsRequired) {
             return NextResponse.json({
-                error: 'Price mismatch detected. Please refresh your cart.',
-                expectedCash: verifiedCashTotal,
-                providedCash: cashTotal,
+                error: 'Points total mismatch. Please refresh your cart.',
                 expectedPoints: verifiedPointsTotal,
                 providedPoints: pointsRequired,
-                itemsCashTotal: verifiedItemCashTotal,
-                shippingCost: shippingCostNum,
-                shippingPaymentCash: verifiedShippingCashPayment,
-                shippingPaymentPoints: verifiedShippingPointsPayment,
-                couponDiscount: couponDiscountNum
+                itemsPointsTotal: verifiedItemPointsTotal,
+                shippingPointsCost: shippingPointsNum,
             }, { status: 400 });
         }
 
-        // Check user has enough balances
-        const [creditsBalanceRaw, pointsBalanceRaw] = await Promise.all([
-            redis.get<number>(`user:${userId}:balance`),
-            redis.get<number>(`user:${userId}:pointsBalance`),
-        ]);
+        const pointsBalance = (await redis.get<number>(`user:${userId}:pointsBalance`)) ?? 0;
 
-        const creditsBalance = creditsBalanceRaw ?? 0;
-        const pointsBalance = pointsBalanceRaw ?? 0;
-
-        if (pointsBalance < verifiedItemPointsTotal) {
+        if (pointsBalance < verifiedPointsTotal) {
             return NextResponse.json({
                 error: 'Insufficient points',
-                required: verifiedItemPointsTotal,
+                required: verifiedPointsTotal,
                 balance: pointsBalance
-            }, { status: 400 });
-        }
-
-        if (creditsBalance < verifiedCashTotal) {
-            return NextResponse.json({
-                error: 'Insufficient credits',
-                required: verifiedCashTotal,
-                balance: creditsBalance
             }, { status: 400 });
         }
 
@@ -192,6 +155,9 @@ export async function POST(request: Request) {
         const order: Order = {
             id: orderId,
             userId,
+            pathway: 'student',
+            paymentMethod: 'points',
+            paymentStatus: 'paid',
             items: validation.items!.map(item => ({
                 id: item.id,
                 name: item.name,
@@ -199,13 +165,13 @@ export async function POST(request: Request) {
                 quantity: item.quantity,
                 thumbnail_url: item.thumbnail_url,
             })),
-            subtotal: verifiedItemCashTotal,
-            pointsRequired: verifiedItemPointsTotal,
-            pointsSpent: verifiedItemPointsTotal,
-            couponDiscount: couponDiscountNum > 0 ? couponDiscountNum : undefined,
-            shippingCost: shippingCostNum,
-            totalAmount: verifiedCashTotal,
-            creditsPaid: verifiedCashTotal,
+            subtotal: 0,
+            pointsRequired: verifiedPointsTotal,
+            pointsSpent: verifiedPointsTotal,
+            shippingCost: 0,
+            shippingPointsCost: shippingPointsNum,
+            totalAmount: 0,
+            creditsPaid: 0,
             shippingCountry: resolvedShippingCountry,
             shippingAddress,
             checkoutData: checkoutData || {},
@@ -216,32 +182,20 @@ export async function POST(request: Request) {
             createdAt: now,
         };
 
-        // Deduct balances
-        const newCreditsBalance = creditsBalance - verifiedCashTotal;
-        const newPointsBalance = pointsBalance - verifiedItemPointsTotal;
+        // Deduct points
+        const newPointsBalance = pointsBalance - verifiedPointsTotal;
 
-        const currentCreditTransactions = await redis.get<CreditTransaction[]>(`user:${userId}:transactions`) || [];
         const currentPointsTransactions = await redis.get<PointsTransaction[]>(`user:${userId}:pointsTransactions`) || [];
-
-        const creditTransaction: CreditTransaction = {
-            id: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            amount: -verifiedCashTotal,
-            type: 'purchase',
-            description: `Order #${orderId.slice(-8)}`,
-            timestamp: new Date(),
-            orderId,
-        };
 
         const pointsTransaction: PointsTransaction = {
             id: `ptxn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            amount: -verifiedItemPointsTotal,
+            amount: -verifiedPointsTotal,
             type: 'spend',
             description: `Order #${orderId.slice(-8)}`,
             timestamp: new Date(),
             orderId,
         };
 
-        const newCreditTransactions = [creditTransaction, ...currentCreditTransactions];
         const newPointsTransactions = [pointsTransaction, ...currentPointsTransactions];
 
         // Save everything atomically
@@ -249,8 +203,6 @@ export async function POST(request: Request) {
         const newOrders = [order, ...currentOrders];
 
         const savePromises: Promise<unknown>[] = [
-            redis.set(`user:${userId}:balance`, newCreditsBalance),
-            redis.set(`user:${userId}:transactions`, newCreditTransactions),
             redis.set(`user:${userId}:pointsBalance`, newPointsBalance),
             redis.set(`user:${userId}:pointsTransactions`, newPointsTransactions),
             redis.set(`user:${userId}:orders`, newOrders),
@@ -270,7 +222,7 @@ export async function POST(request: Request) {
 
         // Best-effort mirror to Airtable for staff visibility (never blocks the order).
         void mirrorOrder(order, slackId);
-        void mirrorUser({ userId, balance: newCreditsBalance, pointsBalance: newPointsBalance, slackId, email: session.user?.email ?? undefined });
+        void mirrorUser({ userId, pointsBalance: newPointsBalance, slackId, email: session.user?.email ?? undefined });
 
         try {
             await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/slack/notify-purchase`, {
@@ -282,13 +234,8 @@ export async function POST(request: Request) {
                     userEmail: session.user?.email,
                     slackId: (session.user as any)?.slackId,
                     items: order.items,
-                    subtotal: order.subtotal,
-                    couponDiscount: order.couponDiscount,
-                    totalAmount: order.totalAmount,
-                    shippingCost: order.shippingCost,
                     shippingCountry: order.shippingCountry,
                     checkoutData: order.checkoutData,
-                    newBalance: newCreditsBalance,
                     pointsSpent: order.pointsSpent,
                     newPointsBalance: newPointsBalance,
                 }),
@@ -299,9 +246,7 @@ export async function POST(request: Request) {
 
         return NextResponse.json({
             order,
-            creditsBalance: newCreditsBalance,
             pointsBalance: newPointsBalance,
-            creditTransaction,
             pointsTransaction,
         });
     } catch (error) {

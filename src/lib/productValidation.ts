@@ -1,16 +1,19 @@
 import { Redis } from '@upstash/redis';
+import { resolveDualPrice } from './variantPricing';
 
 interface ProductVariant {
     id: string;
     variant_id: string;
     name: string;
     price: number;
-    payment_mode: 'balance_only' | 'points_only' | 'mixed';
-    price_balance?: number;
+    price_cash?: number;
     price_points?: number;
+    // legacy fields still present on older Redis records; resolveDualPrice folds them in.
+    payment_mode?: 'balance_only' | 'points_only' | 'mixed';
+    price_balance?: number;
     price_balance_full?: number;
     price_points_full?: number;
-    pointsPrice?: number; // Backward compatibility
+    pointsPrice?: number;
     size?: string;
     color?: string;
     image_url?: string;
@@ -23,7 +26,6 @@ interface CartItemForValidation {
     price: string;
     quantity: number;
     variant_id?: string;
-    pointsSpent?: number; // For mixed items - actual points user chose to spend
 }
 
 interface AdminProduct {
@@ -59,38 +61,50 @@ async function loadProducts(): Promise<AdminProduct[]> {
     }
 }
 
+export interface VerifiedCartItem {
+    id: string;
+    name: string;
+    price: string;          // USD string (cash price, or "0" for points-only items)
+    priceCash?: number;     // verified per-unit USD price (adult/Stripe path)
+    pricePoints?: number;   // verified per-unit points price (student path)
+    quantity: number;
+    thumbnail_url?: string;
+}
+
+/**
+ * Re-loads every product from Redis and re-derives the authoritative price for each
+ * cart item. The client-sent `price` is only cross-checked, never trusted. Returns
+ * both a verified cash total (adult/Stripe path) and a verified points total
+ * (student path); the caller charges whichever matches the pathway.
+ */
 export async function validateCartItems(items: CartItemForValidation[]): Promise<{
     valid: boolean;
     error?: string;
-    verifiedTotal?: number;
+    verifiedCashTotal?: number;
     verifiedPointsTotal?: number;
-    items?: { id: string; name: string; price: string; pointsPrice?: number; quantity: number; thumbnail_url?: string }[];
+    items?: VerifiedCartItem[];
 }> {
     const products = await loadProducts();
-    let verifiedTotal = 0;
+    let verifiedCashTotal = 0;
     let verifiedPointsTotal = 0;
-    const verifiedItems: { id: string; name: string; price: string; pointsPrice?: number; quantity: number; thumbnail_url?: string }[] = [];
+    const verifiedItems: VerifiedCartItem[] = [];
 
     for (const item of items) {
         const product = products.find(p => p.id === item.id);
-        
+
         if (!product) {
-            return {
-                valid: false,
-                error: `Product not found: ${item.name}`,
-            };
+            return { valid: false, error: `Product not found: ${item.name}` };
         }
 
         const variant = product.variants.find(v => {
-            // Try both exact matches and string conversions
             return (
-                v.variant_id === item.variant_id || 
+                v.variant_id === item.variant_id ||
                 v.id === item.variant_id ||
                 String(v.variant_id) === String(item.variant_id) ||
                 String(v.id) === String(item.variant_id)
             );
         });
-        
+
         if (!variant) {
             console.log('[Validation] Variant not found:', {
                 itemName: item.name,
@@ -98,77 +112,33 @@ export async function validateCartItems(items: CartItemForValidation[]): Promise
                 productId: product.id,
                 availableVariants: product.variants.map(v => ({ id: v.id, variant_id: v.variant_id }))
             });
-            return {
-                valid: false,
-                error: `Variant not found for ${item.name}`,
-            };
+            return { valid: false, error: `Variant not found for ${item.name}` };
         }
 
-        // Check price matches - get the expected price based on payment mode
-        let expectedPrice: number;
-        const paymentMode = variant.payment_mode || 'balance_only';
-        
-        // For backward compatibility with old products: if payment_mode is not set,
-        // assume balance_only and use the legacy price field
-        if (!variant.payment_mode) {
-            // Old product without payment_mode - use legacy price
-            expectedPrice = variant.price ?? 0;
-        } else if (paymentMode === 'balance_only') {
-            expectedPrice = variant.price_balance ?? variant.price ?? 0;
-        } else if (paymentMode === 'mixed') {
-            expectedPrice = variant.price_balance_full ?? variant.price ?? 0;
-        } else if (paymentMode === 'points_only') {
-            // For points_only, price in cart should be "0" since no balance is charged
-            expectedPrice = 0;
-        } else {
-            expectedPrice = variant.price ?? 0;
-        }
+        const { price_cash, price_points } = resolveDualPrice(variant);
 
+        // Cross-check the client-sent cash price against the resolved one. Cart carries
+        // the USD price as `price` ("0" for points-only items), so the expected value is
+        // the cash price or 0 when the item is points-only.
+        const expectedPrice = price_cash ?? 0;
         const itemPrice = parseFloat(item.price);
-        if (Math.abs(itemPrice - expectedPrice) > 0.01) {  // Allow small floating point differences
-            console.log('[Validation] Price mismatch:', {
-                itemName: item.name,
-                itemPrice,
-                expectedPrice,
-                paymentMode,
-                variant: {
-                    price: variant.price,
-                    price_balance: variant.price_balance,
-                    price_balance_full: variant.price_balance_full,
-                }
-            });
+        if (Math.abs(itemPrice - expectedPrice) > 0.01) {
+            console.log('[Validation] Price mismatch:', { itemName: item.name, itemPrice, expectedPrice });
             return {
                 valid: false,
                 error: `Price mismatch for ${item.name}: expected ${expectedPrice}, got ${itemPrice}`,
             };
         }
 
-        // Calculate totals based on payment mode
-        if (variant.payment_mode === 'balance_only') {
-            verifiedTotal += (variant.price_balance || variant.price) * item.quantity;
-        } else if (variant.payment_mode === 'points_only') {
-            verifiedPointsTotal += (variant.price_points || 0) * item.quantity;
-        } else if (variant.payment_mode === 'mixed') {
-            // For mixed items, calculate based on actual points spent
-            const pointsPerUnit = item.pointsSpent ?? 0;
-            const pricePointsFull = variant.price_points_full || 0;
-            const priceBalanceFull = variant.price_balance_full || variant.price || 0;
-            
-            // Calculate ratio of points being used
-            const ratio = pricePointsFull > 0 ? pointsPerUnit / pricePointsFull : 0;
-            
-            // Balance is the remaining portion
-            const balancePerUnit = priceBalanceFull * (1 - ratio);
-            
-            verifiedTotal += balancePerUnit * item.quantity;
-            verifiedPointsTotal += pointsPerUnit * item.quantity;
-        }
-        
+        verifiedCashTotal += (price_cash ?? 0) * item.quantity;
+        verifiedPointsTotal += (price_points ?? 0) * item.quantity;
+
         verifiedItems.push({
             id: item.id,
             name: variant.name,
-            price: variant.price.toString(),
-            pointsPrice: variant.price_points || variant.pointsPrice,
+            price: (price_cash ?? 0).toString(),
+            priceCash: price_cash,
+            pricePoints: price_points,
             quantity: item.quantity,
             thumbnail_url: variant.image_url || product.image_url || product.thumbnail_url,
         });
@@ -176,7 +146,7 @@ export async function validateCartItems(items: CartItemForValidation[]): Promise
 
     return {
         valid: true,
-        verifiedTotal,
+        verifiedCashTotal,
         verifiedPointsTotal,
         items: verifiedItems,
     };

@@ -1,22 +1,13 @@
 'use client';
 
 import React, { createContext, useState, useEffect } from 'react';
-import { PaymentMode } from '../types/Product';
 
 interface CartItem {
     id: string | number;
     name: string;
-    price: string;
-    paymentMode: PaymentMode;
-    // For balance_only
-    priceBalance?: number;
-    // For points_only
-    pricePoints?: number;
-    // For mixed
-    priceBalanceFull?: number;
-    pricePointsFull?: number;
-    // For mixed items, user-specified points to spend (default 0)
-    pointsSpent?: number;
+    price: string;            // keep for display compatibility (USD string)
+    price_cash?: number;      // USD, for adult/Stripe path
+    price_points?: number;    // points, for student path
     thumbnail_url: string;
     variant_id?: string | number | null;
     quantity: number;

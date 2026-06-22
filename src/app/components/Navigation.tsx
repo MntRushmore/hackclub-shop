@@ -4,7 +4,6 @@ import React, { useContext, useState, useEffect, useRef, forwardRef, useImperati
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CartContext } from '../../context/CartContext';
-import { CreditsContext } from '../../context/CreditsContext';
 import Image from 'next/image';
 import CartModal from './CartModal';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -66,7 +65,6 @@ const Navigation = () => {
   const router = useRouter();
   const bagIconRef = useRef<{ closeAndWait: () => Promise<void> }>(null);
   const cartContext = useContext(CartContext);
-  const creditsContext = useContext(CreditsContext);
   const { data: session, status } = useSession();
   const [isClient, setIsClient] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -158,24 +156,14 @@ const Navigation = () => {
                 Browse
               </Link>
 
-              <Link
-                href="/credits"
-                className="text-hackclub-slate hover:text-hackclub-red font-bold text-xl transition-colors flex items-center gap-2"
-              >
-                Credits
-                {creditsContext && creditsContext.balance > 0 && (
-                  <span className="bg-hackclub-green text-white text-xs font-black px-2 py-0.5 rounded-full">
-                    ${creditsContext.balance.toFixed(2)}
-                  </span>
-                )}
-              </Link>
-
-              <Link
-                href="/submit"
-                className="text-hackclub-slate hover:text-hackclub-red font-bold text-xl transition-colors"
-              >
-                Submit
-              </Link>
+              {session && (
+                <Link
+                  href="/submit"
+                  className="text-hackclub-slate hover:text-hackclub-red font-bold text-xl transition-colors"
+                >
+                  Submit
+                </Link>
+              )}
 
               {session && (
                 <Link

@@ -59,14 +59,15 @@ export async function POST(request: Request) {
 
         const variantsInvalid = variants.some((v: any) => {
             if (!v.name) return true;
-            // Validate based on payment mode
-            if (v.paymentMode === 'balance_only' && !v.price && !v.priceBalance) return true;
-            if (v.paymentMode === 'points_only' && !v.pricePoints) return true;
-            if (v.paymentMode === 'mixed' && (!v.priceBalanceFull || !v.pricePointsFull)) return true;
+            // A variant must be buyable on at least one pathway: a cash price (USD,
+            // for adults) and/or a points price (for students).
+            const hasCash = v.priceCash != null && v.priceCash !== '' && parseFloat(v.priceCash) > 0;
+            const hasPoints = v.pricePoints != null && v.pricePoints !== '' && parseInt(v.pricePoints) > 0;
+            if (!hasCash && !hasPoints) return true;
             return false;
         });
         if (variantsInvalid) {
-            return NextResponse.json({ error: 'Each variant must have a name and valid prices for its payment mode' }, { status: 400 });
+            return NextResponse.json({ error: 'Each variant needs a name and at least one price (cash and/or points)' }, { status: 400 });
         }
 
         const product: Product = {
@@ -77,27 +78,22 @@ export async function POST(request: Request) {
             thumbnail_url,
             category,
             variants: (variants || []).map((v: any, idx: number) => {
+                const cash = v.priceCash != null && v.priceCash !== '' ? parseFloat(v.priceCash) : undefined;
+                const points = v.pricePoints != null && v.pricePoints !== '' ? parseInt(v.pricePoints) : undefined;
                 const variant: any = {
                     id: v.id || `var_${Date.now()}_${idx}`,
                     variant_id: v.variant_id || `var_${Date.now()}_${idx}`,
                     name: v.name,
-                    price: parseFloat(v.price || '0'),
-                    payment_mode: v.paymentMode || 'balance_only',
+                    // `price` retained as the legacy USD field (mirrors price_cash).
+                    price: cash ?? parseFloat(v.price || '0'),
                     size: v.size,
                     color: v.color,
                     image_url: v.image_url,
                     stock: v.stock ? parseInt(v.stock) : undefined,
                 };
 
-                // Set appropriate price fields based on payment mode
-                if (v.paymentMode === 'balance_only') {
-                    variant.price_balance = parseFloat(v.priceBalance || v.price || '0');
-                } else if (v.paymentMode === 'points_only') {
-                    variant.price_points = parseInt(v.pricePoints || '0');
-                } else if (v.paymentMode === 'mixed') {
-                    variant.price_balance_full = parseFloat(v.priceBalanceFull || '0');
-                    variant.price_points_full = parseInt(v.pricePointsFull || '0');
-                }
+                if (cash !== undefined && cash > 0) variant.price_cash = cash;
+                if (points !== undefined && points > 0) variant.price_points = points;
 
                 return variant;
             }),

@@ -5,7 +5,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { CartContext } from '../../context/CartContext';
-import { getDisplayPrice, getPaymentModeBadge } from '../../lib/paymentUtils';
+import { getCashPrice, getPointsPrice, getDisplayPrice } from '../../lib/paymentUtils';
+import { usePathway } from '../../lib/usePathway';
 
 interface Variant {
     variant_id: string | number;
@@ -14,11 +15,8 @@ interface Variant {
     size?: string;
     color?: string;
     retail_price: string;
-    payment_mode: 'balance_only' | 'points_only' | 'mixed';
-    price_balance?: number;
+    price_cash?: number;
     price_points?: number;
-    price_balance_full?: number;
-    price_points_full?: number;
     product: { image: string };
 }
 
@@ -40,6 +38,7 @@ const Shop = () => {
     const [isReleasing, setIsReleasing] = useState(false);
     const [releaseOnCart, setReleaseOnCart] = useState(false);
     const cartContext = useContext(CartContext);
+    const { pathway } = usePathway();
 
     useEffect(() => {
         const fetchProducts = async () => {
@@ -108,25 +107,14 @@ const Shop = () => {
                 if (isNearCart && product.sync_variants && product.sync_variants.length > 0 && cartContext) {
                     droppedOnCart = true;
                     const variant = product.sync_variants[0];
-                    
-                    // Set price based on payment mode
-                    let displayPrice = '0';
-                    if (variant.payment_mode === 'balance_only') {
-                        displayPrice = (variant.price_balance || 0).toString();
-                    } else if (variant.payment_mode === 'mixed') {
-                        displayPrice = (variant.price_balance_full || 0).toString();
-                    }
-                    
+
                     const variantId = variant.variant_id || variant.id || `${product.id}_var_0`;
                     cartContext.addToCart({
                         id: product.id,
                         name: variant.name,
-                        price: displayPrice,
-                        paymentMode: variant.payment_mode,
-                        priceBalance: variant.price_balance,
-                        pricePoints: variant.price_points,
-                        priceBalanceFull: variant.price_balance_full,
-                        pricePointsFull: variant.price_points_full,
+                        price: String(getCashPrice(variant)),
+                        price_cash: getCashPrice(variant) || undefined,
+                        price_points: getPointsPrice(variant) || undefined,
                         thumbnail_url: variant.product.image,
                         variant_id: variantId,
                     });
@@ -207,12 +195,13 @@ const Shop = () => {
                                          {product.name}
                                      </h2>
                                      <div className="mb-3">
-                                         <p className="text-lg font-black text-hackclub-red">
-                                             {getDisplayPrice(product.sync_variants[0])}
-                                         </p>
-                                         <p className="text-xs text-gray-600 font-medium">
-                                             {getPaymentModeBadge(product.sync_variants[0].payment_mode)}
-                                         </p>
+                                         {getDisplayPrice(product.sync_variants[0], pathway) ? (
+                                             <p className="text-lg font-black text-hackclub-red">
+                                                 {getDisplayPrice(product.sync_variants[0], pathway)}
+                                             </p>
+                                         ) : (
+                                             <p className="text-sm text-gray-400 font-medium">Not available</p>
+                                         )}
                                      </div>
                                 </Link>
                                 <div className="flex items-center gap-2">
@@ -229,25 +218,14 @@ const Shop = () => {
                                              e.preventDefault();
                                              if (product.sync_variants && product.sync_variants.length > 0 && cartContext) {
                                                   const variant = product.sync_variants[0];
-                                                  
-                                                  // Set price based on payment mode
-                                                  let displayPrice = '0';
-                                                  if (variant.payment_mode === 'balance_only') {
-                                                      displayPrice = (variant.price_balance || 0).toString();
-                                                  } else if (variant.payment_mode === 'mixed') {
-                                                      displayPrice = (variant.price_balance_full || 0).toString();
-                                                  }
-                                                  
+
                                                   const variantId = variant.variant_id || variant.id || `${product.id}_var_0`;
                                                    cartContext.addToCart({
                                                        id: product.id,
                                                        name: variant.name,
-                                                       price: displayPrice,
-                                                       paymentMode: variant.payment_mode,
-                                                       priceBalance: variant.price_balance,
-                                                       pricePoints: variant.price_points,
-                                                       priceBalanceFull: variant.price_balance_full,
-                                                       pricePointsFull: variant.price_points_full,
+                                                       price: String(getCashPrice(variant)),
+                                                       price_cash: getCashPrice(variant) || undefined,
+                                                       price_points: getPointsPrice(variant) || undefined,
                                                        thumbnail_url: variant.product.image,
                                                        variant_id: variantId,
                                                    });

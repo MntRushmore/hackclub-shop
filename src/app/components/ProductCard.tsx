@@ -5,7 +5,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { CartContext } from '../../context/CartContext';
 import { Product } from '../../types/Product';
-import { getDisplayPrice, getPaymentModeBadge } from '../../lib/paymentUtils';
+import { getCashPrice, getPointsPrice, getDisplayPrice } from '../../lib/paymentUtils';
+import { usePathway } from '../../lib/usePathway';
 
 interface ProductCardProps {
     product: Product;
@@ -27,6 +28,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
     );
 
     const { addToCart } = useContext(CartContext)!;
+    const { pathway } = usePathway();
 
     const selectedVariant = product.sync_variants?.find(
         (variant) => variant.variant_id === selectedVariantId
@@ -34,24 +36,12 @@ const ProductCard: React.FC<ProductCardProps> = ({
 
     const handleAddToCart = () => {
         if (selectedVariant) {
-            // Set price based on payment mode
-            let displayPrice = '0';
-            if (selectedVariant.payment_mode === 'balance_only') {
-                displayPrice = (selectedVariant.price_balance || 0).toString();
-            } else if (selectedVariant.payment_mode === 'mixed') {
-                displayPrice = (selectedVariant.price_balance_full || 0).toString();
-            }
-            // For points_only, price is 0 in dollars
-            
             const cartItem = {
                 id: product.id,
                 name: selectedVariant.name,
-                price: displayPrice,
-                paymentMode: selectedVariant.payment_mode,
-                priceBalance: selectedVariant.price_balance,
-                pricePoints: selectedVariant.price_points,
-                priceBalanceFull: selectedVariant.price_balance_full,
-                pricePointsFull: selectedVariant.price_points_full,
+                price: String(getCashPrice(selectedVariant)),
+                price_cash: getCashPrice(selectedVariant) || undefined,
+                price_points: getPointsPrice(selectedVariant) || undefined,
                 thumbnail_url: selectedVariant.product.image,
                 variant_id: selectedVariant.variant_id,
             };
@@ -85,12 +75,13 @@ const ProductCard: React.FC<ProductCardProps> = ({
 
             {selectedVariant && (
                 <div className="flex flex-col items-center mt-2">
-                    <p className="text-lg font-semibold text-gray-900">
-                        {getDisplayPrice(selectedVariant)}
-                    </p>
-                    <span className="text-xs text-gray-600 mt-1 font-medium">
-                        {getPaymentModeBadge(selectedVariant.payment_mode)}
-                    </span>
+                    {getDisplayPrice(selectedVariant, pathway) ? (
+                        <p className="text-lg font-semibold text-gray-900">
+                            {getDisplayPrice(selectedVariant, pathway)}
+                        </p>
+                    ) : (
+                        <p className="text-sm text-gray-400 mt-1">Not available</p>
+                    )}
                 </div>
             )}
 

@@ -1,14 +1,13 @@
 'use client';
 
-import React, { useContext, useState } from 'react';
+import React, { useContext } from 'react';
 import { CartContext } from '../../context/CartContext';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CartItemPrice } from './CartItemPrice';
-import { MixedPaymentSlider } from './MixedPaymentSlider';
-import { CreditsContext } from '../../context/CreditsContext';
 import { PointsContext } from '../../context/PointsContext';
+import { usePathway } from '../../lib/usePathway';
+import { formatCash, formatPoints } from '../../lib/paymentUtils';
 
 interface CartModalProps {
   isOpen: boolean;
@@ -17,10 +16,9 @@ interface CartModalProps {
 
 const CartModal: React.FC<CartModalProps> = ({ isOpen, onClose }) => {
   const cartContext = useContext(CartContext);
-  const creditsContext = useContext(CreditsContext);
   const pointsContext = useContext(PointsContext);
   const router = useRouter();
-  const [expandedMixedItem, setExpandedMixedItem] = useState<string | number | null>(null);
+  const { isStudent } = usePathway();
 
   if (!cartContext || cartContext.cart === null) {
     return null;
@@ -31,15 +29,6 @@ const CartModal: React.FC<CartModalProps> = ({ isOpen, onClose }) => {
   const handleCheckout = () => {
     onClose();
     router.push('/checkout');
-  };
-
-  const handlePointsChange = (itemId: string | number, pointsPerUnit: number) => {
-    // Update the cart item's pointsSpent value
-    // This will be picked up during checkout
-    const item = cart.find(i => i.id === itemId);
-    if (item) {
-      item.pointsSpent = pointsPerUnit;
-    }
   };
 
   return (
@@ -98,16 +87,11 @@ const CartModal: React.FC<CartModalProps> = ({ isOpen, onClose }) => {
                         )}
                         <div className="flex-1">
                           <h3 className="font-bold text-hackclub-dark mb-1">{item.name}</h3>
-                          <CartItemPrice
-                            paymentMode={item.paymentMode}
-                            priceBalance={item.priceBalance}
-                            pricePoints={item.pricePoints}
-                            priceBalanceFull={item.priceBalanceFull}
-                            pricePointsFull={item.pricePointsFull}
-                            quantity={item.quantity}
-                            pointsSpent={item.pointsSpent}
-                            price={item.price}
-                          />
+                          <p className="font-bold text-hackclub-red">
+                            {isStudent
+                              ? formatPoints((item.price_points || 0) * item.quantity)
+                              : formatCash((item.price_cash || 0) * item.quantity)}
+                          </p>
                           <div className="flex items-center gap-2 mt-2">
                             <motion.button
                               whileHover={{ scale: 1.1 }}
@@ -139,38 +123,6 @@ const CartModal: React.FC<CartModalProps> = ({ isOpen, onClose }) => {
                           </svg>
                         </motion.button>
                       </div>
-                      
-                      {item.paymentMode === 'mixed' && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ 
-                            opacity: expandedMixedItem === item.id ? 1 : 0,
-                            height: expandedMixedItem === item.id ? 'auto' : 0
-                          }}
-                          transition={{ duration: 0.2 }}
-                          className="mt-4 pt-4 border-t border-gray-200 overflow-hidden"
-                        >
-                          {expandedMixedItem === item.id && (
-                            <MixedPaymentSlider
-                              priceBalanceFull={item.priceBalanceFull || 0}
-                              pricePointsFull={item.pricePointsFull || 0}
-                              userBalance={creditsContext?.balance || 0}
-                              userPoints={pointsContext?.balance || 0}
-                              quantity={item.quantity}
-                              onPointsChange={(points) => handlePointsChange(item.id, points)}
-                            />
-                          )}
-                        </motion.div>
-                      )}
-                      
-                      {item.paymentMode === 'mixed' && (
-                        <button
-                          onClick={() => setExpandedMixedItem(expandedMixedItem === item.id ? null : item.id)}
-                          className="text-xs text-hackclub-blue hover:text-hackclub-red font-bold mt-2"
-                        >
-                          {expandedMixedItem === item.id ? '− Hide payment options' : '+ Choose payment split'}
-                        </button>
-                      )}
                     </motion.div>
                   ))
                 ) : (
@@ -192,16 +144,14 @@ const CartModal: React.FC<CartModalProps> = ({ isOpen, onClose }) => {
 
             {cart.length > 0 && (
               <div className="p-6 border-t border-gray-200 bg-white rounded-bl-2xl space-y-4">
-                <div className="space-y-1 text-sm">
-                  <div className="flex justify-between items-center">
-                    <span className="text-hackclub-slate">Your HCB Balance:</span>
-                    <span className="font-bold text-hackclub-dark">€{(creditsContext?.balance || 0).toFixed(2)}</span>
+                {isStudent && (
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-hackclub-slate">Your Points:</span>
+                      <span className="font-bold text-hackclub-dark">{pointsContext?.balance || 0}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-hackclub-slate">Your Points:</span>
-                    <span className="font-bold text-hackclub-dark">{pointsContext?.balance || 0}</span>
-                  </div>
-                </div>
+                )}
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
