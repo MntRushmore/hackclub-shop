@@ -14,6 +14,67 @@ interface FormCheckoutField {
     required: boolean;
 }
 
+interface ImageFieldProps {
+    label: string;
+    value: string;
+    onChange: (url: string) => void;
+    onUpload: (file: File) => Promise<string | null>;
+    uploadingKey: string;
+    uploading: string | null;
+    setUploading: (key: string | null) => void;
+    compact?: boolean;
+}
+
+function ImageField({ label, value, onChange, onUpload, uploadingKey, uploading, setUploading, compact }: ImageFieldProps) {
+    const isUploading = uploading === uploadingKey;
+    const inputPad = compact ? 'px-3 py-2' : 'px-4 py-3';
+
+    const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploading(uploadingKey);
+        const url = await onUpload(file);
+        setUploading(null);
+        if (url) onChange(url);
+        e.target.value = '';
+    };
+
+    return (
+        <div className={`${compact ? '' : 'col-span-2'} space-y-2`}>
+            <div className="flex items-center gap-3">
+                {value ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={value} alt={label} className="w-14 h-14 rounded-lg object-cover border-2 border-hackclub-smoke flex-shrink-0" />
+                ) : (
+                    <div className="w-14 h-14 rounded-lg border-2 border-dashed border-hackclub-smoke flex-shrink-0 flex items-center justify-center text-hackclub-muted text-xs">
+                        none
+                    </div>
+                )}
+                <label className={`cursor-pointer inline-flex items-center gap-2 ${inputPad} bg-hackclub-dark text-white rounded-lg font-bold text-sm hover:opacity-90 transition-opacity ${isUploading ? 'opacity-60 pointer-events-none' : ''}`}>
+                    {isUploading ? 'Uploading…' : `Upload ${label}`}
+                    <input type="file" accept="image/*" onChange={handleFile} className="hidden" disabled={isUploading} />
+                </label>
+                {value && (
+                    <button
+                        type="button"
+                        onClick={() => onChange('')}
+                        className="text-sm text-hackclub-red font-bold hover:underline"
+                    >
+                        Remove
+                    </button>
+                )}
+            </div>
+            <input
+                type="text"
+                placeholder={`${label} (or paste a URL)`}
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className={`w-full ${inputPad} border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium text-sm`}
+            />
+        </div>
+    );
+}
+
 export default function ProductsAdmin() {
     const { data: session, status } = useSession();
     const [products, setProducts] = useState<Product[]>([]);
@@ -46,6 +107,26 @@ export default function ProductsAdmin() {
         checkoutFields: [] as FormCheckoutField[],
     });
     const [submitting, setSubmitting] = useState(false);
+    const [uploading, setUploading] = useState<string | null>(null);
+    const [uploadError, setUploadError] = useState<string | null>(null);
+
+    const uploadImage = async (file: File): Promise<string | null> => {
+        setUploadError(null);
+        const body = new FormData();
+        body.append('file', file);
+        try {
+            const res = await fetch('/api/admin/upload', { method: 'POST', body });
+            const data = await res.json();
+            if (!res.ok) {
+                setUploadError(data.error || 'Upload failed');
+                return null;
+            }
+            return data.url as string;
+        } catch {
+            setUploadError('Upload failed');
+            return null;
+        }
+    };
 
     useEffect(() => {
         if (status === 'unauthenticated') {
@@ -366,20 +447,27 @@ export default function ProductsAdmin() {
                                             onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                                             className="col-span-2 px-4 py-3 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
                                         />
-                                        <input
-                                            type="text"
-                                            placeholder="Thumbnail URL"
+                                        <ImageField
+                                            label="Thumbnail"
                                             value={formData.thumbnail_url}
-                                            onChange={(e) => setFormData({ ...formData, thumbnail_url: e.target.value })}
-                                            className="col-span-2 px-4 py-3 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
+                                            onChange={(url) => setFormData({ ...formData, thumbnail_url: url })}
+                                            onUpload={uploadImage}
+                                            uploadingKey="thumbnail"
+                                            uploading={uploading}
+                                            setUploading={setUploading}
                                         />
-                                        <input
-                                            type="text"
-                                            placeholder="Image URL"
+                                        <ImageField
+                                            label="Image"
                                             value={formData.image_url}
-                                            onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
-                                            className="col-span-2 px-4 py-3 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
+                                            onChange={(url) => setFormData({ ...formData, image_url: url })}
+                                            onUpload={uploadImage}
+                                            uploadingKey="image"
+                                            uploading={uploading}
+                                            setUploading={setUploading}
                                         />
+                                        {uploadError && (
+                                            <p className="col-span-2 text-sm text-hackclub-red font-medium">{uploadError}</p>
+                                        )}
                                         <textarea
                                             placeholder="Description"
                                             value={formData.description}
@@ -505,17 +593,22 @@ export default function ProductsAdmin() {
                                                         />
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-2">
-                                                        <input
-                                                            type="text"
-                                                            placeholder="Variant Image URL"
-                                                            value={variant.image_url}
-                                                            onChange={(e) => {
-                                                                const newVariants = [...formData.variants];
-                                                                newVariants[idx].image_url = e.target.value;
-                                                                setFormData({ ...formData, variants: newVariants });
-                                                            }}
-                                                            className="col-span-2 px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium text-sm"
-                                                        />
+                                                        <div className="col-span-2">
+                                                            <ImageField
+                                                                label="Variant Image"
+                                                                value={variant.image_url}
+                                                                onChange={(url) => {
+                                                                    const newVariants = [...formData.variants];
+                                                                    newVariants[idx].image_url = url;
+                                                                    setFormData({ ...formData, variants: newVariants });
+                                                                }}
+                                                                onUpload={uploadImage}
+                                                                uploadingKey={`variant-${idx}`}
+                                                                uploading={uploading}
+                                                                setUploading={setUploading}
+                                                                compact
+                                                            />
+                                                        </div>
                                                         <input
                                                             type="number"
                                                             placeholder="Stock"
