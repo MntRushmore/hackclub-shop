@@ -3,7 +3,7 @@ import type Stripe from 'stripe';
 import { getStripe } from '../../../../lib/stripe';
 import { getGuestOrder, getGuestOrderBySession, updateGuestOrder } from '../../../../lib/guestOrders';
 import { mirrorOrder } from '../../../../lib/airtableMirror';
-import { Order } from '../../../../types/Order';
+import { sendEmail, buildOrderConfirmation, buildAdminNewOrder } from '../../../../lib/email';
 
 /**
  * Stripe webhook — the ONLY trusted signal that a guest order was paid. The
@@ -13,29 +13,6 @@ import { Order } from '../../../../types/Order';
 
 // Stripe needs the raw, unparsed request body to verify the signature.
 export const runtime = 'nodejs';
-
-async function notifySlack(order: Order) {
-    try {
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/slack/notify-purchase`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                orderId: order.id,
-                userId: order.guestEmail || 'guest',
-                userEmail: order.guestEmail || '',
-                items: order.items.map(i => ({ name: i.name, price: parseFloat(i.price) || 0, quantity: i.quantity })),
-                subtotal: order.subtotal,
-                totalAmount: order.totalAmount,
-                shippingCost: order.shippingCost,
-                shippingCountry: order.shippingCountry,
-                checkoutData: order.checkoutData,
-                newBalance: 0,
-            }),
-        });
-    } catch (err) {
-        console.error('[Stripe webhook] Slack notify failed:', err);
-    }
-}
 
 export async function POST(request: Request) {
     const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -90,7 +67,10 @@ export async function POST(request: Request) {
 
                 if (updated) {
                     void mirrorOrder(updated);
-                    void notifySlack(updated);
+                    // Confirm to the customer + alert staff (no-op until email is configured).
+                    if (email) void sendEmail(buildOrderConfirmation(updated, email));
+                    const adminMsg = buildAdminNewOrder(updated);
+                    if (adminMsg) void sendEmail(adminMsg);
                 }
                 break;
             }

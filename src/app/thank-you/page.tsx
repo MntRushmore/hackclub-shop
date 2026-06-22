@@ -1,7 +1,8 @@
 'use client';
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, useContext, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { CartContext } from '../../context/CartContext';
 
 type GuestStatus = 'loading' | 'processing' | 'paid' | 'notfound';
 
@@ -10,18 +11,23 @@ const ThankYouInner = () => {
   const sessionId = searchParams.get('session_id');
   const isGuest = Boolean(sessionId);
   const [status, setStatus] = useState<GuestStatus>(isGuest ? 'loading' : 'paid');
+  const cartContext = useContext(CartContext);
+
+  // Always clear the cart on the thank-you page — both the in-memory context
+  // (so the nav badge resets) and localStorage. Student checkout also clears it,
+  // but doing it here too is idempotent and covers the guest/Stripe return.
+  useEffect(() => {
+    cartContext?.clearCart();
+  }, [cartContext]);
 
   useEffect(() => {
     if (!isGuest) {
-      // Student order: cart was already cleared at checkout.
+      // Student order: cart already cleared above + at checkout.
       return;
     }
 
-    // Guest landed here after Stripe. Reaching this page means they completed
-    // payment, so clear the cart. The webhook finalizes the order asynchronously,
-    // so poll the status until it flips to paid.
-    localStorage.removeItem('cart');
-
+    // Guest landed here after Stripe. The webhook finalizes the order
+    // asynchronously, so poll the status until it flips to paid.
     let cancelled = false;
     let attempts = 0;
 

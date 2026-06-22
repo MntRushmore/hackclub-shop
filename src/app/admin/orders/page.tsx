@@ -12,6 +12,7 @@ export default function OrdersAdmin() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+    const [actingOrderId, setActingOrderId] = useState<string | null>(null);
 
     useEffect(() => {
         if (status === 'unauthenticated') {
@@ -57,6 +58,44 @@ export default function OrdersAdmin() {
                 return 'bg-orange-100 text-orange-800';
             default:
                 return 'bg-gray-100 text-gray-800';
+        }
+    };
+
+    const handleAction = async (
+        e: React.MouseEvent,
+        order: Order,
+        action: 'approve' | 'deny' | 'fulfill' | 'refund',
+    ) => {
+        e.stopPropagation();
+
+        let message: string | undefined;
+        if (action === 'deny' || action === 'refund') {
+            const reason = window.prompt('Reason (optional):');
+            // Cancelling the prompt aborts the action; an empty string is allowed.
+            if (reason === null) return;
+            message = reason || undefined;
+        }
+
+        setError(null);
+        setActingOrderId(order.id);
+        try {
+            const res = await fetch(`/api/admin/orders/${order.id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action, message }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                setError(data.error || 'Action failed');
+                return;
+            }
+            const updated: Order = data.order;
+            setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+            setSelectedOrder((prev) => (prev && prev.id === updated.id ? updated : prev));
+        } catch {
+            setError('Action failed');
+        } finally {
+            setActingOrderId(null);
         }
     };
 
@@ -161,6 +200,41 @@ export default function OrdersAdmin() {
                                                 {order.pathway === 'guest' ? `$${order.totalAmount.toFixed(2)}` : `${order.pointsSpent} pts`}
                                             </span>
                                         </div>
+
+                                        {(() => {
+                                            const isActing = actingOrderId === order.id;
+                                            const btnBase = 'px-4 py-2 rounded-xl text-sm font-bold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+                                            const refundLabel = order.pathway === 'guest' ? 'Refund (card)' : 'Refund (points)';
+                                            const actions: { action: 'approve' | 'deny' | 'fulfill' | 'refund'; label: string; className: string }[] = [];
+
+                                            if (order.status === 'pending') {
+                                                actions.push({ action: 'approve', label: 'Approve', className: 'bg-hackclub-green hover:bg-green-600' });
+                                                actions.push({ action: 'deny', label: 'Deny', className: 'bg-hackclub-red hover:bg-red-600' });
+                                            } else if (order.status === 'approved') {
+                                                actions.push({ action: 'fulfill', label: 'Fulfill', className: 'bg-hackclub-blue hover:bg-blue-600' });
+                                                actions.push({ action: 'refund', label: refundLabel, className: 'bg-hackclub-red hover:bg-red-600' });
+                                            } else if (order.status === 'fulfilled') {
+                                                actions.push({ action: 'refund', label: refundLabel, className: 'bg-hackclub-red hover:bg-red-600' });
+                                            }
+
+                                            if (actions.length === 0) return null;
+
+                                            return (
+                                                <div className="mt-4 flex flex-wrap gap-2">
+                                                    {actions.map(({ action, label, className }) => (
+                                                        <button
+                                                            key={action}
+                                                            type="button"
+                                                            onClick={(e) => handleAction(e, order, action)}
+                                                            disabled={isActing}
+                                                            className={`${btnBase} ${className}`}
+                                                        >
+                                                            {isActing ? 'Working…' : label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            );
+                                        })()}
 
                                         {selectedOrder?.id === order.id && order.statusHistory && order.statusHistory.length > 0 && (
                                             <motion.div

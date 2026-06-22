@@ -28,12 +28,23 @@ export async function GET(request: Request) {
         let totalOrders = 0;
         const ordersByStatus: Record<string, number> = {};
 
+        // Student orders are arrays under user:*:orders.
         for (const key of orderKeys) {
             const userOrders = await redis.get<Order[]>(key);
             if (userOrders) {
                 orders = orders.concat(userOrders);
             }
         }
+
+        // Guest (Stripe) orders are stored standalone under order:*.
+        const guestKeys = await redis.keys('order:*');
+        for (const key of guestKeys) {
+            const guestOrder = await redis.get<Order>(key);
+            if (guestOrder) orders.push(guestOrder);
+        }
+
+        // Newest first across both sources.
+        orders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
         const now = new Date();
         let filteredOrders = orders;

@@ -9,6 +9,7 @@ import { PointsTransaction } from '../../../types/Points';
 import { validateCSRFToken } from '../../../lib/csrf';
 import { validateCartItems } from '../../../lib/productValidation';
 import { mirrorOrder, mirrorUser } from '../../../lib/airtableMirror';
+import { sendEmail, buildOrderConfirmation, buildAdminNewOrder } from '../../../lib/email';
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -224,25 +225,11 @@ export async function POST(request: Request) {
         void mirrorOrder(order, slackId);
         void mirrorUser({ userId, pointsBalance: newPointsBalance, slackId, email: session.user?.email ?? undefined });
 
-        try {
-            await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/slack/notify-purchase`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    orderId: order.id,
-                    userId,
-                    userEmail: session.user?.email,
-                    slackId: (session.user as any)?.slackId,
-                    items: order.items,
-                    shippingCountry: order.shippingCountry,
-                    checkoutData: order.checkoutData,
-                    pointsSpent: order.pointsSpent,
-                    newPointsBalance: newPointsBalance,
-                }),
-            });
-        } catch (error) {
-            console.error('Failed to notify Slack about purchase:', error);
-        }
+        // Confirm to the student + alert staff (no-op until email is configured).
+        const studentEmail = session.user?.email ?? undefined;
+        if (studentEmail) void sendEmail(buildOrderConfirmation(order, studentEmail));
+        const adminMsg = buildAdminNewOrder(order);
+        if (adminMsg) void sendEmail(adminMsg);
 
         return NextResponse.json({
             order,
