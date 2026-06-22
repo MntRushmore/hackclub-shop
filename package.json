@@ -12,6 +12,7 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mui/material": "^6.1.10",
+    "@stripe/stripe-js": "^9.8.0",
     "@upstash/redis": "^1.36.1",
     "@vercel/blob": "^2.4.1",
     "autoprefixer": "^10.4.20",
@@ -22,6 +23,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-icons": "^5.4.0",
+    "stripe": "^22.2.2",
     "supercons": "^0.1.7"
   },
   "devDependencies": {
