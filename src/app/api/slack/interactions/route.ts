@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { mirrorOrder, mirrorUser } from '../../../../lib/airtableMirror';
+
+/** Mirror the single order matching orderId out of an updated orders array (best-effort). */
+function mirrorUpdatedOrder(updatedOrders: any[], orderId: string, userId: string) {
+    const updated = (updatedOrders || []).find((o: any) => o.id === orderId);
+    if (updated) void mirrorOrder({ ...updated, userId }, undefined);
+}
 
 const SLACK_SIGNING_SECRET = process.env.SLACK_SIGNING_SECRET;
 const SLACK_CHANNEL_ID = process.env.SLACK_CHANNEL_ID;
@@ -85,6 +92,7 @@ export async function POST(request: NextRequest) {
                                     return o;
                                 });
                                 await redis.set(`user:${userId}:orders`, updatedOrders);
+                                mirrorUpdatedOrder(updatedOrders, orderId, userId);
                                 break;
                             }
                         }
@@ -228,7 +236,8 @@ export async function POST(request: NextRequest) {
                                     
                                     await redis.set(`user:${userId}:balance`, newBalance);
                                     await redis.set(`user:${userId}:transactions`, newTransactions);
-                                    
+                                    void mirrorUser({ userId, balance: newBalance });
+
                                 }
                             } catch {
                             }
@@ -257,6 +266,7 @@ export async function POST(request: NextRequest) {
                                         return o;
                                     });
                                     await redis.set(`user:${userId}:orders`, updatedOrders);
+                                    mirrorUpdatedOrder(updatedOrders, orderId, userId);
                                     break;
                                 }
                             }
@@ -426,6 +436,7 @@ export async function POST(request: NextRequest) {
                                 return o;
                             });
                             await redis.set(`user:${userId}:orders`, updatedOrders);
+                            mirrorUpdatedOrder(updatedOrders, orderId, userId);
                             break;
                         }
                     }
@@ -618,6 +629,7 @@ export async function POST(request: NextRequest) {
                                 return o;
                             });
                             await redis.set(`user:${userId}:orders`, updatedOrders);
+                            mirrorUpdatedOrder(updatedOrders, orderId, userId);
                             break;
                         }
                     }
@@ -750,7 +762,8 @@ export async function POST(request: NextRequest) {
                             
                             await redis.set(`user:${userId}:balance`, newBalance);
                             await redis.set(`user:${userId}:transactions`, newTransactions);
-                            
+                            void mirrorUser({ userId, balance: newBalance });
+
                             refundSucceeded = true;
                         } else {
                         }
@@ -783,6 +796,7 @@ export async function POST(request: NextRequest) {
                                     return o;
                                 });
                                 await redis.set(`user:${userId}:orders`, updatedOrders);
+                                mirrorUpdatedOrder(updatedOrders, orderId, userId);
                                 break;
                             }
                         }
@@ -1001,7 +1015,8 @@ export async function POST(request: NextRequest) {
                             
                             await redis.set(`user:${userId}:balance`, newBalance);
                             await redis.set(`user:${userId}:transactions`, newTransactions);
-                            
+                            void mirrorUser({ userId, balance: newBalance });
+
                         }
                     } catch {
                     }

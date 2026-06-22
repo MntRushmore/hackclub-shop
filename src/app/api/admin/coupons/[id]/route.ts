@@ -4,6 +4,7 @@ import { Redis } from '@upstash/redis';
 import { authOptions } from '../../../auth/[...nextauth]/route';
 import { requireAdminPermission } from '../../../../../lib/adminAuth';
 import { Coupon } from '../../../../../types/Admin';
+import { mirrorCoupon, unmirrorCoupon } from '../../../../../lib/airtableMirror';
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -60,6 +61,7 @@ export async function PUT(
 
         await redis.set(`coupon:${params.id}`, updated);
         await redis.set(`coupon:${updated.code}`, updated);
+        void mirrorCoupon(updated);
         return NextResponse.json({ coupon: updated });
     } catch {
         return NextResponse.json({ error: 'Failed to update coupon' }, { status: 500 });
@@ -85,6 +87,7 @@ export async function DELETE(
 
         await redis.del(`coupon:${params.id}`);
         await redis.del(`coupon:${coupon.code}`);
+        void unmirrorCoupon(params.id);
         return NextResponse.json({ success: true });
     } catch {
         return NextResponse.json({ error: 'Failed to delete coupon' }, { status: 500 });

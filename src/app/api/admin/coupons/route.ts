@@ -4,6 +4,7 @@ import { Redis } from '@upstash/redis';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import { requireAdminPermission } from '../../../../lib/adminAuth';
 import { Coupon } from '../../../../types/Admin';
+import { mirrorCoupon } from '../../../../lib/airtableMirror';
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -86,6 +87,7 @@ export async function POST(request: Request) {
 
         await redis.set(`coupon:${coupon.id}`, coupon);
         await redis.set(`coupon:${coupon.code}`, coupon);
+        void mirrorCoupon(coupon);
         return NextResponse.json({ coupon }, { status: 201 });
     } catch {
         return NextResponse.json({ error: 'Failed to create coupon' }, { status: 500 });

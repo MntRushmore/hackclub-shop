@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { Redis } from '@upstash/redis';
 import { authOptions } from '../../../../auth/[...nextauth]/route';
 import { requireAdminPermission } from '../../../../../../lib/adminAuth';
+import { mirrorUser } from '../../../../../../lib/airtableMirror';
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -33,6 +34,7 @@ export async function PUT(
         const newBalance = Math.max(0, currentBalance + amount);
 
         await redis.set(`user:${userId}:balance`, newBalance);
+        void mirrorUser({ userId, balance: newBalance });
 
         const transaction = {
             id: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,

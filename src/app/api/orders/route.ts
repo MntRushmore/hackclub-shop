@@ -8,6 +8,7 @@ import { CreditTransaction } from '../../../types/Credits';
 import { PointsTransaction } from '../../../types/Points';
 import { validateCSRFToken } from '../../../lib/csrf';
 import { validateCartItems } from '../../../lib/productValidation';
+import { mirrorOrder, mirrorUser } from '../../../lib/airtableMirror';
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -247,6 +248,10 @@ export async function POST(request: Request) {
         }
 
         await Promise.all(savePromises);
+
+        // Best-effort mirror to Airtable for staff visibility (never blocks the order).
+        void mirrorOrder(order, slackId);
+        void mirrorUser({ userId, balance: newCreditsBalance, pointsBalance: newPointsBalance, slackId, email: session.user?.email ?? undefined });
 
         try {
             await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/slack/notify-purchase`, {

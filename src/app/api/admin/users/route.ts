@@ -1,0 +1,69 @@
+import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { Redis } from '@upstash/redis';
+import { authOptions } from '../../auth/[...nextauth]/route';
+import { requireAdminPermission, getAdminRole } from '../../../../lib/adminAuth';
+
+const redis = new Redis({
+    url: process.env.UPSTASH_REDIS_REST_URL!,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+});
+
+interface AdminUserRow {
+    userId: string;
+    balance: number;
+    pointsBalance: number;
+    slackId: string | null;
+    role: string | null;
+    orderCount: number;
+}
+
+// GET - list every known user with balance/points/role (admin view).
+// Users are implied by the existence of user:{id}:* keys.
+export async function GET() {
+    const session = await getServerSession(authOptions);
+    const canView = await requireAdminPermission(session, 'canViewStats');
+
+    if (!canView.allowed) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
+    try {
+        // Collect distinct user ids from balance, points, and order keys.
+        const keyPatterns = ['user:*:balance', 'user:*:pointsBalance', 'user:*:orders'];
+        const userIds = new Set<string>();
+        for (const pattern of keyPatterns) {
+            const keys = await redis.keys(pattern);
+            for (const key of keys) {
+                userIds.add(key.split(':')[1]);
+            }
+        }
+
+        const users: AdminUserRow[] = [];
+        for (const userId of userIds) {
+            const [balance, pointsBalance, slackId, orders, role] = await Promise.all([
+                redis.get<number>(`user:${userId}:balance`),
+                redis.get<number>(`user:${userId}:pointsBalance`),
+                redis.get<string>(`user:${userId}:slackId`),
+                redis.get<unknown[]>(`user:${userId}:orders`),
+                getAdminRole(userId),
+            ]);
+
+            users.push({
+                userId,
+                balance: balance ?? 0,
+                pointsBalance: pointsBalance ?? 0,
+                slackId: slackId ?? null,
+                role: role ?? null,
+                orderCount: Array.isArray(orders) ? orders.length : 0,
+            });
+        }
+
+        users.sort((a, b) => b.balance - a.balance);
+
+        return NextResponse.json({ users });
+    } catch (error) {
+        console.error('[Admin Users] Error:', error);
+        return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
+    }
+}

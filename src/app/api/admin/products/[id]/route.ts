@@ -4,6 +4,7 @@ import { Redis } from '@upstash/redis';
 import { authOptions } from '../../../auth/[...nextauth]/route';
 import { requireAdminPermission } from '../../../../../lib/adminAuth';
 import { Product } from '../../../../../types/Admin';
+import { mirrorProduct, unmirrorProduct } from '../../../../../lib/airtableMirror';
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -100,6 +101,7 @@ export async function PUT(
         };
 
         await redis.set(`product:${params.id}`, updated);
+        void mirrorProduct(updated);
         return NextResponse.json({ product: updated });
     } catch (error) {
         console.error('Update error:', error);
@@ -120,6 +122,7 @@ export async function DELETE(
 
     try {
         await redis.del(`product:${params.id}`);
+        void unmirrorProduct(params.id);
         return NextResponse.json({ success: true });
     } catch {
         return NextResponse.json({ error: 'Failed to delete product' }, { status: 500 });

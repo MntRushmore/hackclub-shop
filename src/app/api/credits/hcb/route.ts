@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { Redis } from '@upstash/redis';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import { CreditTransaction } from '../../../../types/Credits';
+import { mirrorUser } from '../../../../lib/airtableMirror';
 
 const HCB_ORG_SLUG = process.env.HCB_ORG_SLUG || 'ysws-combinator';
 const HCB_API_BASE = process.env.HCB_API_BASE || 'https://hcb.hackclub.com/api/v3';
@@ -160,6 +161,9 @@ export async function GET(request: Request) {
         if (slackId) {
             await redis.set(`user:${userId}:slackId`, slackId);
         }
+
+        // Best-effort mirror to Airtable for staff visibility.
+        void mirrorUser({ userId, balance: newBalance, slackId, email: session.user?.email ?? undefined });
 
         // Store which user claimed this donation
         await redis.set(`donation:${matchingDonation.id}:user`, userId);

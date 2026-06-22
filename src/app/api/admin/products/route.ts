@@ -4,6 +4,7 @@ import { Redis } from '@upstash/redis';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import { requireAdminPermission } from '../../../../lib/adminAuth';
 import { Product } from '../../../../types/Admin';
+import { mirrorProduct } from '../../../../lib/airtableMirror';
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -112,6 +113,7 @@ export async function POST(request: Request) {
         };
 
         await redis.set(`product:${product.id}`, product);
+        void mirrorProduct(product);
         return NextResponse.json({ product }, { status: 201 });
     } catch (error) {
         console.error(error);

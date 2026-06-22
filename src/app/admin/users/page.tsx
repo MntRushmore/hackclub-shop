@@ -1,9 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSession, signIn } from 'next-auth/react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+
+interface AdminUserRow {
+    userId: string;
+    balance: number;
+    pointsBalance: number;
+    slackId: string | null;
+    role: string | null;
+    orderCount: number;
+}
 
 export default function UsersAdmin() {
     const { status } = useSession();
@@ -12,6 +21,29 @@ export default function UsersAdmin() {
     const [reason, setReason] = useState('');
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    // Users list
+    const [users, setUsers] = useState<AdminUserRow[]>([]);
+    const [usersLoading, setUsersLoading] = useState(true);
+
+    const loadUsers = useCallback(async () => {
+        setUsersLoading(true);
+        try {
+            const res = await fetch('/api/admin/users');
+            if (res.ok) {
+                const data = await res.json();
+                setUsers(data.users || []);
+            }
+        } catch {
+            // best-effort; list just stays empty
+        } finally {
+            setUsersLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (status === 'authenticated') loadUsers();
+    }, [status, loadUsers]);
     
     // Points state
     const [pointsUserId, setPointsUserId] = useState('');
@@ -58,6 +90,7 @@ export default function UsersAdmin() {
             setUserId('');
             setAmount('');
             setReason('');
+            loadUsers();
         } catch {
             setMessage({ type: 'error', text: 'Failed to adjust balance' });
         } finally {
@@ -95,6 +128,7 @@ export default function UsersAdmin() {
             setPointsUserId('');
             setPointsAmount('');
             setPointsReason('');
+            loadUsers();
         } catch {
             setPointsMessage({ type: 'error', text: 'Failed to adjust points' });
         } finally {
@@ -127,6 +161,54 @@ export default function UsersAdmin() {
                     <p className="text-lg text-hackclub-slate font-medium mb-12">
                         Adjust user balances and credits
                     </p>
+
+                    <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-8 mb-8">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-black text-hackclub-dark">All Users</h2>
+                            <button
+                                onClick={loadUsers}
+                                className="text-sm font-bold text-hackclub-slate hover:text-hackclub-dark"
+                            >
+                                ↻ Refresh
+                            </button>
+                        </div>
+
+                        {usersLoading ? (
+                            <p className="text-hackclub-slate font-medium">Loading users…</p>
+                        ) : users.length === 0 ? (
+                            <p className="text-hackclub-slate font-medium">No users yet.</p>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm">
+                                    <thead>
+                                        <tr className="border-b-2 border-hackclub-smoke text-hackclub-slate">
+                                            <th className="py-2 pr-4 font-bold">User ID</th>
+                                            <th className="py-2 pr-4 font-bold">Balance</th>
+                                            <th className="py-2 pr-4 font-bold">Points</th>
+                                            <th className="py-2 pr-4 font-bold">Orders</th>
+                                            <th className="py-2 pr-4 font-bold">Role</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {users.map((u) => (
+                                            <tr
+                                                key={u.userId}
+                                                onClick={() => { setUserId(u.userId); setPointsUserId(u.userId); }}
+                                                className="border-b border-hackclub-smoke/50 hover:bg-hackclub-smoke/20 cursor-pointer"
+                                            >
+                                                <td className="py-2 pr-4 font-mono text-hackclub-dark">{u.userId}</td>
+                                                <td className="py-2 pr-4 font-bold text-hackclub-dark">${u.balance.toFixed(2)}</td>
+                                                <td className="py-2 pr-4 text-hackclub-dark">{u.pointsBalance}</td>
+                                                <td className="py-2 pr-4 text-hackclub-slate">{u.orderCount}</td>
+                                                <td className="py-2 pr-4 text-hackclub-slate">{u.role || '—'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                <p className="text-xs text-hackclub-slate mt-3">Click a row to fill the forms below with that user&apos;s ID.</p>
+                            </div>
+                        )}
+                    </div>
 
                     <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-8">
                         <h2 className="text-2xl font-black text-hackclub-dark mb-6">Adjust User Balance</h2>
