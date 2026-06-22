@@ -80,6 +80,8 @@ mirror upserts on, so make it the table's primary field.
 | `Total Amount` | Number (decimal) |
 | `Credits Paid` | Number (decimal) |
 | `Shipping Country` | Single line text |
+| `Shipping Address` | Long text (formatted, human-readable) |
+| `Shipping Address JSON` | Long text (structured, for payment/fulfillment) |
 | `Checkout Data JSON` | Long text |
 | `Status History JSON` | Long text |
 | `Created At` | Date (include time) |

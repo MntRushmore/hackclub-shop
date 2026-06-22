@@ -9,7 +9,11 @@ import { CartContext } from '../../context/CartContext';
 import { CreditsContext } from '../../context/CreditsContext';
 import { PointsContext } from '../../context/PointsContext';
 import { ShippingOption, CheckoutField } from '../../types/Admin';
+import { ShippingAddress } from '../../types/Order';
+import { COUNTRIES, EMPTY_ADDRESS, validateAddress } from '../../lib/address';
 import { UnifiedPaymentSlider } from '../components/UnifiedPaymentSlider';
+
+type CheckoutValue = string | ShippingAddress;
 
 const HCB_DONATE_BASE = process.env.NEXT_PUBLIC_HCB_DONATE_BASE || 'https://hcb.hackclub.com/donations/start/ysws-combinator';
 
@@ -23,7 +27,7 @@ const Checkout = () => {
     const [couponDiscount] = useState(0);
     const [appliedCoupon] = useState<string | null>(null);
     const [selectedShipping, setSelectedShipping] = useState<ShippingOption | null>(null);
-    const [checkoutData, setCheckoutData] = useState<Record<string, string>>({});
+    const [checkoutData, setCheckoutData] = useState<Record<string, CheckoutValue>>({});
     const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
     const [checkoutFields, setCheckoutFields] = useState<CheckoutField[]>([]);
     const [loadingCheckoutInfo, setLoadingCheckoutInfo] = useState(true);
@@ -171,19 +175,35 @@ const Checkout = () => {
 
     const validateCheckoutFields = (): boolean => {
         for (const field of checkoutFields) {
-            if (field.required && !checkoutData[field.name]) {
+            const value = checkoutData[field.name];
+
+            if (field.type === 'address') {
+                const errors = validateAddress(value as ShippingAddress | undefined);
+                if (field.required && errors.length > 0) {
+                    setError(errors[0]);
+                    return false;
+                }
+                continue;
+            }
+
+            if (field.required && (!value || typeof value !== 'string' || !value.trim())) {
                 setError(`${field.label} is required`);
                 return false;
             }
             if (field.name === 'email') {
                 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                if (!emailRegex.test(checkoutData[field.name])) {
+                if (!emailRegex.test(value as string)) {
                     setError('Please enter a valid email address');
                     return false;
                 }
             }
         }
         return true;
+    };
+
+    const updateAddressField = (fieldName: string, key: keyof ShippingAddress, val: string) => {
+        const current = (checkoutData[fieldName] as ShippingAddress) || EMPTY_ADDRESS;
+        setCheckoutData({ ...checkoutData, [fieldName]: { ...current, [key]: val } });
     };
 
     const handleCheckout = async () => {
@@ -308,31 +328,67 @@ const Checkout = () => {
                         {cart.length > 0 && checkoutFields.length > 0 && (
                             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-2xl bg-hackclub-smoke/30 border-2 border-hackclub-smoke space-y-3">
                                 <p className="font-bold text-hackclub-dark">Shipping Information</p>
-                                {checkoutFields.map((field, idx) => (
-                                    <div key={field.id || `field_${idx}`}>
-                                        <label className="block text-sm font-bold text-hackclub-slate mb-1">
-                                            {field.label}
-                                            {field.required && <span className="text-hackclub-red">*</span>}
-                                        </label>
-                                        {field.type === 'textarea' ? (
-                                            <textarea
-                                                placeholder={field.label}
-                                                value={checkoutData[field.name] || ''}
-                                                onChange={(e) => setCheckoutData({ ...checkoutData, [field.name]: e.target.value })}
-                                                className="w-full px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
-                                                rows={3}
-                                            />
-                                        ) : (
-                                            <input
-                                                type={field.type === 'address' ? 'text' : field.type}
-                                                placeholder={field.label}
-                                                value={checkoutData[field.name] || ''}
-                                                onChange={(e) => setCheckoutData({ ...checkoutData, [field.name]: e.target.value })}
-                                                className="w-full px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
-                                            />
-                                        )}
-                                    </div>
-                                ))}
+                                {checkoutFields.map((field, idx) => {
+                                    const inputClass = "w-full px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium";
+                                    if (field.type === 'address') {
+                                        const addr = (checkoutData[field.name] as ShippingAddress) || EMPTY_ADDRESS;
+                                        return (
+                                            <div key={field.id || `field_${idx}`} className="space-y-2">
+                                                <label className="block text-sm font-bold text-hackclub-slate mb-1">
+                                                    {field.label}
+                                                    {field.required && <span className="text-hackclub-red">*</span>}
+                                                </label>
+                                                <input className={inputClass} placeholder="Full name" autoComplete="name"
+                                                    value={addr.name} onChange={(e) => updateAddressField(field.name, 'name', e.target.value)} />
+                                                <input className={inputClass} placeholder="Address line 1" autoComplete="address-line1"
+                                                    value={addr.line1} onChange={(e) => updateAddressField(field.name, 'line1', e.target.value)} />
+                                                <input className={inputClass} placeholder="Address line 2 (optional)" autoComplete="address-line2"
+                                                    value={addr.line2 || ''} onChange={(e) => updateAddressField(field.name, 'line2', e.target.value)} />
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <input className={inputClass} placeholder="City" autoComplete="address-level2"
+                                                        value={addr.city} onChange={(e) => updateAddressField(field.name, 'city', e.target.value)} />
+                                                    <input className={inputClass} placeholder="State / Province" autoComplete="address-level1"
+                                                        value={addr.state} onChange={(e) => updateAddressField(field.name, 'state', e.target.value)} />
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <input className={inputClass} placeholder="Postal code" autoComplete="postal-code"
+                                                        value={addr.postal_code} onChange={(e) => updateAddressField(field.name, 'postal_code', e.target.value)} />
+                                                    <select className={inputClass} autoComplete="country"
+                                                        value={addr.country} onChange={(e) => updateAddressField(field.name, 'country', e.target.value)}>
+                                                        {COUNTRIES.map((c) => (
+                                                            <option key={c.code} value={c.code}>{c.name}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+                                    return (
+                                        <div key={field.id || `field_${idx}`}>
+                                            <label className="block text-sm font-bold text-hackclub-slate mb-1">
+                                                {field.label}
+                                                {field.required && <span className="text-hackclub-red">*</span>}
+                                            </label>
+                                            {field.type === 'textarea' ? (
+                                                <textarea
+                                                    placeholder={field.label}
+                                                    value={(checkoutData[field.name] as string) || ''}
+                                                    onChange={(e) => setCheckoutData({ ...checkoutData, [field.name]: e.target.value })}
+                                                    className={inputClass}
+                                                    rows={3}
+                                                />
+                                            ) : (
+                                                <input
+                                                    type={field.type}
+                                                    placeholder={field.label}
+                                                    value={(checkoutData[field.name] as string) || ''}
+                                                    onChange={(e) => setCheckoutData({ ...checkoutData, [field.name]: e.target.value })}
+                                                    className={inputClass}
+                                                />
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </motion.div>
                         )}
 

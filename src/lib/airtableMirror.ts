@@ -17,6 +17,7 @@
 
 import { Order } from '../types/Order';
 import { Product } from '../types/Admin';
+import { formatAddress } from './address';
 
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
@@ -62,8 +63,7 @@ async function findRecordId(table: string, keyField: string, keyValue: string): 
     return data.records?.[0]?.id ?? null;
 }
 
-async function upsert(table: string, keyField: string, keyValue: string, fields: Record<string, unknown>) {
-    const existingId = await findRecordId(table, keyField, keyValue);
+async function writeRecord(table: string, existingId: string | null, fields: Record<string, unknown>) {
     if (existingId) {
         await airtable(`${tableUrl(table)}/${existingId}`, {
             method: 'PATCH',
@@ -74,6 +74,29 @@ async function upsert(table: string, keyField: string, keyValue: string, fields:
             method: 'POST',
             body: JSON.stringify({ records: [{ fields }], typecast: true }),
         });
+    }
+}
+
+async function upsert(table: string, keyField: string, keyValue: string, fields: Record<string, unknown>) {
+    const existingId = await findRecordId(table, keyField, keyValue);
+    const payload = { ...fields };
+
+    // Self-heal against schema drift: if a field doesn't exist in the table yet,
+    // drop it and retry so the rest of the record still syncs. Bounded retries.
+    for (let attempt = 0; attempt < 6; attempt++) {
+        try {
+            await writeRecord(table, existingId, payload);
+            return;
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            const match = msg.match(/Unknown field name: "([^"]+)"/);
+            if (match && match[1] in payload) {
+                delete payload[match[1]];
+                console.warn(`[airtableMirror] dropping unknown field "${match[1]}" on ${table}`);
+                continue;
+            }
+            throw err;
+        }
     }
 }
 
@@ -133,6 +156,8 @@ export function mirrorOrder(order: Order, slackId?: string): Promise<void> {
             'Total Amount': order.totalAmount,
             'Credits Paid': order.creditsPaid,
             'Shipping Country': order.shippingCountry || '',
+            'Shipping Address': order.shippingAddress ? formatAddress(order.shippingAddress) : '',
+            'Shipping Address JSON': order.shippingAddress ? JSON.stringify(order.shippingAddress) : '',
             'Checkout Data JSON': JSON.stringify(order.checkoutData || {}),
             'Status History JSON': JSON.stringify(order.statusHistory || []),
             'Created At': new Date(order.createdAt).toISOString(),

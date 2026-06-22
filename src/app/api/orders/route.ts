@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { Redis } from '@upstash/redis';
 import { authOptions } from '../auth/[...nextauth]/route';
-import { Order } from '../../../types/Order';
+import { Order, ShippingAddress } from '../../../types/Order';
+import { isStructuredAddress, validateAddress } from '../../../lib/address';
 import { rateLimit, rateLimitResponse } from '../../../lib/rateLimit';
 import { CreditTransaction } from '../../../types/Credits';
 import { PointsTransaction } from '../../../types/Points';
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
             shippingPaymentCash?: number;
             shippingPaymentPoints?: number;
             shippingCountry?: string;
-            checkoutData?: Record<string, string>;
+            checkoutData?: Record<string, string | ShippingAddress>;
             csrfToken?: string;
             idempotencyKey?: string;
             couponDiscount?: number;
@@ -168,6 +169,23 @@ export async function POST(request: Request) {
             }, { status: 400 });
         }
 
+        // Extract + validate the structured shipping address (if present in checkoutData).
+        let shippingAddress: ShippingAddress | undefined;
+        for (const value of Object.values(checkoutData || {})) {
+            if (isStructuredAddress(value)) {
+                shippingAddress = value as ShippingAddress;
+                break;
+            }
+        }
+        if (shippingAddress) {
+            const addrErrors = validateAddress(shippingAddress);
+            if (addrErrors.length > 0) {
+                return NextResponse.json({ error: addrErrors[0] }, { status: 400 });
+            }
+        }
+        // Prefer the address's country for shipping when available.
+        const resolvedShippingCountry = shippingAddress?.country || shippingCountry;
+
         // Create order with verified items
         const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         const now = new Date();
@@ -188,7 +206,8 @@ export async function POST(request: Request) {
             shippingCost: shippingCostNum,
             totalAmount: verifiedCashTotal,
             creditsPaid: verifiedCashTotal,
-            shippingCountry,
+            shippingCountry: resolvedShippingCountry,
+            shippingAddress,
             checkoutData: checkoutData || {},
             status: 'pending',
             statusHistory: [
