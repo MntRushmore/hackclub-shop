@@ -1,6 +1,6 @@
 import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
-import { authOptions } from '../../../../auth/[...nextauth]/route';
+import { authOptions } from '../../../../../../lib/authOptions';
 import { requireAdminPermission } from '../../../../../../lib/adminAuth';
 import { getWeeklyReport } from '../../../../../../lib/finance';
 

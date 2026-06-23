@@ -23,25 +23,14 @@ export default function AdminDashboard() {
     useEffect(() => {
         const checkAdmin = async () => {
             if (!session?.user?.id) {
-                console.log('No session or user ID');
                 setLoading(false);
                 return;
             }
 
-            console.log('Checking admin status for user:', session.user.id);
-
             try {
                 const res = await fetch('/api/admin/stats');
-                console.log('Admin check response:', res.status);
-                if (res.ok) {
-                    console.log('User is admin');
-                    setIsAdmin(true);
-                } else {
-                    console.log('User is not admin');
-                    setIsAdmin(false);
-                }
-            } catch (error) {
-                console.error('Admin check error:', error);
+                setIsAdmin(res.ok);
+            } catch {
                 setIsAdmin(false);
             } finally {
                 setLoading(false);
@@ -251,6 +240,23 @@ export default function AdminDashboard() {
                                     </div>
                                     <h3 className="text-xl font-black text-hackclub-dark mb-2">Finance</h3>
                                     <p className="text-hackclub-slate text-sm">Inventory value, cost of goods, margins, weekly reports</p>
+                                </div>
+                            </Link>
+                        </motion.div>
+
+                        {/* Sourcing */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.53 }}
+                        >
+                            <Link href="/admin/sourcing">
+                                <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-6 hover:shadow-xl hover:border-hackclub-blue transition-all cursor-pointer group">
+                                    <div className="w-12 h-12 bg-hackclub-blue/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-hackclub-blue/20 transition-colors">
+                                        <Icon glyph="briefcase" size={24} style={{ color: 'var(--hackclub-blue, #3291FF)' }} />
+                                    </div>
+                                    <h3 className="text-xl font-black text-hackclub-dark mb-2">Sourcing</h3>
+                                    <p className="text-hackclub-slate text-sm">Vendors, quotes, and procurement — compare merch pricing</p>
                                 </div>
                             </Link>
                         </motion.div>

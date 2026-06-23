@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { randomBytes } from 'crypto';
 import { Redis } from '@upstash/redis';
-import { authOptions } from '../../../auth/[...nextauth]/route';
+import { authOptions } from '../../../../../lib/authOptions';
 import { isAdmin } from '../../../../../lib/adminAuth';
 import { isHcbConfigured, buildAuthorizeUrl } from '../../../../../lib/hcb';
 

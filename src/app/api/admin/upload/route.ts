@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { put } from '@vercel/blob';
-import { authOptions } from '../../auth/[...nextauth]/route';
+import { authOptions } from '../../../../lib/authOptions';
 import { requireAdminPermission } from '../../../../lib/adminAuth';
 
 export const runtime = 'nodejs';
 
 const MAX_BYTES = 8 * 1024 * 1024; // 8MB
-const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml'];
+// SVG deliberately excluded: it can embed <script> and become stored XSS if the
+// asset is ever rendered same-origin. Product images don't need vector formats.
+const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 
 export async function POST(request: Request) {
     const session = await getServerSession(authOptions);
@@ -34,7 +36,7 @@ export async function POST(request: Request) {
 
         if (!ALLOWED_TYPES.includes(file.type)) {
             return NextResponse.json(
-                { error: `Unsupported file type: ${file.type || 'unknown'}. Use PNG, JPEG, WebP, GIF, or SVG.` },
+                { error: `Unsupported file type: ${file.type || 'unknown'}. Use PNG, JPEG, WebP, or GIF.` },
                 { status: 400 },
             );
         }

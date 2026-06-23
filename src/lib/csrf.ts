@@ -1,6 +1,6 @@
 import { Redis } from '@upstash/redis';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '../app/api/auth/[...nextauth]/route';
+import { authOptions } from './authOptions';
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,

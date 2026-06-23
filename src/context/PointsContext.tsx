@@ -48,55 +48,23 @@ export const PointsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
     }, [status, fetchPoints]);
 
-    const earnPoints = useCallback(async (amount: number, description?: string) => {
-        if (status !== 'authenticated') return;
+    // Points are money-equivalent (1 point = $1) and may only be mutated by
+    // trusted server-side flows: admin grants / project approval for earning,
+    // and order creation (/api/orders) for spending. There is no client-writable
+    // points endpoint. earnPoints/spendPoints are kept as no-ops for backward
+    // compatibility with the context type; call refreshPoints() after an order
+    // to pull the authoritative server balance.
+    const earnPoints = useCallback(async () => {
+        // Earning happens server-side only. Refresh to reflect any new balance.
+        await fetchPoints();
+    }, [fetchPoints]);
 
-        try {
-            const response = await fetch('/api/points/user', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ amount, description }),
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                setBalance(data.balance);
-                setTransactions(prev => [{
-                    ...data.transaction,
-                    timestamp: new Date(data.transaction.timestamp)
-                }, ...prev]);
-            }
-        } catch (error) {
-            console.error('Failed to add points:', error);
-        }
-    }, [status]);
-
-    const spendPoints = useCallback(async (amount: number, orderId?: string): Promise<boolean> => {
-        if (status !== 'authenticated') return false;
-        if (amount > balance) return false;
-
-        try {
-            const response = await fetch('/api/points/user', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ amount, orderId }),
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                setBalance(data.balance);
-                setTransactions(prev => [{
-                    ...data.transaction,
-                    timestamp: new Date(data.transaction.timestamp)
-                }, ...prev]);
-                return true;
-            }
-            return false;
-        } catch (error) {
-            console.error('Failed to spend points:', error);
-            return false;
-        }
-    }, [status, balance]);
+    const spendPoints = useCallback(async (amount: number): Promise<boolean> => {
+        // Spending is handled atomically inside order creation server-side.
+        // Refresh to reflect the post-order balance; never mutate locally.
+        await fetchPoints();
+        return amount <= balance;
+    }, [fetchPoints, balance]);
 
     const canAfford = useCallback((amount: number) => balance >= amount, [balance]);
 
