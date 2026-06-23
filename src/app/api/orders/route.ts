@@ -8,6 +8,7 @@ import { rateLimit, rateLimitResponse } from '../../../lib/rateLimit';
 import { PointsTransaction } from '../../../types/Points';
 import { validateCSRFToken } from '../../../lib/csrf';
 import { validateCartItems } from '../../../lib/productValidation';
+import { commitImmediate, restock, StockLine } from '../../../lib/inventory';
 import { mirrorOrder, mirrorUser } from '../../../lib/airtableMirror';
 import { sendEmail, buildOrderConfirmation, buildAdminNewOrder } from '../../../lib/email';
 
@@ -58,6 +59,8 @@ export async function POST(request: Request) {
         return rateLimitResponse();
     }
 
+    // Stock decremented for this attempt; restocked if the order then fails to save.
+    let committedStock: StockLine[] | null = null;
     try {
         const { items, pointsRequired, shippingCountry, shippingPointsCost, checkoutData, csrfToken, idempotencyKey } = await request.json() as {
             items: { id: string; name: string; price: string; quantity: number; variant_id?: string | number }[];
@@ -132,6 +135,25 @@ export async function POST(request: Request) {
                 balance: pointsBalance
             }, { status: 400 });
         }
+
+        // Decrement stock immediately — points orders settle in-request, so there's
+        // no reservation window. Fails closed before any points are deducted; if
+        // anything below throws, we release the units so they aren't leaked.
+        const stockLines: StockLine[] = validation.items!.map(i => ({ variantId: i.variantId, quantity: i.quantity }));
+        const stockResult = await commitImmediate(stockLines);
+        if (!stockResult.ok) {
+            const oversold = validation.items!.find(i => i.variantId === stockResult.variantId);
+            const name = oversold?.name || 'An item';
+            return NextResponse.json(
+                {
+                    error: stockResult.available > 0
+                        ? `Only ${stockResult.available} of ${name} left — please reduce the quantity.`
+                        : `${name} just sold out.`,
+                },
+                { status: 409 },
+            );
+        }
+        committedStock = stockLines;
 
         // Extract + validate the structured shipping address (if present in checkoutData).
         let shippingAddress: ShippingAddress | undefined;
@@ -238,6 +260,9 @@ export async function POST(request: Request) {
         });
     } catch (error) {
         console.error('[Orders API] Error creating order:', error);
+        // If we'd already decremented stock for this attempt, give it back so a
+        // failed save doesn't strand units. restock() is best-effort/no-throw.
+        if (committedStock) void restock(committedStock);
         return NextResponse.json({ error: 'Failed to create order' }, { status: 500 });
     }
 }

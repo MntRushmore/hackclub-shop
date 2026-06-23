@@ -69,6 +69,7 @@ export interface VerifiedCartItem {
     pricePoints?: number;   // verified per-unit points price (student path)
     quantity: number;
     thumbnail_url?: string;
+    variantId: string;      // canonical variant id, for stock reservation
 }
 
 /**
@@ -141,6 +142,7 @@ export async function validateCartItems(items: CartItemForValidation[]): Promise
             pricePoints: price_points,
             quantity: item.quantity,
             thumbnail_url: variant.image_url || product.image_url || product.thumbnail_url,
+            variantId: String(variant.variant_id || variant.id),
         });
     }
 

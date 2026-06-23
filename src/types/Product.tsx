@@ -7,6 +7,7 @@ export interface Variant {
     // price_cash (USD) → adult/Stripe path; price_points → student path.
     price_cash?: number;
     price_points?: number;
+    available?: number | null; // null = unlimited; number = units left
     size: string;
     color: string;
     product: {
