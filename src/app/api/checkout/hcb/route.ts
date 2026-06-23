@@ -125,7 +125,12 @@ export async function POST(request: Request) {
         // From here on, a failure must release the stock we just reserved so a
         // crashed checkout doesn't leak held units.
         try {
-            const donateUrl = buildDonationUrl({ amountUsd: totalAmount, email: email || undefined, orderId });
+            const donateUrl = buildDonationUrl({
+                amountUsd: totalAmount,
+                email: email || undefined,
+                name: shippingAddress?.name || undefined,
+                orderId,
+            });
 
             const now = new Date();
             const order: Order = {
