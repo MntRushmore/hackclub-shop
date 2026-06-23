@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../../auth/[...nextauth]/route';
+import { authOptions } from '../../../../../../lib/authOptions';
 import { requireAdminPermission } from '../../../../../../lib/adminAuth';
 import { findOrder, patchOrder, orderEmail } from '../../../../../../lib/orderStore';
 import { mirrorOrder } from '../../../../../../lib/airtableMirror';

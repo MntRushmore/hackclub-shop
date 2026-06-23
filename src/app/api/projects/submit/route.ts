@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '../../auth/[...nextauth]/route';
+import { authOptions } from '../../../../lib/authOptions';
 import { createProjectSubmission } from '../../../../lib/airtable';
 import { rateLimit, rateLimitResponse } from '../../../../lib/rateLimit';
 

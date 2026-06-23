@@ -40,7 +40,8 @@ export function isEmailConfigured(): boolean {
  */
 export async function sendEmail(msg: EmailMessage): Promise<boolean> {
     if (!isEmailConfigured()) {
-        console.log(`[email] skipped (no provider configured): "${msg.subject}" -> ${msg.to}`);
+        // Don't log the recipient address (PII); the subject is enough to debug.
+        console.log(`[email] skipped (no provider configured): "${msg.subject}"`);
         return false;
     }
     try {

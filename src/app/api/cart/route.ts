@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { Redis } from '@upstash/redis';
-import { authOptions } from '../auth/[...nextauth]/route';
+import { authOptions } from '../../../lib/authOptions';
 
 /**
  * Per-student server-side cart, so a logged-in hack clubber's cart follows them

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { Redis } from '@upstash/redis';
-import { authOptions } from '../../auth/[...nextauth]/route';
+import { authOptions } from '../../../../lib/authOptions';
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -16,13 +16,9 @@ export async function POST() {
     }
 
     const newUserId = session.user.id;
-    const slackId = (session.user as any)?.slackId;
     const identityId = (session.user as any)?.identityId;
 
-    console.log('[Migration] User IDs:', { newUserId, slackId, identityId });
-
     if (!identityId || identityId === newUserId) {
-        console.log('[Migration] No migration needed - identityId === newUserId or missing identityId');
         return NextResponse.json({ migrated: false, message: 'No migration needed' });
     }
 
@@ -36,29 +32,31 @@ export async function POST() {
         const oldTransactions = await redis.get<any[]>(`user:${identityId}:transactions`);
         const oldOrders = await redis.get<any[]>(`user:${identityId}:orders`);
 
-        console.log('[Migration] Found old data:', { 
-            hasBalance: oldBalance !== null && oldBalance !== undefined,
-            transactionCount: oldTransactions?.length || 0,
-            orderCount: oldOrders?.length || 0,
-        });
-
-        if (oldBalance === null && oldBalance === undefined && !oldTransactions && !oldOrders) {
-            console.log('[Migration] No old data found at user:', identityId);
+        const hasOldBalance = oldBalance !== null && oldBalance !== undefined;
+        if (!hasOldBalance && !oldTransactions && !oldOrders) {
             return NextResponse.json({ migrated: false, message: 'No old data found' });
         }
 
         const promises = [];
-        
-        if (oldBalance !== null && oldBalance !== undefined) {
-            console.log('[Migration] Migrating balance:', oldBalance);
-            promises.push(redis.set(`user:${newUserId}:balance`, oldBalance));
+
+        // Never overwrite a balance the destination account already accumulated —
+        // only import the legacy balance into a fresh (zero/empty) account. This
+        // makes the migration a safe one-shot import, not a clobber/replay
+        // primitive even if the :migrated guard were ever cleared.
+        if (hasOldBalance) {
+            const existingBalance = await redis.get<number>(`user:${newUserId}:pointsBalance`);
+            const existingLegacyBalance = await redis.get<number>(`user:${newUserId}:balance`);
+            const destinationEmpty =
+                (existingBalance === null || existingBalance === undefined || existingBalance === 0) &&
+                (existingLegacyBalance === null || existingLegacyBalance === undefined || existingLegacyBalance === 0);
+            if (destinationEmpty) {
+                promises.push(redis.set(`user:${newUserId}:balance`, oldBalance));
+            }
         }
         if (oldTransactions) {
-            console.log('[Migration] Migrating transactions count:', oldTransactions.length);
             promises.push(redis.set(`user:${newUserId}:transactions`, oldTransactions));
         }
         if (oldOrders) {
-            console.log('[Migration] Migrating orders count:', oldOrders.length);
             promises.push(redis.set(`user:${newUserId}:orders`, oldOrders));
         }
 
@@ -66,7 +64,6 @@ export async function POST() {
 
         await Promise.all(promises);
 
-        console.log('[Migration] Migration completed successfully');
         return NextResponse.json({
             migrated: true,
             message: 'User data migrated successfully',
