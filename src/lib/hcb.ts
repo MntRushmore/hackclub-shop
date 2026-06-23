@@ -229,6 +229,8 @@ interface HcbDonation {
     message?: string;
     donated_at?: string;
     refunded?: boolean;
+    in_transit?: boolean;   // money sent, not yet cleared — still a valid payment
+    deposited?: boolean;
     utm_source?: string;
     utm_content?: string;
 }
@@ -310,7 +312,10 @@ export async function findDonationForOrder(
     for (const tx of txns) {
         const d = tx.donation;
         if (!d) continue;
-        if (tx.pending || tx.declined || d.refunded) continue;
+        // Accept a donation that's settled OR in flight (pending / in_transit) —
+        // the donor has committed the money; it just hasn't cleared yet. Only a
+        // declined or refunded donation is disqualifying.
+        if (tx.declined || d.refunded) continue;
         if (d.utm_content !== orderId) continue;
 
         // Secondary guard: the donated amount must cover the order total. HCB
@@ -325,4 +330,121 @@ export async function findDonationForOrder(
         return { txId: tx.id || '', donatedAt: d.donated_at };
     }
     return null;
+}
+
+// ── Diagnostics ──────────────────────────────────────────────────────────────
+
+export interface HcbDiagnostics {
+    configured: boolean;
+    connected: boolean;
+    orgId?: string;
+    apiBase: string;
+    requestedScope: string;          // what we send at authorize time
+    tokenMinted: boolean;
+    tokenScopes?: string;            // scopes on the access token, per the token response
+    transactionsStatus?: number;     // raw HTTP status from the transactions call
+    transactionsBodySnippet?: string;// first chunk of the raw body (errors are visible here)
+    transactionCount?: number;
+    donationCount?: number;
+    donationsSeen?: Array<{ txId?: string; amount_cents?: number; pending?: boolean; declined?: boolean; refunded?: boolean; in_transit?: boolean; utm_content?: string; donated_at?: string }>;
+    // When an orderId is supplied: why each donation did/didn't match it.
+    orderId?: string;
+    matchResult?: { matched: boolean; reason: string; txId?: string };
+}
+
+/**
+ * Run the full reconciliation path with FULL visibility (no swallowed errors),
+ * for the admin debug endpoint. Mints a token, hits the transactions endpoint,
+ * and reports the raw status/body + every donation it can see, plus — if an
+ * orderId is given — exactly why the match did or didn't happen.
+ */
+export async function diagnoseHcb(orderId?: string, expectedAmountCents?: number): Promise<HcbDiagnostics> {
+    const diag: HcbDiagnostics = {
+        configured: isHcbConfigured(),
+        connected: await isHcbConnected(),
+        orgId: process.env.HCB_ORG_ID,
+        apiBase: apiBase(),
+        requestedScope: process.env.HCB_OAUTH_SCOPE ?? 'read',
+        tokenMinted: false,
+        orderId,
+    };
+
+    // Mint a token, capturing its granted scopes from the token response.
+    let refreshToken: string | null = null;
+    try { refreshToken = await redis.get<string>(REDIS_REFRESH_KEY); } catch { /* noted below */ }
+    if (refreshToken) {
+        const tok = await postToken({
+            grant_type: 'refresh_token',
+            refresh_token: refreshToken,
+            client_id: process.env.HCB_CLIENT_ID || '',
+            client_secret: process.env.HCB_CLIENT_SECRET || '',
+        });
+        if (tok?.access_token) {
+            diag.tokenMinted = true;
+            diag.tokenScopes = (tok as { scope?: string }).scope;
+        }
+    }
+
+    const token = await getAccessToken();
+    if (!token) {
+        diag.transactionsBodySnippet = diag.connected ? 'token mint failed (refresh token present but no access token)' : 'not connected (no refresh token stored)';
+        return diag;
+    }
+
+    const orgId = process.env.HCB_ORG_ID;
+    if (!orgId) { diag.transactionsBodySnippet = 'HCB_ORG_ID not set'; return diag; }
+
+    try {
+        const res = await fetch(`${apiBase()}/organizations/${encodeURIComponent(orgId)}/transactions`, {
+            headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+            cache: 'no-store',
+        });
+        diag.transactionsStatus = res.status;
+        const text = await res.text();
+        diag.transactionsBodySnippet = text.slice(0, 400);
+        if (!res.ok) return diag;
+
+        let data: unknown;
+        try { data = JSON.parse(text); } catch { return diag; }
+        const list = Array.isArray(data) ? data : ((data as Record<string, unknown>)?.transactions ?? (data as Record<string, unknown>)?.data ?? []);
+        const txns = (Array.isArray(list) ? list : []) as HcbTransaction[];
+        diag.transactionCount = txns.length;
+
+        const donations = txns.filter(t => t.donation);
+        diag.donationCount = donations.length;
+        diag.donationsSeen = donations.slice(0, 20).map(t => ({
+            txId: t.id,
+            amount_cents: t.amount_cents,
+            pending: t.pending,
+            declined: t.declined,
+            refunded: t.donation?.refunded,
+            in_transit: t.donation?.in_transit,
+            utm_content: t.donation?.utm_content,
+            donated_at: t.donation?.donated_at,
+        }));
+
+        if (orderId) {
+            let reason = 'no donation with a matching utm_content found';
+            for (const t of txns) {
+                const d = t.donation;
+                if (!d) continue;
+                if (d.utm_content !== orderId) continue;
+                // Found one tagged for this order — explain its state. Pending /
+                // in_transit are ACCEPTED (money committed); only declined/refunded block.
+                if (t.declined) { reason = `tagged donation found but DECLINED (txId ${t.id})`; continue; }
+                if (d.refunded) { reason = `tagged donation found but REFUNDED (txId ${t.id})`; continue; }
+                const amt = typeof t.amount_cents === 'number' ? Math.abs(t.amount_cents) : 0;
+                if (typeof expectedAmountCents === 'number' && amt + 1 < expectedAmountCents) {
+                    reason = `tagged donation found but underpays: ${amt}¢ < ${expectedAmountCents}¢ (txId ${t.id})`;
+                    continue;
+                }
+                diag.matchResult = { matched: true, reason: `matched (txId ${t.id})${t.pending ? ' [pending/in_transit accepted]' : ''}`, txId: t.id };
+                return diag;
+            }
+            diag.matchResult = { matched: false, reason };
+        }
+    } catch (err) {
+        diag.transactionsBodySnippet = `fetch error: ${err instanceof Error ? err.message : String(err)}`;
+    }
+    return diag;
 }
