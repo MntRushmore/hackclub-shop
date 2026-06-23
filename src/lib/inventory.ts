@@ -46,14 +46,34 @@ export interface VariantStock {
     available: number | null; // null when untracked (unlimited)
 }
 
+/**
+ * Read the base stock for a variant. Returns null for a clean miss (untracked →
+ * unlimited). THROWS on a Redis read error so callers that gate sales can tell a
+ * genuine "no stock tracked" apart from "couldn't read" and fail closed.
+ */
+async function readStockStrict(variantId: string): Promise<number | null> {
+    const cached = await redis.get<StockCache>(stockKey(variantId));
+    if (cached && typeof cached.stock === 'number') return cached.stock;
+    return null;
+}
+
+/** Lenient read for display/snapshot paths: a read error degrades to null. */
 async function readStock(variantId: string): Promise<number | null> {
     try {
-        const cached = await redis.get<StockCache>(stockKey(variantId));
-        if (cached && typeof cached.stock === 'number') return cached.stock;
-        return null;
+        return await readStockStrict(variantId);
     } catch {
         return null;
     }
+}
+
+/** Sum line quantities by variant so a duplicated variantId can't be mis-counted. */
+function coalesce(lines: StockLine[]): StockLine[] {
+    const map = new Map<string, number>();
+    for (const l of lines) {
+        if (!l.variantId || l.quantity <= 0) continue;
+        map.set(l.variantId, (map.get(l.variantId) || 0) + l.quantity);
+    }
+    return Array.from(map, ([variantId, quantity]) => ({ variantId, quantity }));
 }
 
 async function readReserved(variantId: string): Promise<number> {
@@ -108,17 +128,28 @@ export async function setStock(variantId: string, stock: number | null): Promise
 export async function reserve(lines: StockLine[]): Promise<
     { ok: true } | { ok: false; variantId: string; available: number }
 > {
+    // Coalesce so the same variant across multiple cart rows is checked once
+    // against one base-stock read (otherwise each line compares against a stale
+    // base and the count is wrong).
+    const merged = coalesce(lines);
     const applied: StockLine[] = [];
-    for (const line of lines) {
-        if (line.quantity <= 0) continue;
-        const stock = await readStock(line.variantId);
-        if (stock === null) continue; // untracked → unlimited
+    for (const line of merged) {
+        let stock: number | null;
+        try {
+            stock = await readStockStrict(line.variantId);
+        } catch (err) {
+            // Couldn't read stock → can't prove availability. Fail CLOSED so a
+            // transient Redis error never silently disables oversell protection.
+            console.error('[inventory] reserve read failed (failing closed):', err instanceof Error ? err.message : err);
+            await rollback(applied);
+            return { ok: false, variantId: line.variantId, available: 0 };
+        }
+        if (stock === null) continue; // clean miss → untracked → unlimited
 
         let newReserved: number;
         try {
             newReserved = await redis.incrby(reservedKey(line.variantId), line.quantity);
         } catch (err) {
-            // Can't reserve safely → fail closed for this tracked line.
             console.error('[inventory] reserve incrby failed:', err instanceof Error ? err.message : err);
             await rollback(applied);
             return { ok: false, variantId: line.variantId, available: 0 };
@@ -138,7 +169,24 @@ export async function reserve(lines: StockLine[]): Promise<
 
 /** Release a held reservation (Stripe session expired/cancelled). Best-effort. */
 export async function release(lines: StockLine[]): Promise<void> {
-    await rollback(lines);
+    await rollback(coalesce(lines));
+}
+
+/**
+ * Claim the one-time right to settle an order's inventory (commit or release),
+ * so Stripe's at-least-once webhook delivery can't double-apply it. Returns true
+ * for the first caller only. SET NX is atomic, so concurrent duplicate deliveries
+ * race and exactly one wins. On a Redis error we return true (fail open) — the
+ * webhook's own paymentStatus guard still covers the common duplicate case.
+ */
+export async function claimOrderSettlement(orderId: string): Promise<boolean> {
+    try {
+        const res = await redis.set(`inventory:settled:${orderId}`, Date.now(), { nx: true, ex: 60 * 60 * 24 * 30 });
+        return res === 'OK';
+    } catch (err) {
+        console.error('[inventory] settlement claim failed:', err instanceof Error ? err.message : err);
+        return true;
+    }
 }
 
 /**
@@ -147,8 +195,7 @@ export async function release(lines: StockLine[]): Promise<void> {
  * the spreadsheet stays roughly current. Used by the Stripe webhook on payment.
  */
 export async function commitReserved(lines: StockLine[], mirror?: (variantId: string, stock: number) => void): Promise<void> {
-    for (const line of lines) {
-        if (line.quantity <= 0) continue;
+    for (const line of coalesce(lines)) {
         await safeDecr(line.variantId, line.quantity);
         const stock = await readStock(line.variantId);
         if (stock === null) continue;
@@ -182,8 +229,7 @@ export async function commitImmediate(
  * left untouched.
  */
 export async function restock(lines: StockLine[]): Promise<void> {
-    for (const line of lines) {
-        if (line.quantity <= 0) continue;
+    for (const line of coalesce(lines)) {
         const stock = await readStock(line.variantId);
         if (stock === null) continue; // untracked → nothing to restore
         await setStock(line.variantId, stock + line.quantity);

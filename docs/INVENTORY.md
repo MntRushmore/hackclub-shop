@@ -88,9 +88,23 @@ base **without touching `reserved`**. So:
   wired later; today none is passed, so Redis leads Airtable between counts.)
 
 Everything in `inventory.ts` is **fire-and-forget safe** like the email and
-Airtable-mirror layers: a Redis/Airtable hiccup degrades to "treat as available"
-rather than blocking a purchase, EXCEPT the explicit oversell check at checkout,
-which fails closed (rejects) only when it can positively prove `available < qty`.
+Airtable-mirror layers: a Redis/Airtable hiccup on a display/snapshot path
+degrades to "treat as available" rather than blocking a purchase. The checkout
+oversell check (`reserve`) is stricter: it reads stock via `readStockStrict`,
+which **throws** on a Redis read error (vs. returning `null` for a clean miss), so
+a transient read failure **fails closed** (rejects the reservation) instead of
+silently disabling oversell protection. A clean miss still means "untracked →
+unlimited".
+
+Duplicate handling: every mutating entry point (`reserve`, `commitReserved`,
+`release`, `restock`) `coalesce`s its lines by `variantId` first, so the same
+variant appearing on multiple cart rows is counted once against one base read.
+
+Webhook idempotency: Stripe delivers `checkout.session.completed`/`expired`
+at-least-once. Before committing or releasing a hold, the webhook takes an atomic
+one-time `claimOrderSettlement(orderId)` (Redis `SET NX`), so a duplicate or
+concurrent delivery can't double-apply the stock change — the non-atomic
+`paymentStatus` check alone is not enough.
 
 ## Enabling stock tracking on a variant
 

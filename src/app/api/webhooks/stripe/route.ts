@@ -4,7 +4,7 @@ import { getStripe } from '../../../../lib/stripe';
 import { getGuestOrder, getGuestOrderBySession, updateGuestOrder } from '../../../../lib/guestOrders';
 import { mirrorOrder } from '../../../../lib/airtableMirror';
 import { sendEmail, buildOrderConfirmation, buildAdminNewOrder } from '../../../../lib/email';
-import { commitReserved, release } from '../../../../lib/inventory';
+import { commitReserved, release, claimOrderSettlement } from '../../../../lib/inventory';
 
 /**
  * Stripe webhook — the ONLY trusted signal that a guest order was paid. The
@@ -55,8 +55,13 @@ export async function POST(request: Request) {
                 if (order.paymentStatus === 'paid') break;
 
                 // Convert the held reservation into a sale (decrements base stock).
+                // Guard the stock commit with an atomic one-time claim so a duplicate
+                // or concurrent webhook delivery can't double-decrement — the
+                // paymentStatus check above is not atomic across deliveries.
                 if (order.inventoryHold && order.inventoryHold.length > 0) {
-                    await commitReserved(order.inventoryHold);
+                    if (await claimOrderSettlement(order.id)) {
+                        await commitReserved(order.inventoryHold);
+                    }
                 }
 
                 const email = order.guestEmail || session.customer_details?.email || undefined;
@@ -84,9 +89,12 @@ export async function POST(request: Request) {
                 const session = event.data.object as Stripe.Checkout.Session;
                 const order = await getGuestOrderBySession(session.id);
                 if (order && order.paymentStatus === 'unpaid') {
-                    // Free the held units — the guest never paid.
+                    // Free the held units — the guest never paid. Same one-time
+                    // claim so a duplicate expiry can't race a late completion.
                     if (order.inventoryHold && order.inventoryHold.length > 0) {
-                        await release(order.inventoryHold);
+                        if (await claimOrderSettlement(order.id)) {
+                            await release(order.inventoryHold);
+                        }
                     }
                     await updateGuestOrder(order.id, { status: 'denied' });
                 }
