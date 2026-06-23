@@ -108,9 +108,14 @@ export function buildAuthorizeUrl(state: string): string {
         client_id: process.env.HCB_CLIENT_ID || '',
         redirect_uri: redirectUri(),
         response_type: 'code',
-        scope: 'read',
         state,
     });
+    // Scope is app-dependent. This app rejects `read` (invalid_scope), so by
+    // default we omit the scope entirely and let Doorkeeper use the app's own
+    // granted scope. Set HCB_OAUTH_SCOPE to force a specific value (e.g.
+    // "restricted") if the app requires one.
+    const scope = process.env.HCB_OAUTH_SCOPE;
+    if (scope) params.set('scope', scope);
     return `${apiBase()}/oauth/authorize?${params.toString()}`;
 }
 
