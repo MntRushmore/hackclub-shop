@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import { requireAdminPermission } from '../../../../lib/adminAuth';
 import { resolveDualPrice } from '../../../../lib/variantPricing';
+import { getVariantStocks } from '../../../../lib/inventory';
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -12,7 +13,7 @@ const redis = new Redis({
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
     const productId = params.id;
-    
+
     try {
         const product = await redis.get<any>(`product:${productId}`);
 
@@ -41,6 +42,13 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
                 },
             })),
         };
+
+        // Enrich variants with live availability (null = untracked/unlimited).
+        const stocks = await getVariantStocks(result.sync_variants.map((v: any) => v.variant_id));
+        result.sync_variants = result.sync_variants.map((v: any) => ({
+            ...v,
+            available: stocks[v.variant_id]?.available ?? null,
+        }));
 
         return NextResponse.json({ result });
     } catch (error) {
