@@ -51,11 +51,12 @@ export function buildAuthorizeUrl(state: string): string {
         response_type: 'code',
         state,
     });
-    // Send NO scope param by default — let HCB use the app's own default grant
-    // (avoids invalid_scope from mismatched scope strings). HCB_OAUTH_SCOPE can
-    // set an explicit space-separated scope if ever needed.
-    const scope = process.env.HCB_OAUTH_SCOPE;
-    if (scope && scope.trim()) params.set('scope', scope.trim());
+    // HCB requires a scope param ("Missing required parameter: scope" otherwise),
+    // and only accepts read / write / admin:read / admin:write (others →
+    // invalid_scope). `read` is the one the org-transactions read needs.
+    // Space-separated for multiples. HCB_OAUTH_SCOPE overrides.
+    const scope = process.env.HCB_OAUTH_SCOPE ?? 'read';
+    params.set('scope', scope.trim());
     return `${apiBase()}/oauth/authorize?${params.toString()}`;
 }
 
