@@ -32,6 +32,13 @@
  *   NEXT_PUBLIC_HCB_DONATE_BASE   https://hcb.hackclub.com/donations/start/<slug>
  */
 
+import { Redis } from '@upstash/redis';
+
+const redis = new Redis({
+    url: process.env.UPSTASH_REDIS_REST_URL!,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+});
+
 const DEFAULT_API_BASE = 'https://hcb.hackclub.com/api/v4';
 const DEFAULT_DONATE_HOST = 'https://hcb.hackclub.com';
 
@@ -54,63 +61,181 @@ export function isHcbConfigured(): boolean {
 /**
  * Build the pre-filled HCB donation URL the donor is sent to. Amount is taken
  * verbatim from the server-derived order total (never a client-supplied price)
- * and rendered in DOLLARS, which is what the donation-start form expects. The
- * `utm_content` tag carries the order id back onto the donation record so
- * reconciliation can match it deterministically.
+ * and rendered in DOLLARS, which is what the donation-start form expects. Name
+ * and email pre-fill the donor's details on HCB (cosmetic — the shipping
+ * address lives on our order, not the donation). The `utm_content` tag carries
+ * the order id back onto the donation record so reconciliation can match it
+ * deterministically.
  */
-export function buildDonationUrl(opts: { amountUsd: number; email?: string; orderId: string }): string {
+export function buildDonationUrl(opts: { amountUsd: number; email?: string; name?: string; orderId: string }): string {
     const slug = process.env.HCB_ORG_SLUG || '';
     // Prefer an explicit donate base if provided (lets prod/staging differ from the API host).
     const base = (process.env.NEXT_PUBLIC_HCB_DONATE_BASE || `${DEFAULT_DONATE_HOST}/donations/start/${slug}`).replace(/\/+$/, '');
     const params = new URLSearchParams();
     params.set('amount', opts.amountUsd.toFixed(2));
     if (opts.email) params.set('email', opts.email);
+    if (opts.name) params.set('name', opts.name);
     params.set('utm_source', 'shop');
     params.set('utm_content', opts.orderId);
     return `${base}?${params.toString()}`;
 }
 
-// ── OAuth token (the read path) ──────────────────────────────────────────────
+// ── OAuth token (the read path, authorization-code grant) ────────────────────
+//
+// The HCB app does NOT support client_credentials — confirmed against the live
+// API (it rejects the grant and redirects to a human login). So an admin
+// authorizes the app ONCE via the authorization-code flow; we persist the
+// refresh token in Redis and mint short-lived access tokens from it. The
+// reconciler reads transactions with the resulting bearer token.
 
-let _token: { value: string; expiresAt: number } | null = null;
+const REDIS_REFRESH_KEY = 'hcb:oauth:refresh_token';
+const REDIS_RET = 60 * 60 * 24 * 365; // keep the refresh token ~1y
 
-/**
- * Fetch (and cache) a bearer token via the client_credentials grant. Cached in
- * module memory until ~60s before expiry. Returns null when unconfigured or on
- * any failure — callers degrade to "couldn't reconcile yet" rather than throw.
- */
-async function getAccessToken(forceRefresh = false): Promise<string | null> {
-    if (!isHcbConfigured()) return null;
-    const now = Date.now();
-    if (!forceRefresh && _token && _token.expiresAt > now) return _token.value;
+// In-memory access-token cache (per server instance). The refresh token is the
+// durable secret; access tokens are cheap to re-mint.
+let _access: { value: string; expiresAt: number } | null = null;
 
+/** The redirect URI registered with the HCB app. Must match exactly. */
+function redirectUri(): string {
+    const origin = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000').replace(/\/+$/, '');
+    return `${origin}/hcb/callback`;
+}
+
+/** Build the HCB authorize URL an admin visits once to connect the shop. */
+export function buildAuthorizeUrl(state: string): string {
+    const params = new URLSearchParams({
+        client_id: process.env.HCB_CLIENT_ID || '',
+        redirect_uri: redirectUri(),
+        response_type: 'code',
+        scope: 'read',
+        state,
+    });
+    return `${apiBase()}/oauth/authorize?${params.toString()}`;
+}
+
+/** True once an admin has connected HCB (a refresh token is stored). */
+export async function isHcbConnected(): Promise<boolean> {
     try {
+        return Boolean(await redis.get<string>(REDIS_REFRESH_KEY));
+    } catch {
+        return false;
+    }
+}
+
+interface TokenResponse {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+    error?: string;
+    error_description?: string;
+}
+
+async function postToken(body: Record<string, string>): Promise<TokenResponse | null> {
+    try {
+        const form = new URLSearchParams(body);
         const res = await fetch(`${apiBase()}/oauth/token`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                grant_type: 'client_credentials',
-                client_id: process.env.HCB_CLIENT_ID,
-                client_secret: process.env.HCB_CLIENT_SECRET,
-                scope: 'read',
-            }),
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+            body: form.toString(),
+            redirect: 'manual',
         });
-        if (!res.ok) {
-            console.error('[hcb] token request failed:', res.status, (await res.text()).slice(0, 200));
+        const text = await res.text();
+        let data: TokenResponse;
+        try {
+            data = JSON.parse(text) as TokenResponse;
+        } catch {
+            console.error('[hcb] token endpoint returned non-JSON:', res.status, text.slice(0, 200));
             return null;
         }
-        const data = (await res.json()) as { access_token?: string; expires_in?: number };
-        if (!data.access_token) {
-            console.error('[hcb] token response missing access_token');
+        if (!res.ok || data.error) {
+            console.error('[hcb] token request failed:', res.status, data.error, data.error_description);
             return null;
         }
-        const ttlMs = (data.expires_in ?? 3600) * 1000;
-        _token = { value: data.access_token, expiresAt: now + ttlMs - 60_000 };
-        return _token.value;
+        return data;
     } catch (err) {
         console.error('[hcb] token request error:', err instanceof Error ? err.message : err);
         return null;
     }
+}
+
+/**
+ * Exchange an authorization code (from the /hcb/callback OAuth return) for an
+ * access + refresh token, and persist the refresh token. Returns true on
+ * success. Called once, by the admin connect flow.
+ */
+export async function exchangeCodeForTokens(code: string): Promise<boolean> {
+    if (!isHcbConfigured()) return false;
+    const data = await postToken({
+        grant_type: 'authorization_code',
+        code,
+        client_id: process.env.HCB_CLIENT_ID || '',
+        client_secret: process.env.HCB_CLIENT_SECRET || '',
+        redirect_uri: redirectUri(),
+    });
+    if (!data?.access_token || !data.refresh_token) {
+        console.error('[hcb] code exchange missing tokens');
+        return false;
+    }
+    try {
+        await redis.set(REDIS_REFRESH_KEY, data.refresh_token, { ex: REDIS_RET });
+    } catch (err) {
+        console.error('[hcb] failed to persist refresh token:', err instanceof Error ? err.message : err);
+        return false;
+    }
+    _access = { value: data.access_token, expiresAt: Date.now() + (data.expires_in ?? 7200) * 1000 - 60_000 };
+    return true;
+}
+
+/** Drop the stored connection (admin disconnect). */
+export async function clearHcbConnection(): Promise<void> {
+    _access = null;
+    try {
+        await redis.del(REDIS_REFRESH_KEY);
+    } catch {
+        // best-effort
+    }
+}
+
+/**
+ * Get a valid access token, minting a fresh one from the stored refresh token
+ * when the cached one is missing/expired (or forceRefresh is set). Returns null
+ * when HCB isn't connected or the refresh fails — callers degrade to "couldn't
+ * reconcile yet" rather than throw.
+ */
+async function getAccessToken(forceRefresh = false): Promise<string | null> {
+    if (!isHcbConfigured()) return null;
+    if (!forceRefresh && _access && _access.expiresAt > Date.now()) return _access.value;
+
+    let refreshToken: string | null;
+    try {
+        refreshToken = await redis.get<string>(REDIS_REFRESH_KEY);
+    } catch (err) {
+        console.error('[hcb] failed to read refresh token:', err instanceof Error ? err.message : err);
+        return null;
+    }
+    if (!refreshToken) {
+        // Not connected yet — an admin must authorize the app once.
+        return null;
+    }
+
+    const data = await postToken({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        client_id: process.env.HCB_CLIENT_ID || '',
+        client_secret: process.env.HCB_CLIENT_SECRET || '',
+    });
+    if (!data?.access_token) return null;
+
+    // Doorkeeper rotates refresh tokens — persist the new one if returned.
+    if (data.refresh_token && data.refresh_token !== refreshToken) {
+        try {
+            await redis.set(REDIS_REFRESH_KEY, data.refresh_token, { ex: REDIS_RET });
+        } catch {
+            // best-effort; the access token is still usable now
+        }
+    }
+    _access = { value: data.access_token, expiresAt: Date.now() + (data.expires_in ?? 7200) * 1000 - 60_000 };
+    return _access.value;
 }
 
 // ── Transactions (reconciliation) ────────────────────────────────────────────
