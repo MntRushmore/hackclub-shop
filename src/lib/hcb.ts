@@ -60,19 +60,20 @@ export function isHcbConfigured(): boolean {
 
 /**
  * Build the pre-filled HCB donation URL the donor is sent to. Amount is taken
- * verbatim from the server-derived order total (never a client-supplied price)
- * and rendered in DOLLARS, which is what the donation-start form expects. Name
- * and email pre-fill the donor's details on HCB (cosmetic — the shipping
- * address lives on our order, not the donation). The `utm_content` tag carries
- * the order id back onto the donation record so reconciliation can match it
- * deterministically.
+ * verbatim from the server-derived order total (never a client-supplied price).
+ * HCB's donation-start form reads the `amount` query param in CENTS (an integer)
+ * — passing dollars makes it read $5.00 as 5¢. Name and email pre-fill the
+ * donor's details on HCB (cosmetic — the shipping address lives on our order,
+ * not the donation). The `utm_content` tag carries the order id back onto the
+ * donation record so reconciliation can match it deterministically.
  */
 export function buildDonationUrl(opts: { amountUsd: number; email?: string; name?: string; orderId: string }): string {
     const slug = process.env.HCB_ORG_SLUG || '';
     // Prefer an explicit donate base if provided (lets prod/staging differ from the API host).
     const base = (process.env.NEXT_PUBLIC_HCB_DONATE_BASE || `${DEFAULT_DONATE_HOST}/donations/start/${slug}`).replace(/\/+$/, '');
     const params = new URLSearchParams();
-    params.set('amount', opts.amountUsd.toFixed(2));
+    // Dollars → integer cents, which is what the donation-start form expects.
+    params.set('amount', String(Math.round(opts.amountUsd * 100)));
     if (opts.email) params.set('email', opts.email);
     if (opts.name) params.set('name', opts.name);
     params.set('utm_source', 'shop');
