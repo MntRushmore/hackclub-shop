@@ -253,9 +253,9 @@ const Checkout = () => {
                 initial={{ opacity: 0, scale: 0.96, y: 24 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 transition={{ duration: 0.35, type: 'spring', stiffness: 180, damping: 18 }}
-                className="w-full max-w-6xl mx-auto bg-white text-hackclub-dark rounded-3xl shadow-2xl border border-hackclub-smoke overflow-hidden"
+                className="w-full max-w-6xl mx-auto bg-white text-hackclub-dark rounded-2xl sm:rounded-3xl shadow-2xl border border-hackclub-smoke overflow-hidden"
             >
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 p-8">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 p-5 sm:p-8">
                     {/* LEFT COLUMN */}
                     <div className="space-y-6">
                         <div>
@@ -422,8 +422,17 @@ const Checkout = () => {
 
                         <AnimatePresence>
                             {error && (
-                                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="p-3 bg-hackclub-red/10 border-2 border-hackclub-red rounded-xl">
+                                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="p-3 bg-hackclub-red/10 border-2 border-hackclub-red rounded-xl flex items-center justify-between gap-3">
                                     <p className="text-hackclub-red font-bold text-sm">{error}</p>
+                                    {canCheckout && !loading && (
+                                        <button
+                                            type="button"
+                                            onClick={handleCheckout}
+                                            className="shrink-0 text-xs font-black text-white bg-hackclub-red hover:bg-hackclub-orange px-3 py-1.5 rounded-full transition-colors"
+                                        >
+                                            Try again
+                                        </button>
+                                    )}
                                 </motion.div>
                             )}
                         </AnimatePresence>
@@ -438,8 +447,9 @@ const Checkout = () => {
                         >
                             <AnimatePresence mode="wait" initial={false}>
                                 {loading ? (
-                                    <motion.span key="processing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                                        <span className="inline-block animate-pulse">{isStudent ? 'Processing…' : 'Redirecting to payment…'}</span>
+                                    <motion.span key="processing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="inline-flex items-center justify-center gap-2">
+                                        <span className="inline-block w-5 h-5 border-[3px] border-white/40 border-t-white rounded-full animate-spin" aria-hidden="true" />
+                                        {isStudent ? 'Processing…' : 'Redirecting to payment…'}
                                     </motion.span>
                                 ) : canCheckout ? (
                                     <motion.span key="checkout" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>

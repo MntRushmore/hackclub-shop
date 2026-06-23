@@ -129,6 +129,12 @@ export function mirrorProduct(product: Product): Promise<void> {
             'Variants JSON': JSON.stringify(product.variants || []),
             'Shipping Options JSON': JSON.stringify(product.shippingOptions || []),
             'Variant Count': (product.variants || []).length,
+            // Convenience roll-up so staff can scan stock without parsing the JSON.
+            // Per-variant stock lives inside Variants JSON (the sync reads it there).
+            'Total Stock': (product.variants || []).reduce(
+                (sum, v) => sum + (typeof v.stock === 'number' ? v.stock : 0),
+                0,
+            ),
             'Updated At': new Date().toISOString(),
         }),
     );
@@ -163,6 +169,9 @@ export function mirrorOrder(order: Order, slackId?: string): Promise<void> {
             'Shipping Country': order.shippingCountry || '',
             'Shipping Address': order.shippingAddress ? formatAddress(order.shippingAddress) : '',
             'Shipping Address JSON': order.shippingAddress ? JSON.stringify(order.shippingAddress) : '',
+            Carrier: order.shipment?.carrier || '',
+            'Tracking Number': order.shipment?.trackingNumber || '',
+            'Tracking URL': order.shipment?.trackingUrl || '',
             'Checkout Data JSON': JSON.stringify(order.checkoutData || {}),
             'Status History JSON': JSON.stringify(order.statusHistory || []),
             'Created At': new Date(order.createdAt).toISOString(),

@@ -1,17 +1,22 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSession, signIn } from 'next-auth/react';
 import Image from 'next/image';
 import { Order } from '../../types/Order';
 import { OrderSkeleton } from '../components/Skeleton';
+import { CartContext } from '../../context/CartContext';
 
 const OrdersPage = () => {
     const { data: session, status } = useSession();
+    const router = useRouter();
+    const cart = useContext(CartContext);
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [reordering, setReordering] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchOrders = async () => {
@@ -62,6 +67,57 @@ const OrdersPage = () => {
                 return 'bg-orange-100 text-orange-800';
             default:
                 return 'bg-gray-100 text-gray-800';
+        }
+    };
+
+    // Reorder: re-fetch each product so prices/availability are current and
+    // correct for whichever pathway the shopper is on (the stored order item only
+    // carries the historical USD price — points orders store "0"). Falls back to
+    // the stored price if the product can't be re-fetched. addToCart increments by
+    // one, so add once per unit.
+    const handleReorder = async (order: Order) => {
+        if (!cart) return;
+        setReordering(order.id);
+        try {
+            // De-dupe product lookups across items in the order.
+            const productCache: Record<string, any> = {};
+            for (const item of order.items) {
+                const productId = String(item.id);
+                if (!(productId in productCache)) {
+                    try {
+                        const res = await fetch(`/api/products/${productId}`);
+                        const data = res.ok ? await res.json() : null;
+                        productCache[productId] = data?.result || null;
+                    } catch {
+                        productCache[productId] = null;
+                    }
+                }
+                const result = productCache[productId];
+                const variant = result?.sync_variants?.find((v: any) => v.name === item.name) || result?.sync_variants?.[0];
+
+                const cartItem = variant
+                    ? {
+                          id: productId,
+                          name: variant.name,
+                          price: String(variant.price_cash ?? 0),
+                          price_cash: variant.price_cash || undefined,
+                          price_points: variant.price_points || undefined,
+                          thumbnail_url: variant.product?.image || item.thumbnail_url || '',
+                          variant_id: variant.variant_id || variant.id,
+                      }
+                    : {
+                          id: productId,
+                          name: item.name,
+                          price: item.price,
+                          price_cash: parseFloat(item.price) || undefined,
+                          thumbnail_url: item.thumbnail_url || '',
+                      };
+
+                for (let i = 0; i < item.quantity; i++) cart.addToCart(cartItem);
+            }
+            router.push('/shop?reordered=1');
+        } finally {
+            setReordering(null);
         }
     };
 
@@ -252,6 +308,48 @@ const OrdersPage = () => {
                                                  </div>
                                              ) : null}
                                          </div>
+
+                                        {order.shipment?.trackingNumber && (
+                                            <div className="px-6 py-4 border-t-2 border-hackclub-smoke">
+                                                <div className="rounded-xl bg-hackclub-snow border-2 border-hackclub-smoke px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+                                                    <div>
+                                                        <p className="text-xs font-bold text-hackclub-muted uppercase">
+                                                            📦 Shipped{order.shipment.carrier ? ` · ${order.shipment.carrier}${order.shipment.service ? ` ${order.shipment.service}` : ''}` : ''}
+                                                        </p>
+                                                        <p className="font-mono text-sm text-hackclub-dark">{order.shipment.trackingNumber}</p>
+                                                        {order.shipment.estDeliveryDate && (
+                                                            <p className="text-xs text-hackclub-slate mt-0.5">Est. delivery: {order.shipment.estDeliveryDate}</p>
+                                                        )}
+                                                    </div>
+                                                    {order.shipment.trackingUrl && (
+                                                        <a
+                                                            href={order.shipment.trackingUrl}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="bg-hackclub-red hover:bg-hackclub-orange text-white font-bold text-sm py-2 px-4 rounded-full transition-colors whitespace-nowrap"
+                                                        >
+                                                            Track package →
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {cart && order.items.length > 0 && (
+                                            <div className="px-6 py-4 border-t-2 border-hackclub-smoke">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleReorder(order)}
+                                                    disabled={reordering === order.id}
+                                                    className="inline-flex items-center gap-2 text-hackclub-blue hover:text-hackclub-dark font-bold text-sm transition-colors disabled:opacity-50"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                    </svg>
+                                                    {reordering === order.id ? 'Adding to cart…' : 'Reorder these items'}
+                                                </button>
+                                            </div>
+                                        )}
 
                                         {order.statusHistory && order.statusHistory.length > 0 && (
                                             <div className="px-6 py-4 border-t-2 border-hackclub-smoke space-y-2">

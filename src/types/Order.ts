@@ -27,6 +27,24 @@ export interface OrderStatusUpdate {
     message?: string;
 }
 
+/**
+ * Shipment record for a fulfilled order. Populated when staff buy postage —
+ * either through the EasyPost/Pirate Ship integration (`src/lib/shipping.ts`)
+ * or by pasting a tracking number bought manually in Pirate Ship. EasyPost is
+ * what Pirate Ship runs on, so a label bought either way maps to these fields.
+ */
+export interface OrderShipment {
+    carrier?: string;          // e.g. "USPS", "UPS"
+    service?: string;          // e.g. "First", "Priority"
+    trackingNumber?: string;
+    trackingUrl?: string;      // public carrier/EasyPost tracking page
+    labelUrl?: string;         // postage label PDF/PNG (EasyPost-hosted)
+    easypostShipmentId?: string;
+    cost?: number;             // postage paid, USD (for the audit/stats trail)
+    estDeliveryDate?: string;  // ISO date string when known
+    shippedAt?: Date;
+}
+
 /** Which storefront an order came through. */
 export type OrderPathway = 'student' | 'guest';
 /** How the order was paid. */
@@ -55,6 +73,11 @@ export interface Order {
     stripePaymentIntentId?: string;
     shippingCountry?: string;
     shippingAddress?: ShippingAddress;
+    // Postage/tracking, set at fulfillment time (Pirate Ship / EasyPost).
+    shipment?: OrderShipment;
+    // Units reserved against inventory for this order (guest/Stripe path). The
+    // webhook commits these on payment or releases them if the session expires.
+    inventoryHold?: { variantId: string; quantity: number }[];
     checkoutData: Record<string, string | ShippingAddress>;
     status: 'pending' | 'approved' | 'fulfilled' | 'denied' | 'refunded';
     statusHistory: OrderStatusUpdate[];

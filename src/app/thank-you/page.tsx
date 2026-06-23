@@ -79,7 +79,12 @@ const ThankYouInner = () => {
       {status === 'paid' && (
         <p className="text-hackclub-muted mb-8">A confirmation has been sent to your email.</p>
       )}
-      <Link href="/shop" className="inline-block bg-hackclub-red hover:bg-hackclub-orange text-white font-bold px-8 py-3 rounded-full shadow-lg transition-colors">Continue Shopping</Link>
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <Link href="/shop" className="inline-block bg-hackclub-red hover:bg-hackclub-orange text-white font-bold px-8 py-3 rounded-full shadow-lg transition-colors">Continue Shopping</Link>
+        {isGuest && status === 'paid' && (
+          <Link href="/orders/track" className="inline-block border-2 border-hackclub-smoke hover:border-hackclub-slate text-hackclub-slate font-bold px-8 py-3 rounded-full transition-colors">Track your order</Link>
+        )}
+      </div>
     </div>
   );
 };
