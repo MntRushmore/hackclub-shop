@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { CartContext } from '../../context/CartContext';
+import { CardSkeleton } from '../components/Skeleton';
 import { getCashPrice, getPointsPrice, getDisplayPrice, isAvailableOn } from '../../lib/paymentUtils';
 import { usePathway } from '../../lib/usePathway';
 
@@ -17,6 +18,7 @@ interface Variant {
     retail_price: string;
     price_cash?: number;
     price_points?: number;
+    available?: number | null; // null = unlimited; number = units left
     product: { image: string };
 }
 
@@ -24,8 +26,12 @@ interface Product {
     id: string | number;
     name: string;
     thumbnail_url: string;
+    category?: string | null;
+    createdAt?: string | null;
     sync_variants: Variant[];
 }
+
+type SortKey = 'featured' | 'price-asc' | 'price-desc' | 'newest' | 'name';
 
 const Shop = () => {
     const [products, setProducts] = useState<Product[]>([]);
@@ -40,14 +46,67 @@ const Shop = () => {
     const cartContext = useContext(CartContext);
     const { pathway, loading: pathwayLoading } = usePathway();
 
+    // Catalog controls.
+    const [query, setQuery] = useState('');
+    const [category, setCategory] = useState<string>('all');
+    const [sort, setSort] = useState<SortKey>('featured');
+
     // Strict path separation: while auth resolves, show everything; once
     // resolved, only show products with at least one variant the active
     // pathway can actually buy.
-    const visibleProducts = pathwayLoading
-        ? products
-        : products.filter((product) =>
-              (product.sync_variants || []).some((variant) => isAvailableOn(variant, pathway))
-          );
+    const pathwayProducts = useMemo(
+        () =>
+            pathwayLoading
+                ? products
+                : products.filter((product) =>
+                      (product.sync_variants || []).some((variant) => isAvailableOn(variant, pathway)),
+                  ),
+        [products, pathway, pathwayLoading],
+    );
+
+    // Distinct categories present in the pathway-visible catalog (for the chips).
+    const categories = useMemo(() => {
+        const set = new Set<string>();
+        for (const p of pathwayProducts) {
+            if (p.category && p.category.trim()) set.add(p.category.trim());
+        }
+        return Array.from(set).sort((a, b) => a.localeCompare(b));
+    }, [pathwayProducts]);
+
+    // The pathway-aware unit price used for sorting/searching.
+    const priceFor = (p: Product): number => {
+        const v = p.sync_variants?.[0];
+        if (!v) return 0;
+        return (pathway === 'student' ? getPointsPrice(v) : getCashPrice(v)) || 0;
+    };
+
+    // Search → category → sort, layered on top of the pathway filter.
+    const visibleProducts = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        let list = pathwayProducts;
+        if (q) list = list.filter((p) => p.name.toLowerCase().includes(q) || (p.category || '').toLowerCase().includes(q));
+        if (category !== 'all') list = list.filter((p) => (p.category || '').trim() === category);
+
+        const sorted = [...list];
+        switch (sort) {
+            case 'price-asc':
+                sorted.sort((a, b) => priceFor(a) - priceFor(b));
+                break;
+            case 'price-desc':
+                sorted.sort((a, b) => priceFor(b) - priceFor(a));
+                break;
+            case 'name':
+                sorted.sort((a, b) => a.name.localeCompare(b.name));
+                break;
+            case 'newest':
+                sorted.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+                break;
+            default:
+                break; // 'featured' = catalog order
+        }
+        return sorted;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pathwayProducts, query, category, sort, pathway]);
 
     useEffect(() => {
         const fetchProducts = async () => {
@@ -113,7 +172,7 @@ const Shop = () => {
                     upEvent.clientY >= rect.top - 100 &&
                     upEvent.clientY <= rect.bottom + 100;
 
-                if (isNearCart && product.sync_variants && product.sync_variants.length > 0 && isAvailableOn(product.sync_variants[0], pathway) && cartContext) {
+                if (isNearCart && product.sync_variants && product.sync_variants.length > 0 && isAvailableOn(product.sync_variants[0], pathway) && product.sync_variants[0].available !== 0 && cartContext) {
                     droppedOnCart = true;
                     const variant = product.sync_variants[0];
 
@@ -145,11 +204,11 @@ const Shop = () => {
     };
 
     return (
-        <motion.div 
+        <motion.div
             initial={{ opacity: 0 }}
-            animate={{ opacity: loading ? 0 : 1 }}
+            animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
-            className="min-h-screen bg-white" 
+            className="min-h-screen bg-white"
             style={{
                 backgroundImage: `
                   linear-gradient(to right, #e0f2fe 1px, transparent 1px),
@@ -160,7 +219,7 @@ const Shop = () => {
         >
             
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-                <div className="mb-12">
+                <div className="mb-8">
                     <h1 className="text-5xl sm:text-6xl font-black text-hackclub-dark mb-4">
                         Browse Merch
                     </h1>
@@ -168,17 +227,87 @@ const Shop = () => {
                         Stickers, shirts, and more cool stuff
                     </p>
                 </div>
-                
+
+                {/* Search + sort */}
+                <div className="flex flex-col sm:flex-row gap-3 mb-5">
+                    <div className="relative flex-1">
+                        <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-hackclub-muted pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <input
+                            type="search"
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            placeholder="Search merch…"
+                            aria-label="Search products"
+                            className="w-full pl-11 pr-4 py-3 rounded-full border-2 border-hackclub-smoke bg-white text-hackclub-dark font-medium focus:outline-none focus:border-hackclub-red transition-colors"
+                        />
+                    </div>
+                    <label className="sr-only" htmlFor="sort">Sort products</label>
+                    <select
+                        id="sort"
+                        value={sort}
+                        onChange={(e) => setSort(e.target.value as SortKey)}
+                        className="px-4 py-3 rounded-full border-2 border-hackclub-smoke bg-white text-hackclub-dark font-bold focus:outline-none focus:border-hackclub-red transition-colors"
+                    >
+                        <option value="featured">Featured</option>
+                        <option value="price-asc">Price: low to high</option>
+                        <option value="price-desc">Price: high to low</option>
+                        <option value="newest">Newest</option>
+                        <option value="name">Name (A–Z)</option>
+                    </select>
+                </div>
+
+                {/* Category chips */}
+                {categories.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-10">
+                        <CategoryChip label="All" active={category === 'all'} onClick={() => setCategory('all')} />
+                        {categories.map((c) => (
+                            <CategoryChip key={c} label={c} active={category === c} onClick={() => setCategory(c)} />
+                        ))}
+                    </div>
+                )}
+
                 {error && (
                     <div className="text-center py-20">
                         <p className="text-hackclub-red text-lg font-bold">⚠️ {error}</p>
                     </div>
                 )}
 
+                {loading ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        {Array.from({ length: 8 }).map((_, i) => <CardSkeleton key={i} />)}
+                    </div>
+                ) : !error && visibleProducts.length === 0 ? (
+                    <div className="text-center py-20">
+                        <div className="w-16 h-16 bg-hackclub-smoke rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg className="w-8 h-8 text-hackclub-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                            </svg>
+                        </div>
+                        <p className="text-hackclub-dark font-black text-lg">
+                            {query || category !== 'all' ? 'No merch matches that' : 'No merch yet'}
+                        </p>
+                        <p className="text-hackclub-slate font-medium mt-1">
+                            {query || category !== 'all' ? 'Try a different search or category.' : 'Check back soon!'}
+                        </p>
+                        {(query || category !== 'all') && (
+                            <button
+                                type="button"
+                                onClick={() => { setQuery(''); setCategory('all'); }}
+                                className="mt-5 inline-block bg-hackclub-red hover:bg-hackclub-orange text-white font-bold px-6 py-2.5 rounded-full transition-colors"
+                            >
+                                Clear filters
+                            </button>
+                        )}
+                    </div>
+                ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {visibleProducts.map((product) => {
                       const firstVariant = product.sync_variants?.[0];
-                      const canBuy = firstVariant ? isAvailableOn(firstVariant, pathway) : false;
+                      const soldOut = firstVariant?.available === 0;
+                      const lowStock = typeof firstVariant?.available === 'number' && firstVariant.available > 0 && firstVariant.available <= 5;
+                      const canBuy = firstVariant ? isAvailableOn(firstVariant, pathway) && !soldOut : false;
                       return (
                         <motion.div
                             key={product.id}
@@ -197,9 +326,19 @@ const Shop = () => {
                                     src={product.thumbnail_url}
                                     alt={product.name}
                                     fill
-                                    className="object-contain p-6 group-hover:scale-105 transition-transform duration-300 pointer-events-none"
+                                    className={`object-contain p-6 group-hover:scale-105 transition-transform duration-300 pointer-events-none ${soldOut ? 'opacity-40 grayscale' : ''}`}
                                     draggable={false}
                                 />
+                                {soldOut && (
+                                    <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-xs font-black bg-hackclub-dark text-white">
+                                        Sold out
+                                    </span>
+                                )}
+                                {!soldOut && lowStock && (
+                                    <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-xs font-black bg-hackclub-orange text-white">
+                                        Only {firstVariant!.available} left
+                                    </span>
+                                )}
                             </div>
                             <div className="flex flex-col gap-2 p-5 bg-white">
                                 <Link href={`/products/${product.id}`} className="block">
@@ -250,7 +389,7 @@ const Shop = () => {
                                              e.currentTarget.blur();
                                          }}
                                     >
-                                        {canBuy ? 'Add to Cart' : 'Not available'}
+                                        {canBuy ? 'Add to Cart' : soldOut ? 'Sold out' : 'Not available'}
                                     </button>
                                 </div>
                             </div>
@@ -258,6 +397,7 @@ const Shop = () => {
                       );
                     })}
                 </div>
+                )}
 
                 {draggingProduct && (
                     <motion.div
@@ -291,5 +431,22 @@ const Shop = () => {
         </motion.div>
     );
 };
+
+function CategoryChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            aria-pressed={active}
+            className={`px-4 py-1.5 rounded-full text-sm font-bold border-2 transition-colors ${
+                active
+                    ? 'bg-hackclub-red text-white border-hackclub-red'
+                    : 'bg-white text-hackclub-slate border-hackclub-smoke hover:border-hackclub-red hover:text-hackclub-red'
+            }`}
+        >
+            {label}
+        </button>
+    );
+}
 
 export default Shop;
