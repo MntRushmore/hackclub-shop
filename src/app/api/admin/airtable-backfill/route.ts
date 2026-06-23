@@ -11,6 +11,7 @@ import {
     mirrorUser,
     mirrorCoupon,
 } from '../../../../lib/airtableMirror';
+import { setStock } from '../../../../lib/inventory';
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -41,16 +42,24 @@ export async function POST() {
     // ~4 req/sec throttle to stay under Airtable's 5/sec limit.
     const throttle = () => new Promise((r) => setTimeout(r, 250));
 
-    const counts = { products: 0, coupons: 0, users: 0, orders: 0, errors: 0 };
+    const counts = { products: 0, coupons: 0, users: 0, orders: 0, variantsStocked: 0, errors: 0 };
 
     try {
-        // Products
+        // Products — also seed the inventory cache from each variant's stock so
+        // tracking works immediately without waiting for the first Airtable sync.
         const productKeys = await redis.keys('product:*');
         for (const key of productKeys) {
             const product = await redis.get<Product>(key);
             if (product?.id) {
                 await mirrorProduct(product);
                 counts.products++;
+                for (const v of product.variants || []) {
+                    const variantId = String(v.variant_id || v.id);
+                    if (!variantId) continue;
+                    const stock = typeof v.stock === 'number' ? v.stock : null;
+                    await setStock(variantId, stock);
+                    if (stock !== null) counts.variantsStocked++;
+                }
                 await throttle();
             }
         }

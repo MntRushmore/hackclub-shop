@@ -4,6 +4,7 @@ import { validateCartItems, getProductById } from '../../../../lib/productValida
 import { isStructuredAddress, validateAddress } from '../../../../lib/address';
 import { rateLimit, rateLimitResponse } from '../../../../lib/rateLimit';
 import { saveGuestOrder } from '../../../../lib/guestOrders';
+import { reserve, release, StockLine } from '../../../../lib/inventory';
 import { Order, ShippingAddress } from '../../../../types/Order';
 
 /**
@@ -67,6 +68,25 @@ export async function POST(request: Request) {
 
         const itemsCashTotal = validation.verifiedCashTotal!;
 
+        // Reserve stock before creating the Stripe session, so two guests can't
+        // both buy the last unit during the in-flight payment window. Untracked
+        // variants are unlimited and always succeed. The hold is released by the
+        // webhook on expiry, or committed to a sale on payment.
+        const holdLines: StockLine[] = validation.items!.map(i => ({ variantId: i.variantId, quantity: i.quantity }));
+        const reservation = await reserve(holdLines);
+        if (!reservation.ok) {
+            const oversold = validation.items!.find(i => i.variantId === reservation.variantId);
+            const name = oversold?.name || 'An item';
+            return NextResponse.json(
+                {
+                    error: reservation.available > 0
+                        ? `Only ${reservation.available} of ${name} left — please reduce the quantity.`
+                        : `${name} just sold out.`,
+                },
+                { status: 409 },
+            );
+        }
+
         // Resolve the verified USD shipping cost from the first item's product.
         let shippingCost = 0;
         const firstProduct = await getProductById(items[0].id);
@@ -81,6 +101,10 @@ export async function POST(request: Request) {
         const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
         const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        // From here on, a failure must release the stock we just reserved so a
+        // crashed checkout doesn't leak held units.
+        try {
 
         // Stripe only accepts absolute http(s) image URLs; a relative path (e.g.
         // "/images/x.svg") makes session creation fail entirely. Pass images only
@@ -147,15 +171,21 @@ export async function POST(request: Request) {
             stripeSessionId: session.id,
             shippingCountry: country,
             shippingAddress,
+            inventoryHold: holdLines.filter(l => l.quantity > 0),
             checkoutData: checkoutData || {},
             status: 'pending',
             statusHistory: [{ status: 'pending', timestamp: now }],
             createdAt: now,
         };
 
-        await saveGuestOrder(order);
+            await saveGuestOrder(order);
 
-        return NextResponse.json({ url: session.url, sessionId: session.id, orderId });
+            return NextResponse.json({ url: session.url, sessionId: session.id, orderId });
+        } catch (inner) {
+            // Roll back the reservation — the session/order never came to be.
+            await release(holdLines);
+            throw inner;
+        }
     } catch (error) {
         console.error('[Stripe Checkout] Error:', error);
         return NextResponse.json({ error: 'Failed to start checkout' }, { status: 500 });

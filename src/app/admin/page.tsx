@@ -153,6 +153,23 @@ export default function AdminDashboard() {
                             </Link>
                         </motion.div>
 
+                        {/* Inventory */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.15 }}
+                        >
+                            <Link href="/admin/inventory">
+                                <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-6 hover:shadow-xl hover:border-hackclub-cyan transition-all cursor-pointer group">
+                                    <div className="w-12 h-12 bg-hackclub-cyan/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-hackclub-cyan/20 transition-colors">
+                                        <Icon glyph="package" size={24} style={{ color: 'var(--hackclub-cyan, #5bc0de)' }} />
+                                    </div>
+                                    <h3 className="text-xl font-black text-hackclub-dark mb-2">Inventory</h3>
+                                    <p className="text-hackclub-slate text-sm">Track stock, sync from Airtable, fix oversells</p>
+                                </div>
+                            </Link>
+                        </motion.div>
+
                         {/* Coupons */}
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
@@ -217,6 +234,23 @@ export default function AdminDashboard() {
                                     </div>
                                     <h3 className="text-xl font-black text-hackclub-dark mb-2">Statistics</h3>
                                     <p className="text-hackclub-slate text-sm">View sales and order statistics</p>
+                                </div>
+                            </Link>
+                        </motion.div>
+
+                        {/* Audit Log */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.55 }}
+                        >
+                            <Link href="/admin/audit">
+                                <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-6 hover:shadow-xl hover:border-hackclub-slate transition-all cursor-pointer group">
+                                    <div className="w-12 h-12 bg-hackclub-slate/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-hackclub-slate/20 transition-colors">
+                                        <Icon glyph="history" size={24} style={{ color: 'var(--hackclub-slate, #3c4858)' }} />
+                                    </div>
+                                    <h3 className="text-xl font-black text-hackclub-dark mb-2">Audit Log</h3>
+                                    <p className="text-hackclub-slate text-sm">Who did what — refunds, points, status, stock</p>
                                 </div>
                             </Link>
                         </motion.div>
