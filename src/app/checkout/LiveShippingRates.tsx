@@ -58,7 +58,7 @@ export default function LiveShippingRates({
     // types, so "address object exists" no longer means "ready to rate". Only
     // look up rates once the minimum fields are filled — avoids an eager error
     // and a wasted (billable) EasyPost call on an empty form.
-    const addrReady = Boolean(addr?.line1?.trim() && addr?.city?.trim() && addr?.postal_code?.trim());
+    const addrReady = Boolean(addr?.line1?.trim() && addr?.city?.trim() && addr?.postal_code?.trim() && addr?.country?.trim());
     const sig = JSON.stringify({
         items: items.map((i) => [i.id, i.variant_id, i.quantity]),
         addr: addrReady ? [addr!.line1, addr!.city, addr!.state, addr!.postal_code, addr!.country] : null,

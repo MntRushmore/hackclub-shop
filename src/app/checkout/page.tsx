@@ -80,11 +80,12 @@ const Checkout = () => {
                             ];
                         setCheckoutFields(fields);
 
-                        // Seed each address field with EMPTY_ADDRESS so its defaults
-                        // (notably country: 'US') exist immediately. Without this,
-                        // checkoutData has no address object until the user touches a
-                        // sub-field, so the live-rate lookup reported "enter your
-                        // address" and only worked after toggling the country select.
+                        // Seed each address field with EMPTY_ADDRESS so the address
+                        // object exists immediately. Without this, checkoutData had no
+                        // address until the user touched a sub-field, so the live-rate
+                        // lookup reported "enter your address" until the country select
+                        // was toggled. (Country itself is intentionally blank — the
+                        // customer must pick it; see EMPTY_ADDRESS.)
                         setCheckoutData((prev) => {
                             const next = { ...prev };
                             let changed = false;
@@ -373,6 +374,7 @@ const Checkout = () => {
                                                         value={addr.postal_code} onChange={(e) => updateAddressField(field.name, 'postal_code', e.target.value)} />
                                                     <select className={inputClass} autoComplete="country"
                                                         value={addr.country} onChange={(e) => updateAddressField(field.name, 'country', e.target.value)}>
+                                                        <option value="" disabled>Select country…</option>
                                                         {COUNTRIES.map((c) => (
                                                             <option key={c.code} value={c.code}>{c.name}</option>
                                                         ))}

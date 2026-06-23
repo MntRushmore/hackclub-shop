@@ -36,7 +36,9 @@ export const EMPTY_ADDRESS: ShippingAddress = {
     city: '',
     state: '',
     postal_code: '',
-    country: 'US',
+    // No default — the customer must actively pick a country so an international
+    // order isn't silently treated as US (wrong rates / mis-addressed label).
+    country: '',
 };
 
 /** True when an object looks like a structured ShippingAddress. */
