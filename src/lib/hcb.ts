@@ -261,6 +261,8 @@ interface HcbDonation {
     deposited?: boolean;
     utm_source?: string;
     utm_content?: string;
+    // The v4 JSON may nest donor/attribution; allow arbitrary keys for extraction.
+    [key: string]: unknown;
 }
 
 /** A v4 transaction (only the fields we rely on). */
@@ -272,6 +274,38 @@ interface HcbTransaction {
     pending?: boolean;
     declined?: boolean;
     donation?: HcbDonation | null;
+}
+
+/**
+ * Pull a field's value from a donation object regardless of where the v4 JSON
+ * nests it (flat, or under `donor`/`attribution`). HCB's UI shows utm_content +
+ * donor email, but the API response nests donor details under a `donor` object,
+ * so a flat read misses them. This searches one level of common wrappers.
+ */
+function donationField(d: HcbDonation | null | undefined, key: string): string | undefined {
+    if (!d) return undefined;
+    const top = d[key];
+    if (typeof top === 'string' && top) return top;
+    for (const wrapper of ['donor', 'attribution', 'utm']) {
+        const sub = d[wrapper];
+        if (sub && typeof sub === 'object') {
+            const v = (sub as Record<string, unknown>)[key];
+            if (typeof v === 'string' && v) return v;
+        }
+    }
+    return undefined;
+}
+
+function donationUtmContent(d: HcbDonation | null | undefined): string | undefined {
+    return donationField(d, 'utm_content');
+}
+
+function donationEmail(d: HcbDonation | null | undefined): string | undefined {
+    return donationField(d, 'email');
+}
+
+function donationDonatedAt(d: HcbDonation | null | undefined): string | undefined {
+    return donationField(d, 'donated_at');
 }
 
 /**
@@ -319,44 +353,65 @@ export interface MatchedDonation {
 }
 
 /**
- * Find the settled donation that pays for `orderId`. Matching is keyed on the
- * `utm_content` tag we embedded in the donation URL (deterministic, collision-
- * free); the expected amount is verified as a secondary guard so a tampered or
- * underpaid donation isn't accepted. Pending, declined, and refunded donations
- * are ignored.
+ * Find the donation that pays for `orderId`. Two match strategies, in order of
+ * preference:
  *
- * Returns:
- *   - a MatchedDonation when a valid donation is found,
- *   - null when none matches yet (still waiting on the donor),
- *   - 'unavailable' when HCB couldn't be reached/authed (transient — keep polling).
+ *   1. `utm_content === orderId` — the deterministic tag we put on the donate
+ *      URL. PREFERRED, but HCB's hosted form doesn't always persist utm params,
+ *      so it can be empty (observed live).
+ *   2. Fallback: exact amount + donor email match, with the donation made at or
+ *      after the order was created (and within a sane window). Used only when no
+ *      utm match exists. Email makes this safe against same-amount collisions
+ *      from other donors.
+ *
+ * A donation that's settled OR in flight (pending / in_transit) counts — the
+ * donor has committed the money. Declined/refunded are ignored.
+ *
+ * Returns: a MatchedDonation, null (nothing yet), or 'unavailable' (HCB
+ * unreachable/unauthed — keep polling).
  */
 export async function findDonationForOrder(
     orderId: string,
-    expected: { amountCents: number; email?: string },
+    expected: { amountCents: number; email?: string; createdAt?: Date | string },
 ): Promise<MatchedDonation | null | 'unavailable'> {
     const txns = await listOrgTransactions();
     if (txns === null) return 'unavailable';
 
-    for (const tx of txns) {
-        const d = tx.donation;
-        if (!d) continue;
-        // Accept a donation that's settled OR in flight (pending / in_transit) —
-        // the donor has committed the money; it just hasn't cleared yet. Only a
-        // declined or refunded donation is disqualifying.
-        if (tx.declined || d.refunded) continue;
-        if (d.utm_content !== orderId) continue;
-
-        // Secondary guard: the donated amount must cover the order total. HCB
-        // donations are positive credits; allow a tiny rounding slack and accept
-        // anything >= expected (a donor may have opted to cover fees).
+    const liveDonations = txns.filter((tx) => tx.donation && !tx.declined && !tx.donation.refunded);
+    const coversAmount = (tx: HcbTransaction) => {
         const amt = typeof tx.amount_cents === 'number' ? Math.abs(tx.amount_cents) : 0;
-        if (amt + 1 < expected.amountCents) {
-            console.error(`[hcb] donation for ${orderId} underpays: ${amt} < ${expected.amountCents}`);
+        return amt + 1 >= expected.amountCents; // allow rounding slack; donor may cover fees
+    };
+
+    // 1) Preferred: exact utm_content tag (extracted regardless of JSON nesting).
+    for (const tx of liveDonations) {
+        if (donationUtmContent(tx.donation) !== orderId) continue;
+        if (!coversAmount(tx)) {
+            console.error(`[hcb] utm-matched donation for ${orderId} underpays`);
             continue;
         }
-
-        return { txId: tx.id || '', donatedAt: d.donated_at };
+        return { txId: tx.id || '', donatedAt: donationDonatedAt(tx.donation) };
     }
+
+    // 2) Fallback: amount + donor email, donated at/after the order was created.
+    //    Only attempt when we have an email to disambiguate (avoids matching an
+    //    unrelated donor's same-amount donation).
+    const wantEmail = expected.email?.trim().toLowerCase();
+    if (wantEmail) {
+        const orderTs = expected.createdAt ? new Date(expected.createdAt).getTime() : 0;
+        // Small grace window before order creation for clock skew between systems.
+        const earliest = orderTs ? orderTs - 5 * 60_000 : 0;
+        for (const tx of liveDonations) {
+            if ((donationEmail(tx.donation) || '').trim().toLowerCase() !== wantEmail) continue;
+            if (!coversAmount(tx)) continue;
+            const da = donationDonatedAt(tx.donation);
+            const donatedTs = da ? new Date(da).getTime() : 0;
+            if (earliest && donatedTs && donatedTs < earliest) continue;
+            console.error(`[hcb] order ${orderId} matched by amount+email fallback (no utm_content on donation ${tx.id})`);
+            return { txId: tx.id || '', donatedAt: da };
+        }
+    }
+
     return null;
 }
 
@@ -375,7 +430,7 @@ export interface HcbDiagnostics {
     transactionsBodySnippet?: string;// first chunk of the raw body (errors are visible here)
     transactionCount?: number;
     donationCount?: number;
-    donationsSeen?: Array<{ txId?: string; amount_cents?: number; pending?: boolean; declined?: boolean; refunded?: boolean; in_transit?: boolean; utm_content?: string; donated_at?: string }>;
+    donationsSeen?: Array<{ txId?: string; amount_cents?: number; pending?: boolean; declined?: boolean; refunded?: boolean; in_transit?: boolean; utm_content?: string; email?: string; donated_at?: string }>;
     // When an orderId is supplied: why each donation did/didn't match it.
     orderId?: string;
     matchResult?: { matched: boolean; reason: string; txId?: string };
@@ -420,7 +475,9 @@ export async function diagnoseHcb(orderId?: string, expectedAmountCents?: number
         });
         diag.transactionsStatus = res.status;
         const text = await res.text();
-        diag.transactionsBodySnippet = text.slice(0, 400);
+        // Wide snippet so the FULL donation object (incl. utm_* / attribution
+        // nesting) is visible — we need the exact field path the v4 API uses.
+        diag.transactionsBodySnippet = text.slice(0, 2500);
         if (!res.ok) return diag;
 
         let data: unknown;
@@ -438,8 +495,11 @@ export async function diagnoseHcb(orderId?: string, expectedAmountCents?: number
             declined: t.declined,
             refunded: t.donation?.refunded,
             in_transit: t.donation?.in_transit,
-            utm_content: t.donation?.utm_content,
-            donated_at: t.donation?.donated_at,
+            // Use the robust extractors (the API nests donor/utm), so what we
+            // SHOW here matches what the matcher actually reads.
+            utm_content: donationUtmContent(t.donation),
+            email: donationEmail(t.donation),
+            donated_at: donationDonatedAt(t.donation),
         }));
 
         if (orderId) {
@@ -447,7 +507,7 @@ export async function diagnoseHcb(orderId?: string, expectedAmountCents?: number
             for (const t of txns) {
                 const d = t.donation;
                 if (!d) continue;
-                if (d.utm_content !== orderId) continue;
+                if (donationUtmContent(d) !== orderId) continue;
                 // Found one tagged for this order — explain its state. Pending /
                 // in_transit are ACCEPTED (money committed); only declined/refunded block.
                 if (t.declined) { reason = `tagged donation found but DECLINED (txId ${t.id})`; continue; }

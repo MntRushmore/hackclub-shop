@@ -39,7 +39,11 @@ export async function GET(request: Request) {
 
     try {
         const expectedCents = Math.round(order.totalAmount * 100);
-        const match = await findDonationForOrder(order.id, { amountCents: expectedCents, email: order.guestEmail });
+        const match = await findDonationForOrder(order.id, {
+            amountCents: expectedCents,
+            email: order.guestEmail,
+            createdAt: order.createdAt,
+        });
 
         // HCB unreachable / not authed — transient, keep polling.
         if (match === 'unavailable') {
