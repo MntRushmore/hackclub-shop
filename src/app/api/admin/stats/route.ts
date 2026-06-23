@@ -4,6 +4,8 @@ import { Redis } from '@upstash/redis';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import { requireAdminPermission } from '../../../../lib/adminAuth';
 import { Order } from '../../../../types/Order';
+import { Product } from '../../../../types/Admin';
+import { getVariantStocks } from '../../../../lib/inventory';
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -94,12 +96,55 @@ export async function GET(request: Request) {
             .slice(0, 10)
             .map(([name, data]) => ({ id: name, ...data }));
 
+        // Points vs cash split (real orders): cash revenue (USD) vs points spent.
+        const cashRevenue = realOrders.filter(o => o.pathway === 'guest').reduce((s, o) => s + o.totalAmount, 0);
+        const pointsSpent = realOrders.filter(o => o.pathway === 'student').reduce((s, o) => s + (o.pointsSpent || 0), 0);
+        const guestOrderCount = realOrders.filter(o => o.pathway === 'guest').length;
+        const studentOrderCount = realOrders.filter(o => o.pathway === 'student').length;
+
+        // Revenue + order count over time, bucketed by day across the period.
+        const dayBuckets: Record<string, { revenue: number; orders: number }> = {};
+        for (const o of realOrders) {
+            const day = new Date(o.createdAt).toISOString().slice(0, 10);
+            if (!dayBuckets[day]) dayBuckets[day] = { revenue: 0, orders: 0 };
+            dayBuckets[day].revenue += o.totalAmount;
+            dayBuckets[day].orders += 1;
+        }
+        const timeSeries = Object.entries(dayBuckets)
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([date, v]) => ({ date, revenue: Number(v.revenue.toFixed(2)), orders: v.orders }));
+
+        // Abandoned/expired guest sessions (orders denied while still unpaid).
+        const abandonedSessions = orders.filter(o => o.pathway === 'guest' && o.paymentStatus === 'unpaid' && o.status === 'denied').length;
+
+        // Low-stock count across tracked variants (available ≤ 5).
+        let lowStockCount = 0;
+        try {
+            const productKeys = await redis.keys('product:*');
+            const variantIds: string[] = [];
+            for (const key of productKeys) {
+                const p = await redis.get<Product>(key);
+                for (const v of p?.variants || []) variantIds.push(String(v.variant_id || v.id));
+            }
+            const stocks = await getVariantStocks(variantIds);
+            lowStockCount = Object.values(stocks).filter(s => s.available !== null && s.available <= 5).length;
+        } catch {
+            // Best-effort; leave at 0 if inventory read fails.
+        }
+
         return NextResponse.json({
             period,
             totalOrders,
             totalRevenue: totalRevenue.toFixed(2),
             ordersByStatus,
             topProducts,
+            cashRevenue: cashRevenue.toFixed(2),
+            pointsSpent,
+            guestOrderCount,
+            studentOrderCount,
+            timeSeries,
+            abandonedSessions,
+            lowStockCount,
             orders: filteredOrders,
         });
     } catch {

@@ -48,8 +48,10 @@ const ProductPage = () => {
         fetchProduct();
     }, [productId]);
 
+    const isInStock = (v: Variant | null) => !v || v.available === undefined || v.available === null || v.available > 0;
+
     const handleAddToCart = () => {
-        if (product && selectedVariant && isAvailableOn(selectedVariant, pathway)) {
+        if (product && selectedVariant && isAvailableOn(selectedVariant, pathway) && isInStock(selectedVariant)) {
             const cartItem = {
                 id: product.id,
                 name: selectedVariant.name,
@@ -102,8 +104,11 @@ const ProductPage = () => {
     // Strict path separation: a variant is buyable only if it's priced for the
     // active pathway, and the product is only purchasable at all if at least one
     // variant is.
-    const selectedAvailable = !!selectedVariant && isAvailableOn(selectedVariant, pathway);
+    const selectedInStock = isInStock(selectedVariant);
+    const selectedAvailable = !!selectedVariant && isAvailableOn(selectedVariant, pathway) && selectedInStock;
     const anyVariantAvailable = variants.some((variant) => isAvailableOn(variant, pathway));
+    const selectedStock = selectedVariant?.available;
+    const selectedLow = typeof selectedStock === 'number' && selectedStock > 0 && selectedStock <= 5;
 
     return (
         <div
@@ -142,6 +147,11 @@ const ProductPage = () => {
                                 ) : (
                                     <p className="text-lg text-gray-400 font-medium">Not available</p>
                                 )}
+                                {selectedStock === 0 ? (
+                                    <p className="mt-2 inline-block px-3 py-1 rounded-full text-sm font-black bg-hackclub-dark text-white">Sold out</p>
+                                ) : selectedLow ? (
+                                    <p className="mt-2 inline-block px-3 py-1 rounded-full text-sm font-black bg-hackclub-orange text-white">Only {selectedStock} left</p>
+                                ) : null}
                             </div>
                         )}
 
@@ -167,6 +177,7 @@ const ProductPage = () => {
                                         <option key={`${variant.id || variant.variant_id}_${idx}`} value={variant.id || variant.variant_id}>
                                             {variant.size || 'Default'} / {variant.color || 'Default'}
                                             {getDisplayPrice(variant, pathway) ? ` - ${getDisplayPrice(variant, pathway)}` : ''}
+                                            {variant.available === 0 ? ' (sold out)' : ''}
                                         </option>
                                     ))}
                                 </select>
@@ -185,7 +196,7 @@ const ProductPage = () => {
                                 }
                                 onClick={handleAddToCart}
                             >
-                                {selectedAvailable ? 'Add to Cart' : 'Not available'}
+                                {selectedAvailable ? 'Add to Cart' : !selectedInStock ? 'Sold out' : 'Not available'}
                             </motion.button>
                         ) : (
                             <div className="rounded-2xl border-2 border-gray-200 bg-hackclub-smoke p-5 text-center">
