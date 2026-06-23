@@ -58,10 +58,26 @@ export interface OrderShipment {
 
 /** Which storefront an order came through. */
 export type OrderPathway = 'student' | 'guest';
-/** How the order was paid. */
-export type OrderPaymentMethod = 'points' | 'stripe';
+/**
+ * How the order was paid. `hcb` is the current guest cash path (a donation made
+ * on HCB's hosted page, reconciled via the v4 API). `stripe` is retained only
+ * for orders placed before the HCB migration so they still read correctly.
+ */
+export type OrderPaymentMethod = 'points' | 'stripe' | 'hcb';
 /** Settlement state of the money/points charge. */
 export type OrderPaymentStatus = 'unpaid' | 'paid' | 'refunded';
+
+/**
+ * HCB donation linkage for a guest order. The donation is made on HCB's hosted
+ * page (`donationUrl`, pre-filled with the order's amount + a `utm_content` tag
+ * carrying the order id). Reconciliation polls the HCB v4 transactions API and,
+ * on a match, records the matched transaction id + the donation timestamp.
+ */
+export interface OrderHcb {
+    donationUrl?: string;   // the pre-filled /donations/start URL handed to the donor
+    donationTxId?: string;  // HCB v4 transaction id once the donation is matched
+    donatedAt?: string;     // ISO timestamp of the matched donation (HCB's donated_at)
+}
 
 export interface Order {
     id: string;
@@ -79,7 +95,9 @@ export interface Order {
     shippingPointsCost?: number; // points shipping (student orders)
     totalAmount: number;         // cash total charged (USD)
     creditsPaid: number;         // legacy; always 0 now that credits are retired
-    // Stripe linkage (guest orders only).
+    // HCB donation linkage (current guest cash path).
+    hcb?: OrderHcb;
+    // Stripe linkage (legacy guest orders placed before the HCB migration).
     stripeSessionId?: string;
     stripePaymentIntentId?: string;
     shippingCountry?: string;

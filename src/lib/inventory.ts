@@ -167,17 +167,17 @@ export async function reserve(lines: StockLine[]): Promise<
     return { ok: true };
 }
 
-/** Release a held reservation (Stripe session expired/cancelled). Best-effort. */
+/** Release a held reservation (guest donation abandoned/refunded). Best-effort. */
 export async function release(lines: StockLine[]): Promise<void> {
     await rollback(coalesce(lines));
 }
 
 /**
  * Claim the one-time right to settle an order's inventory (commit or release),
- * so Stripe's at-least-once webhook delivery can't double-apply it. Returns true
- * for the first caller only. SET NX is atomic, so concurrent duplicate deliveries
+ * so concurrent HCB reconciliation polls can't double-apply it. Returns true
+ * for the first caller only. SET NX is atomic, so concurrent duplicate polls
  * race and exactly one wins. On a Redis error we return true (fail open) — the
- * webhook's own paymentStatus guard still covers the common duplicate case.
+ * caller's own paymentStatus guard still covers the common duplicate case.
  */
 export async function claimOrderSettlement(orderId: string): Promise<boolean> {
     try {
@@ -192,7 +192,7 @@ export async function claimOrderSettlement(orderId: string): Promise<boolean> {
 /**
  * Convert a held reservation into a sale: drop the reservation AND decrement the
  * cached base stock. Best-effort; also writes the new number back to Airtable so
- * the spreadsheet stays roughly current. Used by the Stripe webhook on payment.
+ * the spreadsheet stays roughly current. Used by the HCB reconciler on payment.
  */
 export async function commitReserved(lines: StockLine[], mirror?: (variantId: string, stock: number) => void): Promise<void> {
     for (const line of coalesce(lines)) {
