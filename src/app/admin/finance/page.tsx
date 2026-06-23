@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSession, signIn } from 'next-auth/react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import HcbConnectionCard from './HcbConnectionCard';
 
 // ── Types mirrored from src/lib/finance.ts (kept loose; this is a display layer) ──
 type Period = 'week' | 'month' | 'year' | 'all';
@@ -107,6 +108,8 @@ export default function FinanceAdmin() {
                     <p className="text-lg text-hackclub-slate font-medium mb-6">
                         On-hand value, cost of goods, margins, purchasing spend, and the weekly report. Cost basis is weighted-average per variant — see <Link href="/admin/inventory" className="text-hackclub-blue hover:underline font-bold">Inventory</Link> for units.
                     </p>
+
+                    <HcbConnectionCard />
 
                     {error && (
                         <div className="mb-4 p-4 bg-hackclub-red/10 border-2 border-hackclub-red rounded-xl">

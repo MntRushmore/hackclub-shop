@@ -9,6 +9,10 @@ type Status = 'waiting' | 'paid' | 'notfound' | 'timeout';
 const CallbackInner = () => {
     const searchParams = useSearchParams();
     const orderId = searchParams.get('orderId');
+    // OAuth return (admin connecting HCB): HCB redirects here with ?code=&state=.
+    const oauthCode = searchParams.get('code');
+    const oauthState = searchParams.get('state');
+    const isOAuthReturn = Boolean(oauthCode && oauthState);
     // Passed through from checkout so we can re-offer the donate link if the
     // popup was blocked. Optional — the order also stores it server-side.
     const donateUrl = searchParams.get('donate');
@@ -17,6 +21,28 @@ const CallbackInner = () => {
     const cartContext = useContext(CartContext);
     // Lets a manual "paid" result stop the background auto-poll loop.
     const settledRef = useRef(false);
+
+    // ── Admin OAuth return: exchange the code, then report connected/failed. ──
+    const [connectState, setConnectState] = useState<'exchanging' | 'connected' | 'failed'>('exchanging');
+    useEffect(() => {
+        if (!isOAuthReturn) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch('/api/admin/hcb/callback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: oauthCode, state: oauthState }),
+                });
+                if (!cancelled) setConnectState(res.ok ? 'connected' : 'failed');
+            } catch {
+                if (!cancelled) setConnectState('failed');
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [isOAuthReturn, oauthCode, oauthState]);
 
     // One status check shared by the auto-poll loop and the manual button.
     // Returns true once the order is confirmed paid (so the poller can stop).
@@ -46,6 +72,7 @@ const CallbackInner = () => {
     // the donation back to this order. Poll until paid. Generous attempt budget
     // (~3.5 min at 3s) since the donor has to fill the HCB form.
     useEffect(() => {
+        if (isOAuthReturn) return; // admin connect flow handled above
         if (!orderId) {
             setStatus('notfound');
             return;
@@ -70,7 +97,7 @@ const CallbackInner = () => {
         return () => {
             cancelled = true;
         };
-    }, [orderId, checkOnce]);
+    }, [orderId, checkOnce, isOAuthReturn]);
 
     // Manual "check now" — for an impatient donor who's already paid.
     const handleManualCheck = useCallback(async () => {
@@ -98,6 +125,29 @@ const CallbackInner = () => {
                     : 'Finish your donation on the HCB tab that just opened. This page will update automatically once it goes through.';
 
     const showWaitingControls = status === 'waiting' || status === 'timeout';
+
+    // ── Admin OAuth-return view (HCB connect). Distinct from the donor flow. ──
+    if (isOAuthReturn) {
+        const cHeading = connectState === 'connected' ? 'HCB Connected' : connectState === 'failed' ? "Couldn't connect HCB" : 'Connecting HCB…';
+        const cSub =
+            connectState === 'connected'
+                ? 'The shop can now reconcile donations automatically. You can close this page.'
+                : connectState === 'failed'
+                    ? 'The authorization didn’t complete. Head back to the admin dashboard and try connecting again.'
+                    : 'Finishing the connection with HCB…';
+        return (
+            <div className="bg-white min-h-screen flex flex-col items-center justify-center text-hackclub-dark text-center px-4">
+                <h1 className="text-5xl font-black text-hackclub-red mb-4">{cHeading}</h1>
+                <p className="text-2xl font-bold mb-6 max-w-xl">{cSub}</p>
+                {connectState === 'exchanging' && (
+                    <span className="inline-block w-6 h-6 border-[3px] border-hackclub-smoke border-t-hackclub-red rounded-full animate-spin mb-8" aria-hidden="true" />
+                )}
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                    <Link href="/admin/finance" className="inline-block bg-hackclub-red hover:bg-hackclub-orange text-white font-bold px-8 py-3 rounded-full shadow-lg transition-colors">Back to admin</Link>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="bg-white min-h-screen flex flex-col items-center justify-center text-hackclub-dark text-center px-4">

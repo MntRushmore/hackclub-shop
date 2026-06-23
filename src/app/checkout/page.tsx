@@ -18,7 +18,13 @@ type CheckoutValue = string | ShippingAddress;
 
 const Checkout = () => {
     const { status } = useSession();
-    const { isStudent } = usePathway();
+    const { isStudent: isStudentPathway, isAdminMode } = usePathway();
+    // Admins (full-catalog mode) choose how to pay per order. Everyone else is
+    // fixed: students pay points, guests donate via HCB.
+    const [adminPayMode, setAdminPayMode] = useState<'points' | 'hcb'>('points');
+    // The single switch the rest of checkout keys off: true = points checkout,
+    // false = HCB donation checkout.
+    const payWithPoints = isAdminMode ? adminPayMode === 'points' : isStudentPathway;
     const cartContext = useContext(CartContext);
     const pointsContext = useContext(PointsContext);
     const [loading, setLoading] = useState(false);
@@ -100,14 +106,22 @@ const Checkout = () => {
 
     const { cart, clearCart } = cartContext;
 
-    // Student (points) totals.
-    const itemsPoints = cart.reduce((total, item) => total + (item.price_points || 0) * item.quantity, 0);
+    // Student (points) totals. For an admin paying points, a cash-only item
+    // (no points price) is charged at 1 point = $1 — must mirror the server.
+    const itemsPoints = cart.reduce((total, item) => {
+        const pts = item.price_points || (isAdminMode ? (item.price_cash || 0) : 0);
+        return total + pts * item.quantity;
+    }, 0);
     const shippingPointsCost = selectedShipping?.costPoints || 0;
     const requiredPoints = itemsPoints + shippingPointsCost;
 
     // Guest (cash) totals. Guests now choose a live shipping rate, so the shipping
-    // amount comes from selectedRate (falls back to 0 until one is chosen).
-    const itemsCash = cart.reduce((total, item) => total + (item.price_cash || 0) * item.quantity, 0);
+    // amount comes from selectedRate (falls back to 0 until one is chosen). For an
+    // admin paying HCB, a points-only item (no cash price) is charged at 1pt = $1.
+    const itemsCash = cart.reduce((total, item) => {
+        const cash = item.price_cash || (isAdminMode ? (item.price_points || 0) : 0);
+        return total + cash * item.quantity;
+    }, 0);
     const shippingCash = selectedRate?.cost ?? 0;
     const cashTotal = itemsCash + shippingCash;
 
@@ -115,7 +129,7 @@ const Checkout = () => {
     const hasEnoughPoints = pointsBalance >= requiredPoints;
     const remainingPointsNeeded = Math.max(0, requiredPoints - pointsBalance);
     const shippingSelected = shippingOptions.length === 0 || !!selectedShipping;
-    const canCheckout = isStudent
+    const canCheckout = payWithPoints
         ? hasEnoughPoints && cart.length > 0 && shippingSelected
         // Guests must have picked a shipping rate before paying.
         : itemsCash > 0 && cart.length > 0 && !!selectedRate;
@@ -253,7 +267,7 @@ const Checkout = () => {
         if (!validateCheckoutFields()) {
             return;
         }
-        if (isStudent) {
+        if (payWithPoints) {
             await handleStudentCheckout();
         } else {
             await handleGuestCheckout();
@@ -274,13 +288,36 @@ const Checkout = () => {
                         <div>
                             <h1 className="text-3xl font-black mb-2 text-hackclub-red">Checkout</h1>
                             <h2 className="text-lg font-bold text-hackclub-slate">
-                                {isStudent ? 'Pay with your points.' : 'Complete your order with a donation via HCB.'}
+                                {payWithPoints ? 'Pay with your points.' : 'Complete your order with a donation via HCB.'}
                             </h2>
                         </div>
 
+                        {/* Admin (full-catalog mode): choose how to pay this order. */}
+                        {isAdminMode && cart.length > 0 && (
+                            <div className="p-4 rounded-2xl bg-hackclub-smoke/30 border-2 border-hackclub-smoke">
+                                <label className="block font-bold text-hackclub-dark mb-3">Payment method (admin)</label>
+                                <div className="flex gap-2">
+                                    {(['points', 'hcb'] as const).map((m) => (
+                                        <button
+                                            key={m}
+                                            type="button"
+                                            onClick={() => setAdminPayMode(m)}
+                                            className={`flex-1 px-4 py-2 rounded-full font-bold text-sm transition-colors border-2 ${
+                                                adminPayMode === m
+                                                    ? 'bg-hackclub-red border-hackclub-red text-white'
+                                                    : 'bg-white border-hackclub-smoke text-hackclub-slate hover:border-hackclub-slate'
+                                            }`}
+                                        >
+                                            {m === 'points' ? 'Pay with points' : 'Donate via HCB'}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Students pick a flat points-shipping country; guests get
                             live rates (below) and don't need this selector. */}
-                        {cart.length > 0 && isStudent && (
+                        {cart.length > 0 && payWithPoints && (
                             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-2xl bg-hackclub-smoke/30 border-2 border-hackclub-smoke">
                                 <label className="block font-bold text-hackclub-dark mb-3">Shipping Country</label>
                                 {shippingOptions.length === 0 ? (
@@ -298,7 +335,7 @@ const Checkout = () => {
                                     >
                                         {shippingOptions.map((option, idx) => (
                                             <option key={option.id || `ship_${idx}`} value={option.id || `ship_${idx}`}>
-                                                {option.country} - {isStudent ? formatPoints(option.costPoints || 0) : formatCash(option.cost || 0)}
+                                                {option.country} - {payWithPoints ? formatPoints(option.costPoints || 0) : formatCash(option.cost || 0)}
                                             </option>
                                         ))}
                                     </select>
@@ -373,7 +410,7 @@ const Checkout = () => {
                             </motion.div>
                         )}
 
-                        {!isStudent && cart.length > 0 && (
+                        {!payWithPoints && cart.length > 0 && (
                             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-2xl bg-hackclub-smoke/30 border-2 border-hackclub-smoke space-y-2">
                                 <label className="block font-bold text-hackclub-dark">Email for receipt</label>
                                 <input
@@ -390,7 +427,7 @@ const Checkout = () => {
 
                         {/* Live shipping rates (guests). Reads the address from
                             checkoutData; updates as the customer fills it in. */}
-                        {!isStudent && cart.length > 0 && (
+                        {!payWithPoints && cart.length > 0 && (
                             <LiveShippingRates
                                 items={cart.map((i) => ({ id: String(i.id), variant_id: i.variant_id ?? undefined, quantity: i.quantity || 1 }))}
                                 checkoutData={checkoutData}
@@ -413,7 +450,7 @@ const Checkout = () => {
                                                 <div className="text-hackclub-muted text-sm">Qty: {item.quantity || 1}</div>
                                             </div>
                                             <div className="font-black text-hackclub-red text-lg">
-                                                {isStudent
+                                                {payWithPoints
                                                     ? formatPoints((item.price_points || 0) * (item.quantity || 1))
                                                     : formatCash((item.price_cash || 0) * (item.quantity || 1))}
                                             </div>
@@ -426,25 +463,25 @@ const Checkout = () => {
                         <div className="bg-hackclub-smoke/30 rounded-2xl p-6 border-2 border-hackclub-smoke space-y-2">
                             <div className="flex justify-between items-center text-hackclub-slate">
                                 <span>Items:</span>
-                                <span>{isStudent ? formatPoints(itemsPoints) : formatCash(itemsCash)}</span>
+                                <span>{payWithPoints ? formatPoints(itemsPoints) : formatCash(itemsCash)}</span>
                             </div>
-                            {isStudent && shippingOptions.length > 0 && (
+                            {payWithPoints && shippingOptions.length > 0 && (
                                 <div className="flex justify-between items-center text-hackclub-slate">
                                     <span>Shipping ({selectedShipping?.country}):</span>
                                     <span>{formatPoints(shippingPointsCost)}</span>
                                 </div>
                             )}
-                            {!isStudent && selectedRate && (
+                            {!payWithPoints && selectedRate && (
                                 <div className="flex justify-between items-center text-hackclub-slate">
                                     <span>Shipping ({selectedRate.label}):</span>
                                     <span>{shippingCash > 0 ? formatCash(shippingCash) : 'Free'}</span>
                                 </div>
                             )}
                             <div className="flex justify-between items-center text-xl font-black pt-2 border-t border-hackclub-smoke">
-                                <span>{isStudent ? 'Points Required:' : 'Total:'}</span>
-                                <span className="text-hackclub-dark">{isStudent ? formatPoints(requiredPoints) : formatCash(cashTotal)}</span>
+                                <span>{payWithPoints ? 'Points Required:' : 'Total:'}</span>
+                                <span className="text-hackclub-dark">{payWithPoints ? formatPoints(requiredPoints) : formatCash(cashTotal)}</span>
                             </div>
-                            {isStudent && (
+                            {payWithPoints && (
                                 <div className="flex justify-between items-center text-sm text-hackclub-slate">
                                     <span>Your points:</span>
                                     <span>{formatPoints(pointsBalance)}</span>
@@ -481,15 +518,15 @@ const Checkout = () => {
                                 {loading ? (
                                     <motion.span key="processing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="inline-flex items-center justify-center gap-2">
                                         <span className="inline-block w-5 h-5 border-[3px] border-white/40 border-t-white rounded-full animate-spin" aria-hidden="true" />
-                                        {isStudent ? 'Processing…' : 'Opening donation page…'}
+                                        {payWithPoints ? 'Processing…' : 'Opening donation page…'}
                                     </motion.span>
                                 ) : canCheckout ? (
                                     <motion.span key="checkout" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                                        {isStudent ? 'Checkout →' : 'Donate via HCB →'}
+                                        {payWithPoints ? 'Checkout →' : 'Donate via HCB →'}
                                     </motion.span>
                                 ) : (
                                     <motion.span key="insufficient" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                                        {isStudent
+                                        {payWithPoints
                                             ? `Need ${remainingPointsNeeded} more points`
                                             : (cart.length === 0
                                                 ? 'Cart is empty'

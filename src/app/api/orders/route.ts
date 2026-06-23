@@ -8,6 +8,7 @@ import { rateLimit, rateLimitResponse } from '../../../lib/rateLimit';
 import { PointsTransaction } from '../../../types/Points';
 import { validateCSRFToken } from '../../../lib/csrf';
 import { validateCartItems } from '../../../lib/productValidation';
+import { isAdmin } from '../../../lib/adminAuth';
 import { commitImmediate, restock, StockLine } from '../../../lib/inventory';
 import { mirrorOrder, mirrorUser } from '../../../lib/airtableMirror';
 import { sendEmail, buildOrderConfirmation, buildAdminNewOrder } from '../../../lib/email';
@@ -106,13 +107,31 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: validation.error }, { status: 400 });
         }
 
-        const verifiedItemPointsTotal = validation.verifiedPointsTotal || 0;
+        // Admins (full-catalog mode) may pay points for ANY item — a cash-only
+        // item is charged at 1 point = $1. Regular students may only buy
+        // points-priced items.
+        const buyerIsAdmin = await isAdmin(session);
 
-        // Every item a student buys must be points-priced.
-        const nonPointsItem = validation.items!.find(i => !i.pricePoints || i.pricePoints <= 0);
-        if (nonPointsItem) {
-            return NextResponse.json({ error: `${nonPointsItem.name} can't be bought with points.` }, { status: 400 });
+        // Effective per-item points cost: the real points price, or (for admins)
+        // the cash price at 1:1 when no points price exists.
+        const itemPointsCost = (i: { pricePoints?: number; priceCash?: number }): number => {
+            if (i.pricePoints && i.pricePoints > 0) return i.pricePoints;
+            if (buyerIsAdmin && i.priceCash && i.priceCash > 0) return i.priceCash;
+            return 0;
+        };
+
+        if (!buyerIsAdmin) {
+            // Every item a (non-admin) student buys must be points-priced.
+            const nonPointsItem = validation.items!.find(i => !i.pricePoints || i.pricePoints <= 0);
+            if (nonPointsItem) {
+                return NextResponse.json({ error: `${nonPointsItem.name} can't be bought with points.` }, { status: 400 });
+            }
         }
+
+        const verifiedItemPointsTotal = validation.items!.reduce(
+            (sum, i) => sum + itemPointsCost(i) * i.quantity,
+            0,
+        );
 
         const verifiedPointsTotal = verifiedItemPointsTotal + shippingPointsNum;
 

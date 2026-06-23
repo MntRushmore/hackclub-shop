@@ -44,7 +44,7 @@ const Shop = () => {
     const [isReleasing, setIsReleasing] = useState(false);
     const [releaseOnCart, setReleaseOnCart] = useState(false);
     const cartContext = useContext(CartContext);
-    const { pathway, loading: pathwayLoading } = usePathway();
+    const { pathway, loading: pathwayLoading, isAdmin, isAdminMode, setAdminMode } = usePathway();
 
     // Catalog controls.
     const [query, setQuery] = useState('');
@@ -180,7 +180,7 @@ const Shop = () => {
                     cartContext.addToCart({
                         id: product.id,
                         name: variant.name,
-                        price: String(getCashPrice(variant)),
+                        price: String(getCashPrice(variant) || getPointsPrice(variant)),
                         price_cash: getCashPrice(variant) || undefined,
                         price_points: getPointsPrice(variant) || undefined,
                         thumbnail_url: variant.product.image,
@@ -266,6 +266,26 @@ const Shop = () => {
                             <CategoryChip key={c} label={c} active={category === c} onClick={() => setCategory(c)} />
                         ))}
                     </div>
+                )}
+
+                {/* Admin-only: reveal the full catalog (points + cash items) and pick
+                    how to pay per order at checkout. Off by default so an admin
+                    shopping as a normal student isn't surprised. */}
+                {isAdmin && (
+                    <label className="flex items-center gap-3 mb-8 px-4 py-3 rounded-2xl bg-hackclub-smoke/40 border-2 border-hackclub-smoke w-fit cursor-pointer select-none">
+                        <input
+                            type="checkbox"
+                            checked={isAdminMode}
+                            onChange={(e) => setAdminMode(e.target.checked)}
+                            className="w-4 h-4 accent-hackclub-red cursor-pointer"
+                        />
+                        <span className="font-bold text-hackclub-dark text-sm">
+                            Admin: show all products
+                        </span>
+                        <span className="text-hackclub-muted text-xs">
+                            {isAdminMode ? 'Viewing every product — pick points or HCB at checkout.' : 'Currently shopping as a student.'}
+                        </span>
+                    </label>
                 )}
 
                 {error && (
@@ -379,7 +399,7 @@ const Shop = () => {
                                                    cartContext.addToCart({
                                                        id: product.id,
                                                        name: variant.name,
-                                                       price: String(getCashPrice(variant)),
+                                                       price: String(getCashPrice(variant) || getPointsPrice(variant)),
                                                        price_cash: getCashPrice(variant) || undefined,
                                                        price_points: getPointsPrice(variant) || undefined,
                                                        thumbnail_url: variant.product.image,

@@ -55,7 +55,7 @@ const ProductPage = () => {
             const cartItem = {
                 id: product.id,
                 name: selectedVariant.name,
-                price: String(getCashPrice(selectedVariant)),
+                price: String(getCashPrice(selectedVariant) || getPointsPrice(selectedVariant)),
                 price_cash: getCashPrice(selectedVariant) || undefined,
                 price_points: getPointsPrice(selectedVariant) || undefined,
                 thumbnail_url: selectedVariant.product.image,

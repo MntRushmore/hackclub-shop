@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '../../auth/[...nextauth]/route';
+import { isAdmin } from '../../../../lib/adminAuth';
 import { isHcbConfigured, buildDonationUrl } from '../../../../lib/hcb';
 import { validateCartItems, getProductById } from '../../../../lib/productValidation';
 import { isStructuredAddress, validateAddress } from '../../../../lib/address';
@@ -66,13 +69,28 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: validation.error }, { status: 400 });
         }
 
-        // Every item the guest buys must have a cash price.
-        const nonCashItem = validation.items!.find(i => !i.priceCash || i.priceCash <= 0);
-        if (nonCashItem) {
-            return NextResponse.json({ error: `${nonCashItem.name} isn't available for purchase.` }, { status: 400 });
+        // Admins (full-catalog mode) may donate-pay for ANY item — a points-only
+        // item is charged at 1 point = $1. Regular guests may only buy cash-priced
+        // items.
+        const buyerIsAdmin = await isAdmin(await getServerSession(authOptions));
+
+        // Effective per-item cash cost: the real cash price, or (for admins) the
+        // points price at 1:1 when no cash price exists.
+        const itemCashCost = (i: { priceCash?: number; pricePoints?: number }): number => {
+            if (i.priceCash && i.priceCash > 0) return i.priceCash;
+            if (buyerIsAdmin && i.pricePoints && i.pricePoints > 0) return i.pricePoints;
+            return 0;
+        };
+
+        if (!buyerIsAdmin) {
+            // Every item a (non-admin) guest buys must have a cash price.
+            const nonCashItem = validation.items!.find(i => !i.priceCash || i.priceCash <= 0);
+            if (nonCashItem) {
+                return NextResponse.json({ error: `${nonCashItem.name} isn't available for purchase.` }, { status: 400 });
+            }
         }
 
-        const itemsCashTotal = validation.verifiedCashTotal!;
+        const itemsCashTotal = validation.items!.reduce((sum, i) => sum + itemCashCost(i) * i.quantity, 0);
 
         // Reserve stock before handing off to HCB, so two guests can't both buy
         // the last unit during the in-flight donation window. Untracked variants
