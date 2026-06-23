@@ -85,6 +85,10 @@ export default function LiveShippingRates({
                 if (data.needsAddress) {
                     setNeedsAddress(true);
                     setOptions([]);
+                    // Surface the specific validation error (e.g. "Postal code is
+                    // required") instead of only the generic "enter your address",
+                    // so a single missing field isn't a silent dead-end.
+                    if (data.error) setError(data.error);
                     return;
                 }
                 if (!res.ok || data.error) {
@@ -129,7 +133,9 @@ export default function LiveShippingRates({
             <label className="block font-bold text-hackclub-dark">Shipping speed</label>
 
             {needsAddress ? (
-                <p className="text-sm text-hackclub-muted">Enter your shipping address above to see shipping options.</p>
+                <p className="text-sm text-hackclub-muted">
+                    {error ? error : 'Enter your shipping address above to see shipping options.'}
+                </p>
             ) : loading ? (
                 <div className="flex items-center gap-2 text-hackclub-muted text-sm font-bold py-2">
                     <span className="inline-block w-4 h-4 border-2 border-hackclub-muted/40 border-t-hackclub-muted rounded-full animate-spin" />
