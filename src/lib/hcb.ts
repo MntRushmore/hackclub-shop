@@ -77,6 +77,10 @@ interface TokenResponse {
     error_description?: string;
 }
 
+// Captures the last token-endpoint failure so the admin diagnostic can surface
+// HCB's actual rejection reason (status + error body) instead of swallowing it.
+let _lastTokenError: string | null = null;
+
 async function postToken(body: Record<string, string>): Promise<TokenResponse | null> {
     try {
         const form = new URLSearchParams(body);
@@ -91,15 +95,19 @@ async function postToken(body: Record<string, string>): Promise<TokenResponse | 
         try {
             data = JSON.parse(text) as TokenResponse;
         } catch {
+            _lastTokenError = `HTTP ${res.status} (non-JSON): ${text.slice(0, 300)}`;
             console.error('[hcb] token endpoint returned non-JSON:', res.status, text.slice(0, 200));
             return null;
         }
         if (!res.ok || data.error) {
+            _lastTokenError = `HTTP ${res.status} ${data.error || ''} ${data.error_description || ''}`.trim();
             console.error('[hcb] token request failed:', res.status, data.error, data.error_description);
             return null;
         }
+        _lastTokenError = null;
         return data;
     } catch (err) {
+        _lastTokenError = `fetch error: ${err instanceof Error ? err.message : String(err)}`;
         console.error('[hcb] token request error:', err instanceof Error ? err.message : err);
         return null;
     }
@@ -341,6 +349,7 @@ export interface HcbDiagnostics {
     apiBase: string;
     requestedScope: string;          // what we send at authorize time
     tokenMinted: boolean;
+    tokenError?: string;             // HCB's raw rejection if the token mint failed
     tokenScopes?: string;            // scopes on the access token, per the token response
     transactionsStatus?: number;     // raw HTTP status from the transactions call
     transactionsBodySnippet?: string;// first chunk of the raw body (errors are visible here)
@@ -369,7 +378,8 @@ export async function diagnoseHcb(orderId?: string, expectedAmountCents?: number
         orderId,
     };
 
-    // Mint a token, capturing its granted scopes from the token response.
+    // Mint a token, capturing its granted scopes — and on failure, HCB's raw
+    // rejection reason (the whole point of this diagnostic).
     let refreshToken: string | null = null;
     try { refreshToken = await redis.get<string>(REDIS_REFRESH_KEY); } catch { /* noted below */ }
     if (refreshToken) {
@@ -382,7 +392,11 @@ export async function diagnoseHcb(orderId?: string, expectedAmountCents?: number
         if (tok?.access_token) {
             diag.tokenMinted = true;
             diag.tokenScopes = (tok as { scope?: string }).scope;
+        } else {
+            diag.tokenError = _lastTokenError ?? 'unknown token error';
         }
+    } else {
+        diag.tokenError = 'no refresh token stored in Redis';
     }
 
     const token = await getAccessToken();
