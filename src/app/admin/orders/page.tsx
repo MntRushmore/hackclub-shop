@@ -1,10 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSession, signIn } from 'next-auth/react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Order } from '../../../types/Order';
+import ShippingPanel from './ShippingPanel';
+
+const PAGE_SIZE = 25;
+type StatusFilter = 'all' | Order['status'];
+type PathwayFilter = 'all' | 'student' | 'guest';
 
 export default function OrdersAdmin() {
     const { data: session, status } = useSession();
@@ -14,6 +19,11 @@ export default function OrdersAdmin() {
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [actingOrderId, setActingOrderId] = useState<string | null>(null);
     const [showTest, setShowTest] = useState(false);
+    // Search / filter / pagination.
+    const [query, setQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+    const [pathwayFilter, setPathwayFilter] = useState<PathwayFilter>('all');
+    const [page, setPage] = useState(1);
 
     useEffect(() => {
         if (status === 'unauthenticated') {
@@ -100,6 +110,24 @@ export default function OrdersAdmin() {
         }
     };
 
+    // Filter pipeline: test toggle → status → pathway → free-text search.
+    // Computed before any early return so hook order stays stable.
+    const filteredOrders = useMemo(() => {
+        const orderSearchText = (o: Order) =>
+            [o.id, o.guestEmail, o.userId, ...o.items.map((i) => i.name), o.shipment?.trackingNumber]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase();
+        const q = query.trim().toLowerCase();
+        return orders.filter((o) => {
+            if (!showTest && o.isTest) return false;
+            if (statusFilter !== 'all' && o.status !== statusFilter) return false;
+            if (pathwayFilter !== 'all' && o.pathway !== pathwayFilter) return false;
+            if (q && !orderSearchText(o).includes(q)) return false;
+            return true;
+        });
+    }, [orders, showTest, statusFilter, pathwayFilter, query]);
+
     if (status === 'loading' || (session && loading)) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-hackclub-smoke">
@@ -108,7 +136,40 @@ export default function OrdersAdmin() {
         );
     }
 
-    const visibleOrders = showTest ? orders : orders.filter((o) => !o.isTest);
+    const totalPages = Math.max(1, Math.ceil(filteredOrders.length / PAGE_SIZE));
+    const clampedPage = Math.min(page, totalPages);
+    const visibleOrders = filteredOrders.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
+
+    const exportCsv = () => {
+        const headers = ['Order ID', 'Pathway', 'Status', 'Payment', 'Buyer', 'Items', 'Total (USD)', 'Points', 'Tracking', 'Created'];
+        const rows = filteredOrders.map((o) => [
+            o.id,
+            o.pathway,
+            o.status,
+            o.paymentStatus || '',
+            o.pathway === 'guest' ? o.guestEmail || '' : o.userId,
+            o.items.map((i) => `${i.quantity}x ${i.name}`).join('; '),
+            o.totalAmount.toFixed(2),
+            o.pointsSpent || 0,
+            o.shipment?.trackingNumber || '',
+            new Date(o.createdAt).toISOString(),
+        ]);
+        const esc = (v: unknown) => {
+            let s = String(v);
+            // Neutralize spreadsheet formula injection: a leading =,+,-,@ is treated
+            // as a formula by Excel/Sheets. Prefix with an apostrophe to force text.
+            if (/^[=+\-@]/.test(s)) s = `'${s}`;
+            return `"${s.replace(/"/g, '""')}"`;
+        };
+        const csv = [headers, ...rows].map((r) => r.map(esc).join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `orders-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
 
     return (
         <div className="min-h-screen bg-white text-hackclub-dark"
@@ -136,16 +197,67 @@ export default function OrdersAdmin() {
                         View and manage all orders
                     </p>
 
-                    <div className="mb-12">
+                    {/* Search + filters + export */}
+                    <div className="flex flex-col lg:flex-row gap-3 mb-4">
+                        <div className="relative flex-1">
+                            <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-hackclub-muted pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                            <input
+                                type="search"
+                                value={query}
+                                onChange={(e) => { setQuery(e.target.value); setPage(1); }}
+                                placeholder="Search by order #, email, user, item, tracking…"
+                                aria-label="Search orders"
+                                className="w-full pl-11 pr-4 py-2.5 rounded-full border-2 border-hackclub-smoke bg-white text-hackclub-dark font-medium focus:outline-none focus:border-hackclub-red transition-colors"
+                            />
+                        </div>
+                        <select
+                            value={statusFilter}
+                            onChange={(e) => { setStatusFilter(e.target.value as StatusFilter); setPage(1); }}
+                            aria-label="Filter by status"
+                            className="px-4 py-2.5 rounded-full border-2 border-hackclub-smoke bg-white text-hackclub-dark font-bold focus:outline-none focus:border-hackclub-red"
+                        >
+                            <option value="all">All statuses</option>
+                            <option value="pending">Pending</option>
+                            <option value="approved">Approved</option>
+                            <option value="fulfilled">Fulfilled</option>
+                            <option value="denied">Denied</option>
+                            <option value="refunded">Refunded</option>
+                        </select>
+                        <select
+                            value={pathwayFilter}
+                            onChange={(e) => { setPathwayFilter(e.target.value as PathwayFilter); setPage(1); }}
+                            aria-label="Filter by pathway"
+                            className="px-4 py-2.5 rounded-full border-2 border-hackclub-smoke bg-white text-hackclub-dark font-bold focus:outline-none focus:border-hackclub-red"
+                        >
+                            <option value="all">All pathways</option>
+                            <option value="student">Points</option>
+                            <option value="guest">Card</option>
+                        </select>
                         <button
                             type="button"
-                            onClick={() => setShowTest((prev) => !prev)}
+                            onClick={exportCsv}
+                            disabled={filteredOrders.length === 0}
+                            className="px-5 py-2.5 rounded-full text-sm font-bold bg-hackclub-blue hover:bg-blue-600 text-white transition-colors disabled:opacity-40"
+                        >
+                            Export CSV
+                        </button>
+                    </div>
+
+                    <div className="flex items-center justify-between mb-8">
+                        <button
+                            type="button"
+                            onClick={() => { setShowTest((prev) => !prev); setPage(1); }}
                             className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold border-2 transition-colors ${showTest ? 'bg-hackclub-dark text-white border-hackclub-dark' : 'bg-white text-hackclub-slate border-hackclub-smoke hover:border-hackclub-slate'}`}
                             aria-pressed={showTest}
                         >
                             <span className={`w-2 h-2 rounded-full ${showTest ? 'bg-hackclub-green' : 'bg-hackclub-muted'}`} />
                             Show test orders
                         </button>
+                        <p className="text-sm text-hackclub-muted font-bold">
+                            {filteredOrders.length} order{filteredOrders.length === 1 ? '' : 's'}
+                        </p>
                     </div>
 
                     {error && (
@@ -231,7 +343,7 @@ export default function OrdersAdmin() {
                                                 actions.push({ action: 'approve', label: 'Approve', className: 'bg-hackclub-green hover:bg-green-600' });
                                                 actions.push({ action: 'deny', label: 'Deny', className: 'bg-hackclub-red hover:bg-red-600' });
                                             } else if (order.status === 'approved') {
-                                                actions.push({ action: 'fulfill', label: 'Fulfill', className: 'bg-hackclub-blue hover:bg-blue-600' });
+                                                // Fulfillment now goes through the shipping panel (below); keep refund here.
                                                 actions.push({ action: 'refund', label: refundLabel, className: 'bg-hackclub-red hover:bg-red-600' });
                                             } else if (order.status === 'fulfilled') {
                                                 actions.push({ action: 'refund', label: refundLabel, className: 'bg-hackclub-red hover:bg-red-600' });
@@ -239,9 +351,16 @@ export default function OrdersAdmin() {
 
                                             const testAction: 'mark-test' | 'unmark-test' = order.isTest ? 'unmark-test' : 'mark-test';
                                             const testLabel = order.isTest ? 'Untest' : 'Mark test';
+                                            const applyUpdate = (updated: Order) => {
+                                                setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+                                                setSelectedOrder((prev) => (prev && prev.id === updated.id ? updated : prev));
+                                            };
 
                                             return (
                                                 <div className="mt-4 flex flex-wrap gap-2">
+                                                    {order.status === 'approved' && (
+                                                        <ShippingPanel order={order} onShipped={applyUpdate} onError={setError} />
+                                                    )}
                                                     {actions.map(({ action, label, className }) => (
                                                         <button
                                                             key={action}
@@ -264,6 +383,38 @@ export default function OrdersAdmin() {
                                                 </div>
                                             );
                                         })()}
+
+                                        {order.shipment?.trackingNumber && (
+                                            <div className="mt-4 pt-4 border-t-2 border-hackclub-smoke flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                                                <span className="font-bold text-hackclub-dark">
+                                                    📦 {order.shipment.carrier || 'Shipped'}{order.shipment.service ? ` ${order.shipment.service}` : ''}
+                                                </span>
+                                                {order.shipment.trackingUrl ? (
+                                                    <a
+                                                        href={order.shipment.trackingUrl}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="font-mono text-hackclub-blue hover:underline"
+                                                    >
+                                                        {order.shipment.trackingNumber}
+                                                    </a>
+                                                ) : (
+                                                    <span className="font-mono text-hackclub-slate">{order.shipment.trackingNumber}</span>
+                                                )}
+                                                {order.shipment.labelUrl && (
+                                                    <a
+                                                        href={order.shipment.labelUrl}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="text-hackclub-slate hover:text-hackclub-dark font-bold underline"
+                                                    >
+                                                        Label PDF
+                                                    </a>
+                                                )}
+                                            </div>
+                                        )}
 
                                         {selectedOrder?.id === order.id && order.statusHistory && order.statusHistory.length > 0 && (
                                             <motion.div
@@ -289,6 +440,30 @@ export default function OrdersAdmin() {
                             )}
                         </AnimatePresence>
                     </div>
+
+                    {totalPages > 1 && (
+                        <div className="flex items-center justify-center gap-4 mt-8">
+                            <button
+                                type="button"
+                                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                disabled={clampedPage <= 1}
+                                className="px-4 py-2 rounded-full text-sm font-bold border-2 border-hackclub-smoke text-hackclub-slate hover:border-hackclub-slate disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >
+                                ← Prev
+                            </button>
+                            <span className="text-sm font-bold text-hackclub-muted">
+                                Page {clampedPage} of {totalPages}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                                disabled={clampedPage >= totalPages}
+                                className="px-4 py-2 rounded-full text-sm font-bold border-2 border-hackclub-smoke text-hackclub-slate hover:border-hackclub-slate disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >
+                                Next →
+                            </button>
+                        </div>
+                    )}
                 </motion.div>
             </div>
         </div>

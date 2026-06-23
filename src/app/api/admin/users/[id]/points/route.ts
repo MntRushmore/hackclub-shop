@@ -4,6 +4,7 @@ import { Redis } from '@upstash/redis';
 import { authOptions } from '../../../../auth/[...nextauth]/route';
 import { requireAdminPermission } from '../../../../../../lib/adminAuth';
 import { mirrorUser } from '../../../../../../lib/airtableMirror';
+import { recordAudit } from '../../../../../../lib/auditLog';
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -50,6 +51,15 @@ export async function PUT(
         const transactions = (await redis.get<any[]>(txKey(userId))) || [];
         transactions.unshift(transaction);
         await redis.set(txKey(userId), transactions);
+
+        void recordAudit({
+            action: amount >= 0 ? 'points.grant' : 'points.deduct',
+            actorId: session?.user?.id || 'unknown',
+            actorEmail: session?.user?.email || undefined,
+            target: userId,
+            summary: `${amount >= 0 ? 'Granted' : 'Deducted'} ${Math.abs(amount)} pts ${amount >= 0 ? 'to' : 'from'} ${userId} (→ ${newBalance}). Reason: ${reason}`,
+            metadata: { amount, previousBalance: currentBalance, newBalance, reason },
+        });
 
         return NextResponse.json({
             userId,
