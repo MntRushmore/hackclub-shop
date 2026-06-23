@@ -73,10 +73,25 @@ const Navigation = () => {
   const [shouldAnimateCart, setShouldAnimateCart] = useState(false);
   const [isInitialMount, setIsInitialMount] = useState(true);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
   }, []);
+
+  // Resolve admin status for the current user (drives the Admin nav link + badge).
+  useEffect(() => {
+    if (status !== 'authenticated') {
+      setIsAdmin(false);
+      return;
+    }
+    let cancelled = false;
+    fetch('/api/admin/me')
+      .then((res) => res.json())
+      .then((data) => { if (!cancelled) setIsAdmin(Boolean(data?.isAdmin)); })
+      .catch(() => { if (!cancelled) setIsAdmin(false); });
+    return () => { cancelled = true; };
+  }, [status]);
 
   useEffect(() => {
     if (cartContext?.totalPrice !== undefined) {
@@ -173,6 +188,15 @@ const Navigation = () => {
                   Orders
                 </Link>
               )}
+
+              {session && isAdmin && (
+                <Link
+                  href="/admin"
+                  className="text-hackclub-red hover:text-hackclub-orange font-bold text-xl transition-colors flex items-center gap-1.5"
+                >
+                  Admin
+                </Link>
+              )}
             </div>
 
             <div className="flex items-center gap-4">
@@ -203,11 +227,27 @@ const Navigation = () => {
                   </button>
 
                   {showUserMenu && (
-                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
                       <div className="px-4 py-2 border-b border-gray-100">
-                        <p className="font-bold text-hackclub-dark truncate">{session.user?.name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-hackclub-dark truncate">{session.user?.name}</p>
+                          {isAdmin && (
+                            <span className="text-[10px] font-black uppercase tracking-wide bg-hackclub-red/10 text-hackclub-red px-1.5 py-0.5 rounded">
+                              Admin
+                            </span>
+                          )}
+                        </div>
                         <p className="text-sm text-hackclub-slate truncate">{session.user?.email}</p>
                       </div>
+                      {isAdmin && (
+                        <Link
+                          href="/admin"
+                          onClick={() => setShowUserMenu(false)}
+                          className="block px-4 py-2 text-hackclub-dark hover:bg-gray-50 font-bold transition-colors"
+                        >
+                          Admin Dashboard
+                        </Link>
+                      )}
                       <button
                         onClick={() => signOut()}
                         className="w-full text-left px-4 py-2 text-hackclub-red hover:bg-gray-50 font-bold transition-colors"
