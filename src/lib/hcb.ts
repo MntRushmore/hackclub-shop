@@ -157,40 +157,60 @@ export async function clearHcbConnection(): Promise<void> {
  * when HCB isn't connected or the refresh fails — callers degrade to "couldn't
  * reconcile yet" rather than throw.
  */
+// Serializes refreshes within an instance: Doorkeeper ROTATES the refresh token
+// (each use returns a new one and revokes the old), so two concurrent refreshes
+// would race and invalidate each other. Concurrent callers share one in-flight
+// refresh instead.
+let _refreshInFlight: Promise<string | null> | null = null;
+
 async function getAccessToken(forceRefresh = false): Promise<string | null> {
     if (!isHcbConfigured()) return null;
     if (!forceRefresh && _access && _access.expiresAt > Date.now()) return _access.value;
+    if (_refreshInFlight) return _refreshInFlight;
 
-    let refreshToken: string | null;
-    try {
-        refreshToken = await redis.get<string>(REDIS_REFRESH_KEY);
-    } catch (err) {
-        console.error('[hcb] failed to read refresh token:', err instanceof Error ? err.message : err);
-        return null;
-    }
-    if (!refreshToken) {
-        // Not connected yet — an admin must authorize the app once.
-        return null;
-    }
+    _refreshInFlight = (async () => {
+        // Re-check the cache inside the critical section — another caller may
+        // have just refreshed while we were queued.
+        if (!forceRefresh && _access && _access.expiresAt > Date.now()) return _access.value;
 
-    const data = await postToken({
-        grant_type: 'refresh_token',
-        refresh_token: refreshToken,
-        client_id: process.env.HCB_CLIENT_ID || '',
-        client_secret: process.env.HCB_CLIENT_SECRET || '',
-    });
-    if (!data?.access_token) return null;
-
-    // Doorkeeper rotates refresh tokens — persist the new one if returned.
-    if (data.refresh_token && data.refresh_token !== refreshToken) {
+        let refreshToken: string | null;
         try {
-            await redis.set(REDIS_REFRESH_KEY, data.refresh_token, { ex: REDIS_RET });
-        } catch {
-            // best-effort; the access token is still usable now
+            refreshToken = await redis.get<string>(REDIS_REFRESH_KEY);
+        } catch (err) {
+            console.error('[hcb] failed to read refresh token:', err instanceof Error ? err.message : err);
+            return null;
         }
+        if (!refreshToken) {
+            // Not connected yet — an admin must authorize the app once.
+            return null;
+        }
+
+        const data = await postToken({
+            grant_type: 'refresh_token',
+            refresh_token: refreshToken,
+            client_id: process.env.HCB_CLIENT_ID || '',
+            client_secret: process.env.HCB_CLIENT_SECRET || '',
+        });
+        if (!data?.access_token) return null;
+
+        // Persist the rotated refresh token IMMEDIATELY so the old (now-revoked)
+        // one is never reused — that reuse is what causes invalid_grant.
+        if (data.refresh_token && data.refresh_token !== refreshToken) {
+            try {
+                await redis.set(REDIS_REFRESH_KEY, data.refresh_token, { ex: REDIS_RET });
+            } catch (err) {
+                console.error('[hcb] failed to persist rotated refresh token:', err instanceof Error ? err.message : err);
+            }
+        }
+        _access = { value: data.access_token, expiresAt: Date.now() + (data.expires_in ?? 7200) * 1000 - 60_000 };
+        return _access.value;
+    })();
+
+    try {
+        return await _refreshInFlight;
+    } finally {
+        _refreshInFlight = null;
     }
-    _access = { value: data.access_token, expiresAt: Date.now() + (data.expires_in ?? 7200) * 1000 - 60_000 };
-    return _access.value;
 }
 
 // ── Connected identity (diagnostics) ─────────────────────────────────────────
@@ -378,30 +398,15 @@ export async function diagnoseHcb(orderId?: string, expectedAmountCents?: number
         orderId,
     };
 
-    // Mint a token, capturing its granted scopes — and on failure, HCB's raw
-    // rejection reason (the whole point of this diagnostic).
-    let refreshToken: string | null = null;
-    try { refreshToken = await redis.get<string>(REDIS_REFRESH_KEY); } catch { /* noted below */ }
-    if (refreshToken) {
-        const tok = await postToken({
-            grant_type: 'refresh_token',
-            refresh_token: refreshToken,
-            client_id: process.env.HCB_CLIENT_ID || '',
-            client_secret: process.env.HCB_CLIENT_SECRET || '',
-        });
-        if (tok?.access_token) {
-            diag.tokenMinted = true;
-            diag.tokenScopes = (tok as { scope?: string }).scope;
-        } else {
-            diag.tokenError = _lastTokenError ?? 'unknown token error';
-        }
-    } else {
-        diag.tokenError = 'no refresh token stored in Redis';
-    }
-
+    // Mint a token THROUGH getAccessToken so the rotated refresh token is
+    // persisted (a raw refresh here would rotate the token and throw the new one
+    // away, invalidating the connection — that was the original bug).
     const token = await getAccessToken();
-    if (!token) {
-        diag.transactionsBodySnippet = diag.connected ? 'token mint failed (refresh token present but no access token)' : 'not connected (no refresh token stored)';
+    if (token) {
+        diag.tokenMinted = true;
+    } else {
+        diag.tokenError = diag.connected ? (_lastTokenError ?? 'token mint failed') : 'no refresh token stored in Redis';
+        diag.transactionsBodySnippet = diag.tokenError;
         return diag;
     }
 
