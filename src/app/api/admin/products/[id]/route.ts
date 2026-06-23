@@ -67,6 +67,7 @@ export async function PUT(
                 color: v.color,
                 image_url: v.image_url,
                 stock: v.stock ? parseInt(v.stock) : undefined,
+                weightOz: v.weightOz != null && v.weightOz !== '' ? parseFloat(v.weightOz) : undefined,
             };
 
             if (cash !== undefined && cash > 0) variant.price_cash = cash;

@@ -66,15 +66,18 @@ export default function ShippingPanel({
         }
     };
 
-    const buy = async (rate: ShippingRate, e: React.MouseEvent) => {
+    // The rate the customer picked + paid for at checkout, if any.
+    const chosen = order.shipment?.chosenAtCheckout ? order.shipment : undefined;
+
+    const buyRate = async (shipId: string, rateId: string, key: string, e: React.MouseEvent) => {
         stop(e);
-        setBuying(rate.id);
+        setBuying(key);
         onError('');
         try {
             const res = await fetch(`/api/admin/orders/${order.id}/shipping`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'buy', shipmentId, rateId: rate.id }),
+                body: JSON.stringify({ action: 'buy', shipmentId: shipId, rateId }),
             });
             const data = await res.json();
             if (!res.ok) {
@@ -88,6 +91,16 @@ export default function ShippingPanel({
         } finally {
             setBuying(null);
         }
+    };
+
+    const buy = async (rate: ShippingRate, e: React.MouseEvent) => {
+        if (!shipmentId) return;
+        await buyRate(shipmentId, rate.id, rate.id, e);
+    };
+
+    const buyChosen = async (e: React.MouseEvent) => {
+        if (!chosen?.easypostShipmentId || !chosen.chosenRateId) return;
+        await buyRate(chosen.easypostShipmentId, chosen.chosenRateId, 'chosen', e);
     };
 
     const recordManual = async (e: React.MouseEvent) => {
@@ -125,13 +138,26 @@ export default function ShippingPanel({
 
     if (!open) {
         return (
-            <button
-                type="button"
-                onClick={fetchRates}
-                className="px-4 py-2 rounded-xl text-sm font-bold text-white bg-hackclub-blue hover:bg-blue-600 transition-colors"
-            >
-                Ship &amp; fulfill
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+                {chosen && (
+                    <button
+                        type="button"
+                        onClick={buyChosen}
+                        disabled={buying === 'chosen'}
+                        className="px-4 py-2 rounded-xl text-sm font-bold text-white bg-hackclub-green hover:bg-green-600 transition-colors disabled:opacity-50"
+                        title={`Customer paid for ${chosen.carrier} ${chosen.service}`}
+                    >
+                        {buying === 'chosen' ? 'Buying…' : `Buy customer's label (${chosen.carrier} ${chosen.service})`}
+                    </button>
+                )}
+                <button
+                    type="button"
+                    onClick={fetchRates}
+                    className="px-4 py-2 rounded-xl text-sm font-bold text-white bg-hackclub-blue hover:bg-blue-600 transition-colors"
+                >
+                    {chosen ? 'Other options' : 'Ship & fulfill'}
+                </button>
+            </div>
         );
     }
 

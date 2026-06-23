@@ -55,6 +55,7 @@ export interface ProductVariant {
     color?: string;
     image_url?: string;
     stock?: number;
+    weightOz?: number; // shipping weight per unit (oz), for live EasyPost rates
 }
 
 export interface ShippingOption {

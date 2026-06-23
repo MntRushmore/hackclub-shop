@@ -12,6 +12,7 @@ import { ShippingAddress } from '../../types/Order';
 import { COUNTRIES, EMPTY_ADDRESS, validateAddress } from '../../lib/address';
 import { formatPoints, formatCash } from '../../lib/paymentUtils';
 import { usePathway } from '../../lib/usePathway';
+import LiveShippingRates, { SelectedRate } from './LiveShippingRates';
 
 type CheckoutValue = string | ShippingAddress;
 
@@ -23,6 +24,9 @@ const Checkout = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [selectedShipping, setSelectedShipping] = useState<ShippingOption | null>(null);
+    // Live EasyPost rate chosen by guests (when configured). Students keep the
+    // flat points-shipping flow below.
+    const [selectedRate, setSelectedRate] = useState<SelectedRate | null>(null);
     const [checkoutData, setCheckoutData] = useState<Record<string, CheckoutValue>>({});
     const [guestEmail, setGuestEmail] = useState('');
     const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
@@ -101,9 +105,10 @@ const Checkout = () => {
     const shippingPointsCost = selectedShipping?.costPoints || 0;
     const requiredPoints = itemsPoints + shippingPointsCost;
 
-    // Guest (cash) totals.
+    // Guest (cash) totals. Guests now choose a live shipping rate, so the shipping
+    // amount comes from selectedRate (falls back to 0 until one is chosen).
     const itemsCash = cart.reduce((total, item) => total + (item.price_cash || 0) * item.quantity, 0);
-    const shippingCash = selectedShipping?.cost || 0;
+    const shippingCash = selectedRate?.cost ?? 0;
     const cashTotal = itemsCash + shippingCash;
 
     const pointsBalance = pointsContext?.balance || 0;
@@ -112,7 +117,8 @@ const Checkout = () => {
     const shippingSelected = shippingOptions.length === 0 || !!selectedShipping;
     const canCheckout = isStudent
         ? hasEnoughPoints && cart.length > 0 && shippingSelected
-        : cashTotal > 0 && cart.length > 0 && shippingSelected;
+        // Guests must have picked a shipping rate before paying.
+        : itemsCash > 0 && cart.length > 0 && !!selectedRate;
 
     const validateCheckoutFields = (): boolean => {
         for (const field of checkoutFields) {
@@ -214,6 +220,9 @@ const Checkout = () => {
                     email: guestEmail,
                     shippingCountry: selectedShipping?.country,
                     checkoutData,
+                    ...(selectedRate?.shipmentId
+                        ? { selectedRate: { rateId: selectedRate.rateId, shipmentId: selectedRate.shipmentId } }
+                        : {}),
                 }),
             });
             const data = await response.json();
@@ -265,7 +274,9 @@ const Checkout = () => {
                             </h2>
                         </div>
 
-                        {cart.length > 0 && (
+                        {/* Students pick a flat points-shipping country; guests get
+                            live rates (below) and don't need this selector. */}
+                        {cart.length > 0 && isStudent && (
                             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-2xl bg-hackclub-smoke/30 border-2 border-hackclub-smoke">
                                 <label className="block font-bold text-hackclub-dark mb-3">Shipping Country</label>
                                 {shippingOptions.length === 0 ? (
@@ -372,6 +383,17 @@ const Checkout = () => {
                                 <p className="text-xs text-hackclub-muted">We&apos;ll send your order confirmation here. Payment is processed securely by Stripe.</p>
                             </motion.div>
                         )}
+
+                        {/* Live shipping rates (guests). Reads the address from
+                            checkoutData; updates as the customer fills it in. */}
+                        {!isStudent && cart.length > 0 && (
+                            <LiveShippingRates
+                                items={cart.map((i) => ({ id: String(i.id), variant_id: i.variant_id ?? undefined, quantity: i.quantity || 1 }))}
+                                checkoutData={checkoutData}
+                                shippingCountry={selectedShipping?.country}
+                                onSelect={setSelectedRate}
+                            />
+                        )}
                     </div>
 
                     {/* RIGHT COLUMN */}
@@ -402,10 +424,16 @@ const Checkout = () => {
                                 <span>Items:</span>
                                 <span>{isStudent ? formatPoints(itemsPoints) : formatCash(itemsCash)}</span>
                             </div>
-                            {shippingOptions.length > 0 && (
+                            {isStudent && shippingOptions.length > 0 && (
                                 <div className="flex justify-between items-center text-hackclub-slate">
                                     <span>Shipping ({selectedShipping?.country}):</span>
-                                    <span>{isStudent ? formatPoints(shippingPointsCost) : formatCash(shippingCash)}</span>
+                                    <span>{formatPoints(shippingPointsCost)}</span>
+                                </div>
+                            )}
+                            {!isStudent && selectedRate && (
+                                <div className="flex justify-between items-center text-hackclub-slate">
+                                    <span>Shipping ({selectedRate.label}):</span>
+                                    <span>{shippingCash > 0 ? formatCash(shippingCash) : 'Free'}</span>
                                 </div>
                             )}
                             <div className="flex justify-between items-center text-xl font-black pt-2 border-t border-hackclub-smoke">
@@ -459,7 +487,11 @@ const Checkout = () => {
                                     <motion.span key="insufficient" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                                         {isStudent
                                             ? `Need ${remainingPointsNeeded} more points`
-                                            : (cart.length === 0 ? 'Cart is empty' : 'Not available for card purchase')}
+                                            : (cart.length === 0
+                                                ? 'Cart is empty'
+                                                : itemsCash <= 0
+                                                    ? 'Not available for card purchase'
+                                                    : 'Select a shipping option')}
                                     </motion.span>
                                 )}
                             </AnimatePresence>

@@ -43,6 +43,10 @@ export interface OrderShipment {
     cost?: number;             // postage paid, USD (for the audit/stats trail)
     estDeliveryDate?: string;  // ISO date string when known
     shippedAt?: Date;
+    // Set when the customer chose+paid a live EasyPost rate at checkout, so admin
+    // fulfillment can buy that exact label. Not yet purchased.
+    chosenRateId?: string;
+    chosenAtCheckout?: boolean;
 }
 
 /** Which storefront an order came through. */

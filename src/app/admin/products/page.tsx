@@ -97,7 +97,8 @@ export default function ProductsAdmin() {
             size: '',
             color: '',
             image_url: '',
-            stock: ''
+            stock: '',
+            weightOz: ''
         }],
         shippingOptions: [{ id: '', country: '', cost: '', costPoints: '' }],
         checkoutFields: [] as FormCheckoutField[],
@@ -181,6 +182,7 @@ export default function ProductsAdmin() {
                         color: v.color,
                         image_url: v.image_url,
                         stock: v.stock,
+                        weightOz: v.weightOz,
                         priceCash: v.priceCash,
                         pricePoints: v.pricePoints,
                     })),
@@ -219,7 +221,8 @@ export default function ProductsAdmin() {
                     size: '',
                     color: '',
                     image_url: '',
-                    stock: ''
+                    stock: '',
+                    weightOz: ''
                 }],
                 shippingOptions: [{ id: '', country: '', cost: '', costPoints: '' }],
                 checkoutFields: [],
@@ -253,6 +256,7 @@ export default function ProductsAdmin() {
                 color: v.color || '',
                 image_url: v.image_url || '',
                 stock: v.stock?.toString() || '',
+                weightOz: (v as any).weightOz?.toString() || '',
             };
         });
 
@@ -271,7 +275,8 @@ export default function ProductsAdmin() {
                 size: '',
                 color: '',
                 image_url: '',
-                stock: ''
+                stock: '',
+                weightOz: ''
             }],
             shippingOptions: (product.shippingOptions || []).map(s => ({
                 id: s.id,
@@ -301,7 +306,8 @@ export default function ProductsAdmin() {
                 size: '',
                 color: '',
                 image_url: '',
-                stock: ''
+                stock: '',
+                weightOz: ''
             }],
             shippingOptions: [{ id: '', country: '', cost: '', costPoints: '' }],
             checkoutFields: [],
@@ -547,6 +553,19 @@ export default function ProductsAdmin() {
                                                             }}
                                                             className="px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
                                                         />
+                                                        <input
+                                                            type="number"
+                                                            step="0.1"
+                                                            placeholder="Weight (oz)"
+                                                            title="Shipping weight per unit in ounces — used for live shipping rates. Leave blank to use the default."
+                                                            value={variant.weightOz}
+                                                            onChange={(e) => {
+                                                                const newVariants = [...formData.variants];
+                                                                newVariants[idx].weightOz = e.target.value;
+                                                                setFormData({ ...formData, variants: newVariants });
+                                                            }}
+                                                            className="px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
+                                                        />
                                                         {formData.variants.length > 1 && (
                                                             <button
                                                                 type="button"
@@ -575,7 +594,8 @@ export default function ProductsAdmin() {
                                                         size: '',
                                                         color: '',
                                                         image_url: '',
-                                                        stock: ''
+                                                        stock: '',
+                                                        weightOz: ''
                                                     }]
                                                 })}
                                                 className="w-full px-4 py-2 border-2 border-dashed border-hackclub-green text-hackclub-green font-bold rounded-lg hover:bg-hackclub-green/10 transition-colors"

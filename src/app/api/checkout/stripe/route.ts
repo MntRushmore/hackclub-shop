@@ -5,6 +5,7 @@ import { isStructuredAddress, validateAddress } from '../../../../lib/address';
 import { rateLimit, rateLimitResponse } from '../../../../lib/rateLimit';
 import { saveGuestOrder } from '../../../../lib/guestOrders';
 import { reserve, release, StockLine } from '../../../../lib/inventory';
+import { validateRate, isShippingConfigured } from '../../../../lib/shipping';
 import { Order, ShippingAddress } from '../../../../types/Order';
 
 /**
@@ -25,11 +26,12 @@ export async function POST(request: Request) {
     if (!rl.success) return rateLimitResponse();
 
     try {
-        const { items, email, shippingCountry, checkoutData } = await request.json() as {
+        const { items, email, shippingCountry, checkoutData, selectedRate } = await request.json() as {
             items: { id: string; name: string; price: string; quantity: number; variant_id?: string | number }[];
             email?: string;
             shippingCountry?: string;
             checkoutData?: Record<string, string | ShippingAddress>;
+            selectedRate?: { rateId: string; shipmentId: string };
         };
 
         if (!items || !Array.isArray(items) || items.length === 0) {
@@ -87,14 +89,29 @@ export async function POST(request: Request) {
             );
         }
 
-        // Resolve the verified USD shipping cost from the first item's product.
+        // Resolve the USD shipping cost. If the customer picked a live EasyPost
+        // rate, re-validate it SERVER-SIDE (never trust the client's price) and use
+        // the authoritative amount. Otherwise fall back to the product's flat
+        // per-country rate (today's behaviour / EasyPost-off).
         let shippingCost = 0;
-        const firstProduct = await getProductById(items[0].id);
-        const shippingOptions = (firstProduct as any)?.shippingOptions as { country: string; cost: number }[] | undefined;
-        if (shippingOptions && shippingOptions.length > 0) {
-            const match = country ? shippingOptions.find(s => s.country === country) : undefined;
-            const chosen = match || shippingOptions[0];
-            shippingCost = typeof chosen.cost === 'number' ? chosen.cost : parseFloat(String(chosen.cost)) || 0;
+        let validatedRate: { carrier: string; service: string; rate: number; estDeliveryDays?: number } | null = null;
+        if (selectedRate?.rateId && selectedRate.shipmentId && isShippingConfigured()) {
+            validatedRate = await validateRate(selectedRate.shipmentId, selectedRate.rateId);
+            if (!validatedRate) {
+                return NextResponse.json(
+                    { error: 'That shipping option is no longer available. Please re-select shipping.' },
+                    { status: 400 },
+                );
+            }
+            shippingCost = validatedRate.rate;
+        } else {
+            const firstProduct = await getProductById(items[0].id);
+            const shippingOptions = (firstProduct as any)?.shippingOptions as { country: string; cost: number }[] | undefined;
+            if (shippingOptions && shippingOptions.length > 0) {
+                const match = country ? shippingOptions.find(s => s.country === country) : undefined;
+                const chosen = match || shippingOptions[0];
+                shippingCost = typeof chosen.cost === 'number' ? chosen.cost : parseFloat(String(chosen.cost)) || 0;
+            }
         }
 
         const stripe = getStripe();
@@ -136,7 +153,9 @@ export async function POST(request: Request) {
                     shipping_options: [{
                         shipping_rate_data: {
                             type: 'fixed_amount',
-                            display_name: country ? `Shipping (${country})` : 'Shipping',
+                            display_name: validatedRate
+                                ? `${validatedRate.carrier} ${validatedRate.service}`.trim()
+                                : (country ? `Shipping (${country})` : 'Shipping'),
                             fixed_amount: { amount: Math.round(shippingCost * 100), currency: 'usd' },
                         },
                     }],
@@ -172,6 +191,20 @@ export async function POST(request: Request) {
             shippingCountry: country,
             shippingAddress,
             inventoryHold: holdLines.filter(l => l.quantity > 0),
+            // Remember the customer's chosen live rate so admin fulfillment buys
+            // that exact label (not just the cheapest).
+            ...(validatedRate && selectedRate
+                ? {
+                      shipment: {
+                          carrier: validatedRate.carrier,
+                          service: validatedRate.service,
+                          cost: validatedRate.rate,
+                          easypostShipmentId: selectedRate.shipmentId,
+                          chosenRateId: selectedRate.rateId,
+                          chosenAtCheckout: true,
+                      },
+                  }
+                : {}),
             checkoutData: checkoutData || {},
             status: 'pending',
             statusHistory: [{ status: 'pending', timestamp: now }],

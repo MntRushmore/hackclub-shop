@@ -25,6 +25,12 @@ export function isShippingConfigured(): boolean {
     return Boolean(process.env.EASYPOST_API_KEY);
 }
 
+/** Fallback parcel weight (oz) when no per-variant weights are set. */
+export function defaultParcelOz(): number {
+    const n = parseFloat(process.env.SHIP_DEFAULT_PARCEL_OZ || '');
+    return Number.isFinite(n) && n > 0 ? n : 6;
+}
+
 /** Origin address postage ships from, read from env (the Hack Club warehouse). */
 function fromAddress() {
     return {
@@ -141,7 +147,7 @@ export async function getRates(to: ShippingAddress, parcel: ParcelSpec = {}): Pr
                     to_address: toEasyPostAddress(to),
                     from_address: fromAddress(),
                     parcel: {
-                        weight: parcel.weightOz ?? 6,
+                        weight: parcel.weightOz ?? defaultParcelOz(),
                         length: parcel.lengthIn,
                         width: parcel.widthIn,
                         height: parcel.heightIn,
@@ -163,6 +169,34 @@ export async function getRates(to: ShippingAddress, parcel: ParcelSpec = {}): Pr
     } catch (err) {
         console.error('[shipping] getRates failed:', err instanceof Error ? err.message : err);
         return { ok: false, reason: 'error', message: err instanceof Error ? err.message : 'rate lookup failed' };
+    }
+}
+
+/**
+ * Re-fetch a shipment and return the authoritative price/carrier for a given rate
+ * id. Used to validate a customer-selected checkout rate SERVER-SIDE so the client
+ * can never spoof a cheaper shipping price. Returns null if the rate isn't found.
+ */
+export async function validateRate(
+    shipmentId: string,
+    rateId: string,
+): Promise<{ carrier: string; service: string; rate: number; estDeliveryDays?: number } | null> {
+    if (!isShippingConfigured()) return null;
+    try {
+        const shipment = await easypost<EpShipment>(`/shipments/${shipmentId}`, { method: 'GET' });
+        const match = (shipment.rates || []).find(r => r.id === rateId);
+        if (!match) return null;
+        const rate = parseFloat(match.rate);
+        if (!Number.isFinite(rate) || rate < 0) return null; // never charge a NaN/negative
+        return {
+            carrier: match.carrier,
+            service: match.service,
+            rate,
+            estDeliveryDays: match.delivery_days ?? undefined,
+        };
+    } catch (err) {
+        console.error('[shipping] validateRate failed:', err instanceof Error ? err.message : err);
+        return null;
     }
 }
 
