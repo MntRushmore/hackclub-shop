@@ -51,12 +51,13 @@ export function buildAuthorizeUrl(state: string): string {
         response_type: 'code',
         state,
     });
-    // Scope is app-dependent. This app rejects `read` (invalid_scope), so by
-    // default we omit the scope entirely and let Doorkeeper use the app's own
-    // granted scope. Set HCB_OAUTH_SCOPE to force a specific value (e.g.
-    // "restricted") if the app requires one.
-    const scope = process.env.HCB_OAUTH_SCOPE;
-    if (scope) params.set('scope', scope);
+    // Scopes are SPACE-SEPARATED. A `restricted` app additionally needs the
+    // scopes the read endpoints require — the transactions/org read needs
+    // `read organizers:read` — so that's the default. HCB_OAUTH_SCOPE overrides
+    // it if HCB changes the required scopes; set it to a single space ("  ") to
+    // force no scope param.
+    const scope = process.env.HCB_OAUTH_SCOPE ?? 'read organizers:read';
+    if (scope.trim()) params.set('scope', scope.trim());
     return `${apiBase()}/oauth/authorize?${params.toString()}`;
 }
 
