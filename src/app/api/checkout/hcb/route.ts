@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../../lib/authOptions';
 import { isAdmin } from '../../../../lib/adminAuth';
 import { isHcbConfigured, buildDonationUrl } from '../../../../lib/hcb';
+import { pointsToUsd } from '../../../../lib/paymentUtils';
 import { validateCartItems, getProductById } from '../../../../lib/productValidation';
 import { isStructuredAddress, validateAddress } from '../../../../lib/address';
 import { rateLimit, rateLimitResponse } from '../../../../lib/rateLimit';
@@ -78,7 +79,7 @@ export async function POST(request: Request) {
         // points price at 1:1 when no cash price exists.
         const itemCashCost = (i: { priceCash?: number; pricePoints?: number }): number => {
             if (i.priceCash && i.priceCash > 0) return i.priceCash;
-            if (buyerIsAdmin && i.pricePoints && i.pricePoints > 0) return i.pricePoints;
+            if (buyerIsAdmin && i.pricePoints && i.pricePoints > 0) return pointsToUsd(i.pricePoints);
             return 0;
         };
 

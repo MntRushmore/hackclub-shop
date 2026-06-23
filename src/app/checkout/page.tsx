@@ -10,7 +10,7 @@ import { PointsContext } from '../../context/PointsContext';
 import { ShippingOption, CheckoutField } from '../../types/Admin';
 import { ShippingAddress } from '../../types/Order';
 import { COUNTRIES, EMPTY_ADDRESS, validateAddress } from '../../lib/address';
-import { formatPoints, formatCash } from '../../lib/paymentUtils';
+import { formatPoints, formatCash, usdToPoints, pointsToUsd } from '../../lib/paymentUtils';
 import { usePathway } from '../../lib/usePathway';
 import LiveShippingRates, { SelectedRate } from './LiveShippingRates';
 
@@ -109,17 +109,20 @@ const Checkout = () => {
     // Student (points) totals. For an admin paying points, a cash-only item
     // (no points price) is charged at 1 point = $1 — must mirror the server.
     const itemsPoints = cart.reduce((total, item) => {
-        const pts = item.price_points || (isAdminMode ? (item.price_cash || 0) : 0);
+        const pts = item.price_points || (isAdminMode ? usdToPoints(item.price_cash || 0) : 0);
         return total + pts * item.quantity;
     }, 0);
-    const shippingPointsCost = selectedShipping?.costPoints || 0;
+    // Points shipping now uses the SAME live EasyPost rate as the cash path,
+    // converted to points at 1pt=$1. (The server re-validates the rate and
+    // recomputes this — the client number is never trusted.)
+    const shippingPointsCost = usdToPoints(selectedRate?.cost ?? 0);
     const requiredPoints = itemsPoints + shippingPointsCost;
 
     // Guest (cash) totals. Guests now choose a live shipping rate, so the shipping
     // amount comes from selectedRate (falls back to 0 until one is chosen). For an
     // admin paying HCB, a points-only item (no cash price) is charged at 1pt = $1.
     const itemsCash = cart.reduce((total, item) => {
-        const cash = item.price_cash || (isAdminMode ? (item.price_points || 0) : 0);
+        const cash = item.price_cash || (isAdminMode ? pointsToUsd(item.price_points || 0) : 0);
         return total + cash * item.quantity;
     }, 0);
     const shippingCash = selectedRate?.cost ?? 0;
@@ -128,10 +131,9 @@ const Checkout = () => {
     const pointsBalance = pointsContext?.balance || 0;
     const hasEnoughPoints = pointsBalance >= requiredPoints;
     const remainingPointsNeeded = Math.max(0, requiredPoints - pointsBalance);
-    const shippingSelected = shippingOptions.length === 0 || !!selectedShipping;
+    // Both pathways now require a live shipping rate before checkout.
     const canCheckout = payWithPoints
-        ? hasEnoughPoints && cart.length > 0 && shippingSelected
-        // Guests must have picked a shipping rate before paying.
+        ? hasEnoughPoints && cart.length > 0 && !!selectedRate
         : itemsCash > 0 && cart.length > 0 && !!selectedRate;
 
     const validateCheckoutFields = (): boolean => {
@@ -192,8 +194,13 @@ const Checkout = () => {
                 body: JSON.stringify({
                     items: itemsPayload(),
                     pointsRequired: requiredPoints,
-                    shippingCountry: selectedShipping?.country,
+                    // Send the chosen live rate; the server re-validates it and
+                    // recomputes the points shipping cost (1pt=$1). The client's
+                    // shippingPointsCost is sent only for the mismatch error message.
                     shippingPointsCost,
+                    ...(selectedRate?.shipmentId
+                        ? { selectedRate: { rateId: selectedRate.rateId, shipmentId: selectedRate.shipmentId } }
+                        : {}),
                     checkoutData,
                     idempotencyKey,
                 }),
@@ -315,33 +322,9 @@ const Checkout = () => {
                             </div>
                         )}
 
-                        {/* Students pick a flat points-shipping country; guests get
-                            live rates (below) and don't need this selector. */}
-                        {cart.length > 0 && payWithPoints && (
-                            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-2xl bg-hackclub-smoke/30 border-2 border-hackclub-smoke">
-                                <label className="block font-bold text-hackclub-dark mb-3">Shipping Country</label>
-                                {shippingOptions.length === 0 ? (
-                                    <div className="w-full px-4 py-3 text-center text-hackclub-slate font-bold bg-hackclub-smoke/50 border-2 border-hackclub-smoke rounded-lg">
-                                        Free shipping
-                                    </div>
-                                ) : (
-                                    <select
-                                        value={selectedShipping?.id || shippingOptions[0]?.id || ''}
-                                        onChange={(e) => {
-                                            const option = shippingOptions.find((s) => s.id === e.target.value);
-                                            if (option) setSelectedShipping(option);
-                                        }}
-                                        className="w-full px-4 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
-                                    >
-                                        {shippingOptions.map((option, idx) => (
-                                            <option key={option.id || `ship_${idx}`} value={option.id || `ship_${idx}`}>
-                                                {option.country} - {payWithPoints ? formatPoints(option.costPoints || 0) : formatCash(option.cost || 0)}
-                                            </option>
-                                        ))}
-                                    </select>
-                                )}
-                            </motion.div>
-                        )}
+                        {/* Both pathways now use live EasyPost rates (the picker is
+                            rendered below, after the address fields). Points orders
+                            pay the rate converted to points at 1pt = $1. */}
 
                         {cart.length > 0 && checkoutFields.length > 0 && (
                             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-2xl bg-hackclub-smoke/30 border-2 border-hackclub-smoke space-y-3">
@@ -425,9 +408,11 @@ const Checkout = () => {
                             </motion.div>
                         )}
 
-                        {/* Live shipping rates (guests). Reads the address from
-                            checkoutData; updates as the customer fills it in. */}
-                        {!payWithPoints && cart.length > 0 && (
+                        {/* Live shipping rates — BOTH pathways. Reads the address from
+                            checkoutData; updates as the customer fills it in. Points
+                            orders are charged the rate converted at 1pt = $1 (shown
+                            in the summary). */}
+                        {cart.length > 0 && (
                             <LiveShippingRates
                                 items={cart.map((i) => ({ id: String(i.id), variant_id: i.variant_id ?? undefined, quantity: i.quantity || 1 }))}
                                 checkoutData={checkoutData}
@@ -465,10 +450,10 @@ const Checkout = () => {
                                 <span>Items:</span>
                                 <span>{payWithPoints ? formatPoints(itemsPoints) : formatCash(itemsCash)}</span>
                             </div>
-                            {payWithPoints && shippingOptions.length > 0 && (
+                            {payWithPoints && selectedRate && (
                                 <div className="flex justify-between items-center text-hackclub-slate">
-                                    <span>Shipping ({selectedShipping?.country}):</span>
-                                    <span>{formatPoints(shippingPointsCost)}</span>
+                                    <span>Shipping ({selectedRate.label}):</span>
+                                    <span>{shippingPointsCost > 0 ? formatPoints(shippingPointsCost) : 'Free'}</span>
                                 </div>
                             )}
                             {!payWithPoints && selectedRate && (

@@ -1,5 +1,23 @@
 import type { Pathway } from './usePathway';
 
+/**
+ * Platform-wide points⇄dollars conversion: 1 point = $1. Used everywhere a value
+ * crosses between the two currencies — admin cross-pathway buys AND points
+ * shipping (live EasyPost rates charged to points orders). Change here to change
+ * the rate everywhere.
+ */
+export const POINTS_PER_USD = 1;
+
+/** Convert a USD amount to points (rounded UP so we never undercharge). */
+export function usdToPoints(usd: number): number {
+    return Math.ceil((usd || 0) * POINTS_PER_USD);
+}
+
+/** Convert points to a USD amount (rounded to cents). Inverse of usdToPoints. */
+export function pointsToUsd(points: number): number {
+    return Math.round(((points || 0) / POINTS_PER_USD) * 100) / 100;
+}
+
 /** Cash (USD) price, or 0 if the variant isn't sold for money. */
 export function getCashPrice(variant: any): number {
     return variant?.price_cash ?? 0;

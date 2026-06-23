@@ -9,6 +9,8 @@ import { PointsTransaction } from '../../../types/Points';
 import { validateCSRFToken } from '../../../lib/csrf';
 import { validateCartItems } from '../../../lib/productValidation';
 import { isAdmin } from '../../../lib/adminAuth';
+import { usdToPoints } from '../../../lib/paymentUtils';
+import { validateRate, isShippingConfigured } from '../../../lib/shipping';
 import { commitImmediate, restock, StockLine } from '../../../lib/inventory';
 import { mirrorOrder, mirrorUser } from '../../../lib/airtableMirror';
 import { sendEmail, buildOrderConfirmation, buildAdminNewOrder } from '../../../lib/email';
@@ -65,17 +67,33 @@ export async function POST(request: Request) {
     // Points debited atomically up front; refunded if the order then fails to save.
     let debitedPoints = 0;
     try {
-        const { items, pointsRequired, shippingCountry, shippingPointsCost, checkoutData, csrfToken, idempotencyKey } = await request.json() as {
+        const { items, pointsRequired, shippingCountry, shippingPointsCost, selectedRate, checkoutData, csrfToken, idempotencyKey } = await request.json() as {
             items: { id: string; name: string; price: string; quantity: number; variant_id?: string | number }[];
             pointsRequired: number;
             shippingPointsCost?: number;
             shippingCountry?: string;
+            selectedRate?: { rateId: string; shipmentId: string };
             checkoutData?: Record<string, string | ShippingAddress>;
             csrfToken?: string;
             idempotencyKey?: string;
         };
 
-        const shippingPointsNum = typeof shippingPointsCost === 'number' ? shippingPointsCost : 0;
+        // Points shipping = the live EasyPost rate, re-validated SERVER-SIDE and
+        // converted to points at 1pt=$1. The client's shippingPointsCost is NEVER
+        // trusted for the charge (only echoed in the mismatch error). When no live
+        // rate is chosen (or EasyPost is off), shipping is free in points.
+        let shippingPointsNum = 0;
+        let validatedRate: { carrier: string; service: string; rate: number; estDeliveryDays?: number } | null = null;
+        if (selectedRate?.rateId && selectedRate.shipmentId && isShippingConfigured()) {
+            validatedRate = await validateRate(selectedRate.shipmentId, selectedRate.rateId);
+            if (!validatedRate) {
+                return NextResponse.json(
+                    { error: 'That shipping option is no longer available. Please re-select shipping.' },
+                    { status: 400 },
+                );
+            }
+            shippingPointsNum = usdToPoints(validatedRate.rate);
+        }
 
         // Optional CSRF token: validated when present. (The app does not yet issue
         // CSRF tokens to clients, so this is belt-and-suspenders; the primary
@@ -135,7 +153,7 @@ export async function POST(request: Request) {
         // the cash price at 1:1 when no points price exists.
         const itemPointsCost = (i: { pricePoints?: number; priceCash?: number }): number => {
             if (i.pricePoints && i.pricePoints > 0) return i.pricePoints;
-            if (buyerIsAdmin && i.priceCash && i.priceCash > 0) return i.priceCash;
+            if (buyerIsAdmin && i.priceCash && i.priceCash > 0) return usdToPoints(i.priceCash);
             return 0;
         };
 
@@ -263,6 +281,20 @@ export async function POST(request: Request) {
             creditsPaid: 0,
             shippingCountry: resolvedShippingCountry,
             shippingAddress,
+            // Remember the chosen live rate so admin fulfillment can buy that exact
+            // label (same as the HCB path). Not yet purchased.
+            ...(validatedRate && selectedRate
+                ? {
+                      shipment: {
+                          carrier: validatedRate.carrier,
+                          service: validatedRate.service,
+                          cost: validatedRate.rate,
+                          easypostShipmentId: selectedRate.shipmentId,
+                          chosenRateId: selectedRate.rateId,
+                          chosenAtCheckout: true,
+                      },
+                  }
+                : {}),
             checkoutData: checkoutData || {},
             status: 'pending',
             statusHistory: [
