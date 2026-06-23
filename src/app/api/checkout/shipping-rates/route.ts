@@ -109,13 +109,40 @@ export async function POST(request: Request) {
         return NextResponse.json({ configured: true, options: [flat], noLiveRates: true });
     }
 
-    const options: RateOption[] = result.rates.map(r => ({
+    // Collapse the raw carrier rates (USPS GroundAdvantage, UPSDAP 3DaySelect,
+    // FEDEX_EXPRESS_SAVER, …) into at most two friendly tiers so checkout isn't a
+    // wall of jargon: "Standard" (cheapest) and, when meaningfully faster, an
+    // "Express" pick. Each tier still carries a real EasyPost rate id + shipmentId
+    // so the chosen rate re-validates at checkout exactly as before.
+    const byPrice = [...result.rates].sort((a, b) => a.rate - b.rate);
+    const standard = byPrice[0];
+
+    // Express = the fastest rate (lowest delivery days), tie-broken by price.
+    // Only offer it if it's genuinely faster AND a different rate than Standard.
+    const withDays = byPrice.filter(r => typeof r.estDeliveryDays === 'number');
+    const fastest = withDays.length
+        ? [...withDays].sort((a, b) =>
+            (a.estDeliveryDays! - b.estDeliveryDays!) || (a.rate - b.rate))[0]
+        : undefined;
+    const express =
+        fastest &&
+        fastest.id !== standard.id &&
+        (typeof standard.estDeliveryDays !== 'number' ||
+            (fastest.estDeliveryDays ?? Infinity) < standard.estDeliveryDays)
+            ? fastest
+            : undefined;
+
+    const toOption = (r: typeof standard, tier: string): RateOption => ({
         id: r.id,
         shipmentId: r.shipmentId,
-        carrier: r.carrier,
-        service: r.service,
+        carrier: tier,        // shown as the option name (e.g. "Standard")
+        service: '',          // no raw carrier service code in the UI
         cost: r.rate,
         estDeliveryDays: r.estDeliveryDays,
-    }));
+    });
+
+    const options: RateOption[] = [toOption(standard, 'Standard')];
+    if (express) options.push(toOption(express, 'Express'));
+
     return NextResponse.json({ configured: true, shipmentId: result.shipmentId, options });
 }

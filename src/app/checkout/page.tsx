@@ -79,6 +79,23 @@ const Checkout = () => {
                                 { id: `field_${Date.now()}_3`, name: 'address', label: 'Shipping Address', type: 'address', required: true },
                             ];
                         setCheckoutFields(fields);
+
+                        // Seed each address field with EMPTY_ADDRESS so its defaults
+                        // (notably country: 'US') exist immediately. Without this,
+                        // checkoutData has no address object until the user touches a
+                        // sub-field, so the live-rate lookup reported "enter your
+                        // address" and only worked after toggling the country select.
+                        setCheckoutData((prev) => {
+                            const next = { ...prev };
+                            let changed = false;
+                            for (const f of fields) {
+                                if (f.type === 'address' && next[f.name] === undefined) {
+                                    next[f.name] = { ...EMPTY_ADDRESS };
+                                    changed = true;
+                                }
+                            }
+                            return changed ? next : prev;
+                        });
                     }
                 } catch (err) {
                     console.error('Failed to load checkout info:', err);
@@ -418,6 +435,7 @@ const Checkout = () => {
                                 checkoutData={checkoutData}
                                 shippingCountry={selectedShipping?.country}
                                 onSelect={setSelectedRate}
+                                priceInPoints={payWithPoints}
                             />
                         )}
                     </div>

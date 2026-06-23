@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ShippingAddress } from '../../types/Order';
-import { formatCash } from '../../lib/paymentUtils';
+import { formatCash, formatPoints, usdToPoints } from '../../lib/paymentUtils';
 
 export interface SelectedRate {
     rateId: string;
@@ -33,11 +33,14 @@ export default function LiveShippingRates({
     checkoutData,
     shippingCountry,
     onSelect,
+    priceInPoints = false,
 }: {
     items: { id: string; variant_id?: string | number; quantity: number }[];
     checkoutData: Record<string, string | ShippingAddress>;
     shippingCountry?: string;
     onSelect: (rate: SelectedRate | null) => void;
+    // Show prices in points (rate × 1pt=$1) for the points checkout path.
+    priceInPoints?: boolean;
 }) {
     const [options, setOptions] = useState<RateOption[]>([]);
     const [loading, setLoading] = useState(false);
@@ -51,9 +54,14 @@ export default function LiveShippingRates({
     const addr = Object.values(checkoutData).find(
         (v): v is ShippingAddress => typeof v === 'object' && v !== null && 'line1' in v,
     );
+    // The address can now be SEEDED with defaults (country only) before the user
+    // types, so "address object exists" no longer means "ready to rate". Only
+    // look up rates once the minimum fields are filled — avoids an eager error
+    // and a wasted (billable) EasyPost call on an empty form.
+    const addrReady = Boolean(addr?.line1?.trim() && addr?.city?.trim() && addr?.postal_code?.trim());
     const sig = JSON.stringify({
         items: items.map((i) => [i.id, i.variant_id, i.quantity]),
-        addr: addr ? [addr.line1, addr.city, addr.state, addr.postal_code, addr.country] : null,
+        addr: addrReady ? [addr!.line1, addr!.city, addr!.state, addr!.postal_code, addr!.country] : null,
         country: shippingCountry,
     });
 
@@ -160,13 +168,15 @@ export default function LiveShippingRates({
                                 <span className="flex items-center gap-3">
                                     <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${active ? 'border-hackclub-red bg-hackclub-red' : 'border-hackclub-muted'}`} />
                                     <span>
-                                        <span className="block font-bold text-hackclub-dark text-sm">{o.carrier} {o.service}</span>
+                                        <span className="block font-bold text-hackclub-dark text-sm">{`${o.carrier} ${o.service}`.trim()}</span>
                                         {o.estDeliveryDays != null && (
                                             <span className="block text-xs text-hackclub-muted">~{o.estDeliveryDays} business day{o.estDeliveryDays === 1 ? '' : 's'}</span>
                                         )}
                                     </span>
                                 </span>
-                                <span className="font-black text-hackclub-dark">{o.cost > 0 ? formatCash(o.cost) : 'Free'}</span>
+                                <span className="font-black text-hackclub-dark">
+                                    {o.cost > 0 ? (priceInPoints ? formatPoints(usdToPoints(o.cost)) : formatCash(o.cost)) : 'Free'}
+                                </span>
                             </button>
                         );
                     })}
