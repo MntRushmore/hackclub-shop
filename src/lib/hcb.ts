@@ -51,12 +51,11 @@ export function buildAuthorizeUrl(state: string): string {
         response_type: 'code',
         state,
     });
-    // Scopes the app is granted, per its HCB app settings: `restricted` (its
-    // identity) + `organizations:read` (to read /organizations/:id/transactions).
-    // Space-separated. HCB_OAUTH_SCOPE overrides; set to a single space to force
-    // no scope param.
-    const scope = process.env.HCB_OAUTH_SCOPE ?? 'restricted organizations:read';
-    if (scope.trim()) params.set('scope', scope.trim());
+    // Send NO scope param by default — let HCB use the app's own default grant
+    // (avoids invalid_scope from mismatched scope strings). HCB_OAUTH_SCOPE can
+    // set an explicit space-separated scope if ever needed.
+    const scope = process.env.HCB_OAUTH_SCOPE;
+    if (scope && scope.trim()) params.set('scope', scope.trim());
     return `${apiBase()}/oauth/authorize?${params.toString()}`;
 }
 
