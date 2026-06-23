@@ -65,15 +65,20 @@ export async function GET(request: Request) {
             filteredOrders = orders.filter(o => new Date(o.createdAt) >= startDate);
         }
 
-        totalOrders = filteredOrders.length;
-        totalRevenue = filteredOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+        // Aggregates (revenue, counts, top products) exclude test orders so junk
+        // doesn't pollute the numbers. The full list — including test orders — is
+        // still returned for the admin page to optionally show.
+        const realOrders = filteredOrders.filter(o => !o.isTest);
 
-        filteredOrders.forEach(order => {
+        totalOrders = realOrders.length;
+        totalRevenue = realOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+
+        realOrders.forEach(order => {
             ordersByStatus[order.status] = (ordersByStatus[order.status] || 0) + 1;
         });
 
         const productSales: Record<string, { name: string; quantity: number; revenue: number }> = {};
-        filteredOrders.forEach(order => {
+        realOrders.forEach(order => {
             order.items.forEach(item => {
                 const productName = item.name;
                 if (!productSales[productName]) {

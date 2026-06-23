@@ -150,6 +150,7 @@ export function mirrorOrder(order: Order, slackId?: string): Promise<void> {
             'Payment Method': order.paymentMethod,
             'Payment Status': order.paymentStatus,
             'Guest Email': order.guestEmail || '',
+            'Is Test': order.isTest ? true : false,
             Status: order.status,
             'Items JSON': JSON.stringify(order.items || []),
             'Item Summary': (order.items || []).map((i) => `${i.quantity}x ${i.name}`).join(', '),

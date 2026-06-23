@@ -59,4 +59,7 @@ export interface Order {
     status: 'pending' | 'approved' | 'fulfilled' | 'denied' | 'refunded';
     statusHistory: OrderStatusUpdate[];
     createdAt: Date;
+    // When true, the order is a test/junk order: hidden from the default admin
+    // list and excluded from stats/revenue. Toggleable by admins.
+    isTest?: boolean;
 }
