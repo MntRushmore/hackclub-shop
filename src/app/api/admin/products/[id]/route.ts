@@ -70,6 +70,20 @@ export async function PUT(
                 weightOz: v.weightOz != null && v.weightOz !== '' ? parseFloat(v.weightOz) : undefined,
             };
 
+            // Unit cost: a submitted value wins; otherwise preserve any existing
+            // cost on the variant (the receiving ledger may have set a weighted
+            // average we don't want a plain product edit to wipe). Matched by
+            // index, then by id as a fallback if the order shifted.
+            const submittedCost = v.unitCost != null && v.unitCost !== '' && !Number.isNaN(parseFloat(v.unitCost))
+                ? Math.max(0, parseFloat(v.unitCost))
+                : undefined;
+            const priorVariant = product.variants?.[idx]?.variant_id === variant.variant_id
+                ? product.variants?.[idx]
+                : (product.variants || []).find((pv: any) => pv.variant_id === variant.variant_id || pv.id === variant.id);
+            const priorCost = (priorVariant as any)?.unitCost;
+            if (submittedCost !== undefined) variant.unitCost = submittedCost;
+            else if (typeof priorCost === 'number') variant.unitCost = priorCost;
+
             if (cash !== undefined && cash > 0) variant.price_cash = cash;
             if (points !== undefined && points > 0) variant.price_points = points;
 

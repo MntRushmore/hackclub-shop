@@ -14,6 +14,10 @@ export interface AdminPermissions {
     canManageProducts: boolean;
     canViewStats: boolean;
     canManageAdmins: boolean;
+    // Finance: view cost/margin/valuation data and record stock receipts. Kept
+    // separate from canViewStats (order stats) and canManageProducts so cost
+    // basis and margin are only visible to finance-trusted roles.
+    canManageFinance: boolean;
 }
 
 export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
@@ -24,6 +28,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
         canManageProducts: true,
         canViewStats: true,
         canManageAdmins: true,
+        canManageFinance: true,
     },
     store_manager: {
         canManageUsers: false,
@@ -32,6 +37,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
         canManageProducts: true,
         canViewStats: true,
         canManageAdmins: false,
+        canManageFinance: false,
     },
     reader: {
         canManageUsers: false,
@@ -40,6 +46,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
         canManageProducts: false,
         canViewStats: true,
         canManageAdmins: false,
+        canManageFinance: false,
     },
 };
 
@@ -56,6 +63,10 @@ export interface ProductVariant {
     image_url?: string;
     stock?: number;
     weightOz?: number; // shipping weight per unit (oz), for live EasyPost rates
+    // Finance: current standard cost per unit (USD) — what we pay for one. Set by
+    // hand or recomputed as a weighted average when stock is received (see
+    // src/lib/costing.ts). Drives inventory valuation and COGS. Missing = uncosted.
+    unitCost?: number;
 }
 
 export interface ShippingOption {

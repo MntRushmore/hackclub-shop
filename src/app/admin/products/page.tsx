@@ -98,7 +98,8 @@ export default function ProductsAdmin() {
             color: '',
             image_url: '',
             stock: '',
-            weightOz: ''
+            weightOz: '',
+            unitCost: ''
         }],
         shippingOptions: [{ id: '', country: '', cost: '', costPoints: '' }],
         checkoutFields: [] as FormCheckoutField[],
@@ -183,6 +184,7 @@ export default function ProductsAdmin() {
                         image_url: v.image_url,
                         stock: v.stock,
                         weightOz: v.weightOz,
+                        unitCost: v.unitCost,
                         priceCash: v.priceCash,
                         pricePoints: v.pricePoints,
                     })),
@@ -222,7 +224,8 @@ export default function ProductsAdmin() {
                     color: '',
                     image_url: '',
                     stock: '',
-                    weightOz: ''
+                    weightOz: '',
+                    unitCost: ''
                 }],
                 shippingOptions: [{ id: '', country: '', cost: '', costPoints: '' }],
                 checkoutFields: [],
@@ -257,6 +260,7 @@ export default function ProductsAdmin() {
                 image_url: v.image_url || '',
                 stock: v.stock?.toString() || '',
                 weightOz: (v as any).weightOz?.toString() || '',
+                unitCost: (v as any).unitCost != null ? String((v as any).unitCost) : '',
             };
         });
 
@@ -276,7 +280,8 @@ export default function ProductsAdmin() {
                 color: '',
                 image_url: '',
                 stock: '',
-                weightOz: ''
+                weightOz: '',
+                unitCost: ''
             }],
             shippingOptions: (product.shippingOptions || []).map(s => ({
                 id: s.id,
@@ -307,7 +312,8 @@ export default function ProductsAdmin() {
                 color: '',
                 image_url: '',
                 stock: '',
-                weightOz: ''
+                weightOz: '',
+                unitCost: ''
             }],
             shippingOptions: [{ id: '', country: '', cost: '', costPoints: '' }],
             checkoutFields: [],
@@ -566,6 +572,20 @@ export default function ProductsAdmin() {
                                                             }}
                                                             className="px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
                                                         />
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            min={0}
+                                                            placeholder="Unit cost ($)"
+                                                            title="What we pay per unit (USD) — drives inventory valuation and cost of goods. Recording a stock receipt in Finance updates this to a weighted average. Leave blank if unknown."
+                                                            value={variant.unitCost}
+                                                            onChange={(e) => {
+                                                                const newVariants = [...formData.variants];
+                                                                newVariants[idx].unitCost = e.target.value;
+                                                                setFormData({ ...formData, variants: newVariants });
+                                                            }}
+                                                            className="px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
+                                                        />
                                                         {formData.variants.length > 1 && (
                                                             <button
                                                                 type="button"
@@ -595,7 +615,8 @@ export default function ProductsAdmin() {
                                                         color: '',
                                                         image_url: '',
                                                         stock: '',
-                                                        weightOz: ''
+                                                        weightOz: '',
+                                                        unitCost: ''
                                                     }]
                                                 })}
                                                 className="w-full px-4 py-2 border-2 border-dashed border-hackclub-green text-hackclub-green font-bold rounded-lg hover:bg-hackclub-green/10 transition-colors"

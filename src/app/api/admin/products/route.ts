@@ -91,6 +91,7 @@ export async function POST(request: Request) {
                     image_url: v.image_url,
                     stock: v.stock ? parseInt(v.stock) : undefined,
                     weightOz: v.weightOz != null && v.weightOz !== '' ? parseFloat(v.weightOz) : undefined,
+                    unitCost: v.unitCost != null && v.unitCost !== '' && !Number.isNaN(parseFloat(v.unitCost)) ? Math.max(0, parseFloat(v.unitCost)) : undefined,
                 };
 
                 if (cash !== undefined && cash > 0) variant.price_cash = cash;
