@@ -6,6 +6,8 @@ import { requireAdminPermission } from '../../../../../lib/adminAuth';
 import { getGuestOrder, updateGuestOrder } from '../../../../../lib/guestOrders';
 import { mirrorOrder } from '../../../../../lib/airtableMirror';
 import { getStripe, isStripeConfigured } from '../../../../../lib/stripe';
+import { restock } from '../../../../../lib/inventory';
+import { recordAudit, AuditAction } from '../../../../../lib/auditLog';
 import { sendEmail, buildStatusUpdate } from '../../../../../lib/email';
 import { Order, OrderStatusUpdate } from '../../../../../types/Order';
 import { PointsTransaction } from '../../../../../types/Points';
@@ -41,6 +43,11 @@ export async function POST(request: Request, { params }: { params: { id: string 
     }
 
     const orderId = params.id;
+    const actorId = session?.user?.id || 'unknown';
+    const actorEmail = session?.user?.email || undefined;
+    const audit = (action: AuditAction, summary: string, metadata?: Record<string, unknown>) =>
+        void recordAudit({ action, actorId, actorEmail, target: orderId, summary, metadata });
+
     const { action, message } = (await request.json()) as { action: Action; message?: string };
 
     const isTestToggle = action === 'mark-test' || action === 'unmark-test';
@@ -55,11 +62,13 @@ export async function POST(request: Request, { params }: { params: { id: string 
         if (guest) {
             const updated = await updateGuestOrder(orderId, { isTest });
             if (updated) void mirrorOrder(updated);
+            audit(`order.${action}` as AuditAction, `${isTest ? 'Marked' : 'Unmarked'} order #${orderId.slice(-8)} as test`);
             return NextResponse.json({ order: updated });
         }
         const updated = await setStudentOrderField(orderId, { isTest });
         if (!updated) return NextResponse.json({ error: 'Order not found' }, { status: 404 });
         void mirrorOrder(updated);
+        audit(`order.${action}` as AuditAction, `${isTest ? 'Marked' : 'Unmarked'} order #${orderId.slice(-8)} as test`);
         return NextResponse.json({ order: updated });
     }
 
@@ -81,6 +90,10 @@ export async function POST(request: Request, { params }: { params: { id: string 
                         return NextResponse.json({ error: 'Stripe refund failed. Check the dashboard.' }, { status: 502 });
                     }
                 }
+                // Return the sold units to stock (best-effort).
+                if (guest.inventoryHold && guest.inventoryHold.length > 0) {
+                    void restock(guest.inventoryHold);
+                }
             }
 
             const updated = await updateGuestOrder(orderId, {
@@ -92,6 +105,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
                 void mirrorOrder(updated);
                 if (updated.guestEmail) void sendEmail(buildStatusUpdate(updated, updated.guestEmail, message));
             }
+            audit(`order.${action}` as AuditAction, `${actionLabel(action)} guest order #${orderId.slice(-8)} ($${guest.totalAmount.toFixed(2)})`, message ? { message } : undefined);
             return NextResponse.json({ order: updated });
         }
 
@@ -102,6 +116,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
         }
         if (result.email) void sendEmail(buildStatusUpdate(result.order, result.email, message));
         void mirrorOrder(result.order);
+        audit(`order.${action}` as AuditAction, `${actionLabel(action)} points order #${orderId.slice(-8)}${result.pointsRefunded ? ` (+${result.pointsRefunded} pts refunded)` : ''}`, message ? { message } : undefined);
         return NextResponse.json({ order: result.order, pointsRefunded: result.pointsRefunded });
     } catch (error) {
         console.error('[Admin order] Error:', error);
@@ -111,6 +126,10 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
 function historyEntry(status: Order['status'], message?: string): OrderStatusUpdate {
     return { status, timestamp: new Date(), ...(message ? { message } : {}) };
+}
+
+function actionLabel(action: StatusAction): string {
+    return { approve: 'Approved', deny: 'Denied', fulfill: 'Fulfilled', refund: 'Refunded' }[action];
 }
 
 /**

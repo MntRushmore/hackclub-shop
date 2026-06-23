@@ -11,6 +11,13 @@ interface StatsData {
     totalRevenue: string;
     ordersByStatus: Record<string, number>;
     topProducts: Array<{ id: string; name: string; quantity: number; revenue: number }>;
+    cashRevenue: string;
+    pointsSpent: number;
+    guestOrderCount: number;
+    studentOrderCount: number;
+    timeSeries: Array<{ date: string; revenue: number; orders: number }>;
+    abandonedSessions: number;
+    lowStockCount: number;
 }
 
 export default function StatsAdmin() {
@@ -148,6 +155,45 @@ export default function StatsAdmin() {
                                 </motion.div>
                             </div>
 
+                            {/* Operational cards */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-6">
+                                    <p className="text-hackclub-muted font-bold text-sm">Cash Revenue</p>
+                                    <p className="text-3xl font-black text-hackclub-green mt-2">${stats.cashRevenue}</p>
+                                    <p className="text-xs text-hackclub-slate mt-1">{stats.guestOrderCount} card order{stats.guestOrderCount === 1 ? '' : 's'}</p>
+                                </div>
+                                <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-6">
+                                    <p className="text-hackclub-muted font-bold text-sm">Points Spent</p>
+                                    <p className="text-3xl font-black text-hackclub-blue mt-2">{stats.pointsSpent.toLocaleString()}</p>
+                                    <p className="text-xs text-hackclub-slate mt-1">{stats.studentOrderCount} points order{stats.studentOrderCount === 1 ? '' : 's'}</p>
+                                </div>
+                                <Link href="/admin/inventory">
+                                    <div className={`bg-white rounded-2xl shadow-lg border-2 p-6 transition-colors ${stats.lowStockCount > 0 ? 'border-hackclub-orange/40 hover:border-hackclub-orange' : 'border-hackclub-smoke hover:border-hackclub-slate'}`}>
+                                        <p className="text-hackclub-muted font-bold text-sm">Low Stock</p>
+                                        <p className={`text-3xl font-black mt-2 ${stats.lowStockCount > 0 ? 'text-hackclub-orange' : 'text-hackclub-dark'}`}>{stats.lowStockCount}</p>
+                                        <p className="text-xs text-hackclub-slate mt-1">variants ≤ 5 left</p>
+                                    </div>
+                                </Link>
+                                <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-6">
+                                    <p className="text-hackclub-muted font-bold text-sm">Abandoned</p>
+                                    <p className="text-3xl font-black text-hackclub-dark mt-2">{stats.abandonedSessions}</p>
+                                    <p className="text-xs text-hackclub-slate mt-1">expired card sessions</p>
+                                </div>
+                            </div>
+
+                            {/* Revenue over time */}
+                            {stats.timeSeries.length > 0 && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.35 }}
+                                    className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-6"
+                                >
+                                    <h2 className="text-2xl font-black text-hackclub-dark mb-6">Revenue over time</h2>
+                                    <RevenueChart data={stats.timeSeries} />
+                                </motion.div>
+                            )}
+
                             {/* Orders by Status */}
                             <motion.div
                                 initial={{ opacity: 0, y: 20 }}
@@ -201,6 +247,35 @@ export default function StatsAdmin() {
                         </div>
                     )}
                 </motion.div>
+            </div>
+        </div>
+    );
+}
+
+/**
+ * Lightweight inline-SVG bar chart for daily revenue. No external chart library
+ * (keeps the bundle small and is CSP-safe). Bars scale to the max day; hover
+ * shows the exact value via the native title tooltip.
+ */
+function RevenueChart({ data }: { data: Array<{ date: string; revenue: number; orders: number }> }) {
+    const max = Math.max(1, ...data.map((d) => d.revenue));
+    // Cap the number of labelled ticks so dense ranges stay readable.
+    const labelEvery = Math.ceil(data.length / 8);
+    return (
+        <div className="overflow-x-auto">
+            <div className="flex items-end gap-1.5 min-w-full h-48" style={{ minWidth: `${data.length * 16}px` }}>
+                {data.map((d, i) => (
+                    <div key={d.date} className="flex-1 flex flex-col items-center justify-end group" style={{ minWidth: '10px' }}>
+                        <div
+                            className="w-full bg-hackclub-red/80 group-hover:bg-hackclub-red rounded-t transition-colors"
+                            style={{ height: `${Math.max(2, (d.revenue / max) * 100)}%` }}
+                            title={`${d.date}: $${d.revenue.toFixed(2)} · ${d.orders} order${d.orders === 1 ? '' : 's'}`}
+                        />
+                        <span className="text-[9px] text-hackclub-muted mt-1 whitespace-nowrap" style={{ visibility: i % labelEvery === 0 ? 'visible' : 'hidden' }}>
+                            {d.date.slice(5)}
+                        </span>
+                    </div>
+                ))}
             </div>
         </div>
     );
