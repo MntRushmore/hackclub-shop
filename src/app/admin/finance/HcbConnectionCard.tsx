@@ -9,23 +9,29 @@ import { useState, useEffect, useCallback } from 'react';
  * (the HCB app can't do machine-to-machine auth), so an admin authorizes the
  * app once here. Until connected, guest HCB orders can't auto-reconcile.
  */
-type Status = { loading: boolean; configured: boolean; connected: boolean };
+interface HcbUser { id?: string; name?: string; email?: string; admin?: boolean }
+type Status = { loading: boolean; configured: boolean; connected: boolean; user: HcbUser | null };
 
 export default function HcbConnectionCard() {
-    const [status, setStatus] = useState<Status>({ loading: true, configured: false, connected: false });
+    const [status, setStatus] = useState<Status>({ loading: true, configured: false, connected: false, user: null });
     const [busy, setBusy] = useState(false);
 
     const load = useCallback(async () => {
         try {
             const res = await fetch('/api/admin/hcb/status');
             if (!res.ok) {
-                setStatus({ loading: false, configured: false, connected: false });
+                setStatus({ loading: false, configured: false, connected: false, user: null });
                 return;
             }
             const data = await res.json();
-            setStatus({ loading: false, configured: Boolean(data.configured), connected: Boolean(data.connected) });
+            setStatus({
+                loading: false,
+                configured: Boolean(data.configured),
+                connected: Boolean(data.connected),
+                user: data.user ?? null,
+            });
         } catch {
-            setStatus({ loading: false, configured: false, connected: false });
+            setStatus({ loading: false, configured: false, connected: false, user: null });
         }
     }, []);
 
@@ -62,6 +68,19 @@ export default function HcbConnectionCard() {
                                 ? 'Guest donations reconcile automatically. Reconnect if reads start failing.'
                                 : 'Authorize the shop with HCB once so guest donations can be matched to orders. Guest orders stay unpaid until this is connected.'}
                     </p>
+                    {status.connected && (
+                        status.user ? (
+                            <p className="text-sm text-hackclub-dark mt-2">
+                                Signed in to HCB as <span className="font-bold">{status.user.name || status.user.email || status.user.id || 'unknown'}</span>
+                                {status.user.email && status.user.name ? <span className="text-hackclub-slate"> ({status.user.email})</span> : null}
+                                {status.user.admin ? <span className="ml-2 px-2 py-0.5 rounded-full bg-hackclub-blue/10 text-hackclub-blue text-xs font-bold align-middle">HCB admin</span> : null}
+                            </p>
+                        ) : (
+                            <p className="text-sm text-hackclub-red font-bold mt-2">
+                                Connected, but couldn&apos;t read the HCB account — the token may lack access to this org. Reconnect with an HCB account that&apos;s an organizer on the shop org.
+                            </p>
+                        )
+                    )}
                 </div>
             </div>
             {status.configured && (

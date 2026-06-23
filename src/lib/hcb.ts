@@ -1,37 +1,3 @@
-/**
- * HCB Donations payment layer for the guest (adult / cash) checkout.
- *
- * The shop does NOT take card payments directly. Instead a guest order is paid
- * by making a donation to the shop's HCB organization on HCB's own hosted
- * donation page. The flow:
- *
- *   1. Checkout creates an `unpaid` order and builds a PRE-FILLED HCB donation
- *      URL (`buildDonationUrl`) — amount derived server-side, plus a
- *      `utm_content=<orderId>` tag so the donation can later be tied back to the
- *      exact order. The donor pays on HCB; no money flows through our servers.
- *   2. Reconciliation (`findDonationForOrder`) polls the HCB **v4** transactions
- *      API for the org and matches the donation by its `utm_content` (amount +
- *      email are a secondary sanity check). On a match the order is finalized.
- *
- * Why a poll instead of a webhook: the OAuth app we hold is read-only
- * (`restricted` scope), so we can neither create the donation via API nor
- * receive a signed webhook — the only write path is HCB's hosted form, and the
- * only trusted read-back is the transactions API.
- *
- * Provider-agnostic and safe by design, like `email.ts` / `shipping.ts`:
- *   - No SDK; plain `fetch` against the HCB v4 REST API with a bearer token.
- *   - When the HCB env is unset, every call returns a typed "not configured"
- *     result instead of throwing, so a misconfigured deploy fails soft (the
- *     order just stays `unpaid`) rather than taking down checkout.
- *
- * To go live, set (see `.env.example`):
- *   HCB_API_BASE   e.g. https://hcb.hackclub.com/api/v4 (local dev: http://localhost:4000/api/v4)
- *   HCB_ORG_ID     the org id for the transactions endpoint (e.g. org_E1u04j)
- *   HCB_ORG_SLUG   the org slug for the donation-start URL
- *   HCB_CLIENT_ID / HCB_CLIENT_SECRET   the Doorkeeper OAuth app credentials
- *   NEXT_PUBLIC_HCB_DONATE_BASE   https://hcb.hackclub.com/donations/start/<slug>
- */
-
 import { Redis } from '@upstash/redis';
 
 const redis = new Redis({
@@ -56,17 +22,6 @@ export function isHcbConfigured(): boolean {
     );
 }
 
-// ── Donation URL (the hosted write path) ─────────────────────────────────────
-
-/**
- * Build the pre-filled HCB donation URL the donor is sent to. Amount is taken
- * verbatim from the server-derived order total (never a client-supplied price).
- * HCB's donation-start form reads the `amount` query param in CENTS (an integer)
- * — passing dollars makes it read $5.00 as 5¢. Name and email pre-fill the
- * donor's details on HCB (cosmetic — the shipping address lives on our order,
- * not the donation). The `utm_content` tag carries the order id back onto the
- * donation record so reconciliation can match it deterministically.
- */
 export function buildDonationUrl(opts: { amountUsd: number; email?: string; name?: string; orderId: string }): string {
     const slug = process.env.HCB_ORG_SLUG || '';
     // Prefer an explicit donate base if provided (lets prod/staging differ from the API host).
@@ -81,28 +36,14 @@ export function buildDonationUrl(opts: { amountUsd: number; email?: string; name
     return `${base}?${params.toString()}`;
 }
 
-// ── OAuth token (the read path, authorization-code grant) ────────────────────
-//
-// The HCB app does NOT support client_credentials — confirmed against the live
-// API (it rejects the grant and redirects to a human login). So an admin
-// authorizes the app ONCE via the authorization-code flow; we persist the
-// refresh token in Redis and mint short-lived access tokens from it. The
-// reconciler reads transactions with the resulting bearer token.
-
 const REDIS_REFRESH_KEY = 'hcb:oauth:refresh_token';
-const REDIS_RET = 60 * 60 * 24 * 365; // keep the refresh token ~1y
-
-// In-memory access-token cache (per server instance). The refresh token is the
-// durable secret; access tokens are cheap to re-mint.
+const REDIS_RET = 60 * 60 * 24 * 365; 
 let _access: { value: string; expiresAt: number } | null = null;
-
-/** The redirect URI registered with the HCB app. Must match exactly. */
 function redirectUri(): string {
     const origin = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000').replace(/\/+$/, '');
     return `${origin}/hcb/callback`;
 }
 
-/** Build the HCB authorize URL an admin visits once to connect the shop. */
 export function buildAuthorizeUrl(state: string): string {
     const params = new URLSearchParams({
         client_id: process.env.HCB_CLIENT_ID || '',
@@ -242,6 +183,41 @@ async function getAccessToken(forceRefresh = false): Promise<string | null> {
     }
     _access = { value: data.access_token, expiresAt: Date.now() + (data.expires_in ?? 7200) * 1000 - 60_000 };
     return _access.value;
+}
+
+// ── Connected identity (diagnostics) ─────────────────────────────────────────
+
+export interface HcbUser {
+    id?: string;
+    name?: string;
+    email?: string;
+    admin?: boolean;
+}
+
+/**
+ * Who the stored token authenticates as on HCB (`GET /api/v4/user`). Used by the
+ * admin dashboard to show which HCB account is connected — important because a
+ * `403 not_authorized` reading the org's transactions usually means this user
+ * isn't an organizer on that org. Returns null when not connected / unreachable.
+ */
+export async function getConnectedHcbUser(): Promise<HcbUser | null> {
+    const token = await getAccessToken();
+    if (!token) return null;
+    try {
+        const res = await fetch(`${apiBase()}/user`, {
+            headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+            cache: 'no-store',
+        });
+        if (!res.ok) {
+            console.error('[hcb] /user request failed:', res.status, (await res.text()).slice(0, 200));
+            return null;
+        }
+        const data = (await res.json()) as HcbUser;
+        return { id: data.id, name: data.name, email: data.email, admin: data.admin };
+    } catch (err) {
+        console.error('[hcb] /user request error:', err instanceof Error ? err.message : err);
+        return null;
+    }
 }
 
 // ── Transactions (reconciliation) ────────────────────────────────────────────
