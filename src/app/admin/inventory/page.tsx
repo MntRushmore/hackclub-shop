@@ -148,7 +148,7 @@ export default function InventoryAdmin() {
                         </button>
                     </div>
                     <p className="text-lg text-hackclub-slate font-medium mb-6">
-                        Stock is tracked per variant. Leave a stock field blank for unlimited. Airtable is the source of truth — edits here also update the product and re-sync to Airtable.
+                        Stock is tracked per variant. Leave a stock field blank for unlimited. Airtable is the source of truth — edits here also update the product and re-sync to Airtable. For cost, valuation, and margins, see <Link href="/admin/finance" className="text-hackclub-blue hover:underline font-bold">Finance</Link>.
                     </p>
 
                     <div className="mb-6">

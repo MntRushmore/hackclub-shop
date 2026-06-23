@@ -4,6 +4,13 @@ export interface OrderItem {
     price: string;
     quantity: number;
     thumbnail_url?: string;
+    // Finance: the variant sold and its cost basis (USD per unit) captured at the
+    // moment of sale, so cost-of-goods stays point-in-time even if the variant's
+    // standard cost changes later. Both optional — orders predating the finance
+    // layer (or lines that can't be mapped to a variant) simply omit them, and
+    // reporting falls back to the variant's current cost, flagged as estimated.
+    variantId?: string;
+    unitCost?: number;
 }
 
 /**

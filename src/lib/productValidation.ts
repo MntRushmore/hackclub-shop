@@ -18,6 +18,7 @@ interface ProductVariant {
     color?: string;
     image_url?: string;
     stock?: number;
+    unitCost?: number; // finance: cost basis per unit (USD), captured onto sold lines
 }
 
 interface CartItemForValidation {
@@ -70,6 +71,7 @@ export interface VerifiedCartItem {
     quantity: number;
     thumbnail_url?: string;
     variantId: string;      // canonical variant id, for stock reservation
+    unitCost?: number;      // finance: cost basis per unit (USD) at time of sale
 }
 
 /**
@@ -143,6 +145,7 @@ export async function validateCartItems(items: CartItemForValidation[]): Promise
             quantity: item.quantity,
             thumbnail_url: variant.image_url || product.image_url || product.thumbnail_url,
             variantId: String(variant.variant_id || variant.id),
+            unitCost: typeof variant.unitCost === 'number' && variant.unitCost >= 0 ? variant.unitCost : undefined,
         });
     }
 

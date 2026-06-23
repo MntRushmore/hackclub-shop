@@ -30,7 +30,8 @@ export type AuditAction =
     | 'order.ship'
     | 'points.grant'
     | 'points.deduct'
-    | 'inventory.adjust';
+    | 'inventory.adjust'
+    | 'inventory.receive';
 
 export interface AuditEntry {
     id: string;

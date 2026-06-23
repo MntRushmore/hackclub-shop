@@ -187,6 +187,9 @@ export async function POST(request: Request) {
                 price: item.price,
                 quantity: item.quantity,
                 thumbnail_url: item.thumbnail_url,
+                // Finance: capture variant + cost basis at sale time for COGS.
+                variantId: item.variantId,
+                unitCost: item.unitCost,
             })),
             subtotal: 0,
             pointsRequired: verifiedPointsTotal,

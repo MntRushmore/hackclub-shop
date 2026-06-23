@@ -238,6 +238,23 @@ export default function AdminDashboard() {
                             </Link>
                         </motion.div>
 
+                        {/* Finance */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.52 }}
+                        >
+                            <Link href="/admin/finance">
+                                <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-6 hover:shadow-xl hover:border-hackclub-green transition-all cursor-pointer group">
+                                    <div className="w-12 h-12 bg-hackclub-green/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-hackclub-green/20 transition-colors">
+                                        <Icon glyph="bag" size={24} style={{ color: 'var(--hackclub-green, #33d6a6)' }} />
+                                    </div>
+                                    <h3 className="text-xl font-black text-hackclub-dark mb-2">Finance</h3>
+                                    <p className="text-hackclub-slate text-sm">Inventory value, cost of goods, margins, weekly reports</p>
+                                </div>
+                            </Link>
+                        </motion.div>
+
                         {/* Audit Log */}
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
