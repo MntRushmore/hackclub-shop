@@ -13,6 +13,7 @@ export default function OrdersAdmin() {
     const [error, setError] = useState<string | null>(null);
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [actingOrderId, setActingOrderId] = useState<string | null>(null);
+    const [showTest, setShowTest] = useState(false);
 
     useEffect(() => {
         if (status === 'unauthenticated') {
@@ -64,7 +65,7 @@ export default function OrdersAdmin() {
     const handleAction = async (
         e: React.MouseEvent,
         order: Order,
-        action: 'approve' | 'deny' | 'fulfill' | 'refund',
+        action: 'approve' | 'deny' | 'fulfill' | 'refund' | 'mark-test' | 'unmark-test',
     ) => {
         e.stopPropagation();
 
@@ -107,6 +108,8 @@ export default function OrdersAdmin() {
         );
     }
 
+    const visibleOrders = showTest ? orders : orders.filter((o) => !o.isTest);
+
     return (
         <div className="min-h-screen bg-white text-hackclub-dark"
             style={{
@@ -129,9 +132,21 @@ export default function OrdersAdmin() {
                     <h1 className="text-5xl sm:text-6xl font-black text-hackclub-dark mb-2">
                         Orders
                     </h1>
-                    <p className="text-lg text-hackclub-slate font-medium mb-12">
+                    <p className="text-lg text-hackclub-slate font-medium mb-6">
                         View and manage all orders
                     </p>
+
+                    <div className="mb-12">
+                        <button
+                            type="button"
+                            onClick={() => setShowTest((prev) => !prev)}
+                            className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold border-2 transition-colors ${showTest ? 'bg-hackclub-dark text-white border-hackclub-dark' : 'bg-white text-hackclub-slate border-hackclub-smoke hover:border-hackclub-slate'}`}
+                            aria-pressed={showTest}
+                        >
+                            <span className={`w-2 h-2 rounded-full ${showTest ? 'bg-hackclub-green' : 'bg-hackclub-muted'}`} />
+                            Show test orders
+                        </button>
+                    </div>
 
                     {error && (
                         <motion.div
@@ -145,7 +160,7 @@ export default function OrdersAdmin() {
 
                     <div className="space-y-4">
                         <AnimatePresence initial={false} mode="popLayout">
-                            {orders.length === 0 ? (
+                            {visibleOrders.length === 0 ? (
                                 <motion.div
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
@@ -154,7 +169,7 @@ export default function OrdersAdmin() {
                                     <p className="text-hackclub-muted font-bold">No orders yet</p>
                                 </motion.div>
                             ) : (
-                                orders.map((order, index) => (
+                                visibleOrders.map((order, index) => (
                                     <motion.div
                                         key={order.id}
                                         initial={{ opacity: 0, y: 20 }}
@@ -169,6 +184,11 @@ export default function OrdersAdmin() {
                                                 <p className="text-xs text-hackclub-slate">{order.pathway === 'guest' ? `Guest: ${order.guestEmail || '—'}` : `User: ${order.userId}`}</p>
                                             </div>
                                             <div className="flex items-center gap-2">
+                                                {order.isTest && (
+                                                    <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-600">
+                                                        TEST
+                                                    </span>
+                                                )}
                                                 {order.pathway && (
                                                     <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${order.pathway === 'guest' ? 'bg-purple-100 text-purple-800' : 'bg-cyan-100 text-cyan-800'}`}>
                                                         {order.pathway === 'guest' ? 'Card' : 'Points'}
@@ -217,7 +237,8 @@ export default function OrdersAdmin() {
                                                 actions.push({ action: 'refund', label: refundLabel, className: 'bg-hackclub-red hover:bg-red-600' });
                                             }
 
-                                            if (actions.length === 0) return null;
+                                            const testAction: 'mark-test' | 'unmark-test' = order.isTest ? 'unmark-test' : 'mark-test';
+                                            const testLabel = order.isTest ? 'Untest' : 'Mark test';
 
                                             return (
                                                 <div className="mt-4 flex flex-wrap gap-2">
@@ -232,6 +253,14 @@ export default function OrdersAdmin() {
                                                             {isActing ? 'Working…' : label}
                                                         </button>
                                                     ))}
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => handleAction(e, order, testAction)}
+                                                        disabled={isActing}
+                                                        className="px-4 py-2 rounded-xl text-sm font-bold bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
+                                                        {isActing ? 'Working…' : testLabel}
+                                                    </button>
                                                 </div>
                                             );
                                         })()}

@@ -47,6 +47,22 @@ export async function getGuestOrderBySession(sessionId: string): Promise<Order |
     return getGuestOrder(orderId);
 }
 
+/**
+ * Look up a guest order by email + order id, for the public order-status page.
+ * Both must match: the email proves ownership (no auth), the id selects the order.
+ * Accepts the full id or the 8-char short ref shown to customers.
+ */
+export async function lookupGuestOrder(email: string, orderRef: string): Promise<Order | null> {
+    const ids = (await redis.get<string[]>(emailKey(email))) || [];
+    const ref = orderRef.trim().toLowerCase();
+    for (const id of ids) {
+        if (id.toLowerCase() === ref || id.slice(-8).toLowerCase() === ref) {
+            return getGuestOrder(id);
+        }
+    }
+    return null;
+}
+
 /** Patch an existing guest order in place (e.g. mark paid from the webhook). */
 export async function updateGuestOrder(orderId: string, patch: Partial<Order>): Promise<Order | null> {
     const existing = await getGuestOrder(orderId);

@@ -15,6 +15,9 @@ import { formatAddress } from './address';
 
 const FROM = process.env.EMAIL_FROM || 'Hack Club Shop <shop@hackclub.com>';
 const ADMIN_EMAIL = process.env.ADMIN_ORDER_EMAIL; // staff inbox for new-order alerts
+// Public base URL for links in emails (no request context here). Falls back
+// through the URLs already configured for the app.
+const BASE_URL = (process.env.NEXT_PUBLIC_API_URL || process.env.NEXTAUTH_URL || 'https://shop.hackclub.com').replace(/\/$/, '');
 
 export interface EmailMessage {
     to: string;
@@ -115,13 +118,24 @@ function shell(title: string, bodyHtml: string): string {
 /** Order confirmation to the customer (works for both guest + student orders). */
 export function buildOrderConfirmation(order: Order, to: string): EmailMessage {
     const ref = order.id.slice(-8);
-    const text = `Thanks for your order!\n\nOrder #${ref}\n\nItems:\n${itemsText(order)}\n\n${priceLine(order)}\nShipping to: ${shippingLine(order)}\n\nWe'll let you know when it ships.`;
+
+    // Guests have no account; give them a self-serve status link prefilled with
+    // their email + order ref. Students track orders from /orders while signed in.
+    const trackUrl =
+        order.pathway === 'guest'
+            ? `${BASE_URL}/orders/track?email=${encodeURIComponent(to)}&ref=${encodeURIComponent(ref)}`
+            : `${BASE_URL}/orders`;
+    const trackText = `\n\nTrack your order: ${trackUrl}`;
+    const trackHtml = `<p style="margin-top:16px"><a href="${escapeHtml(trackUrl)}" style="display:inline-block;background:#ec3750;color:#fff;text-decoration:none;font-weight:700;padding:10px 20px;border-radius:999px">Track your order →</a></p>`;
+
+    const text = `Thanks for your order!\n\nOrder #${ref}\n\nItems:\n${itemsText(order)}\n\n${priceLine(order)}\nShipping to: ${shippingLine(order)}\n\nWe'll let you know when it ships.${trackText}`;
     const html = shell('Thanks for your order!', `
         <p>Your order <strong>#${ref}</strong> is confirmed.</p>
         <ul>${itemsHtml(order)}</ul>
         <p><strong>${escapeHtml(priceLine(order))}</strong></p>
         <p style="color:#8492a6">Shipping to: ${escapeHtml(shippingLine(order))}</p>
-        <p>We'll email you again when it ships.</p>`);
+        <p>We'll email you again when it ships.</p>
+        ${trackHtml}`);
     return { to, subject: `Your Hack Club Shop order #${ref}`, html, text };
 }
 
@@ -151,10 +165,28 @@ export function buildStatusUpdate(order: Order, to: string, message?: string): E
     };
     const line = map[order.status] || `Your order status is now: ${order.status}.`;
     const reason = message ? `\n\nNote: ${message}` : '';
-    const text = `Order #${ref}\n\n${line}${reason}`;
+
+    // When the order shipped with a tracking number, surface it prominently.
+    const ship = order.status === 'fulfilled' ? order.shipment : undefined;
+    const carrierLabel = ship?.carrier ? `${ship.carrier}${ship.service ? ` ${ship.service}` : ''}` : '';
+    const eta = ship?.estDeliveryDate ? `\nEstimated delivery: ${ship.estDeliveryDate}` : '';
+    const trackText = ship?.trackingNumber
+        ? `\n\nTracking${carrierLabel ? ` (${carrierLabel})` : ''}: ${ship.trackingNumber}${ship.trackingUrl ? `\n${ship.trackingUrl}` : ''}${eta}`
+        : '';
+
+    const text = `Order #${ref}\n\n${line}${reason}${trackText}`;
+    const trackHtml = ship?.trackingNumber
+        ? `<div style="margin-top:16px;padding:14px 16px;background:#f9fafc;border-radius:10px">
+            <p style="margin:0 0 6px;font-weight:700">Tracking${carrierLabel ? ` — ${escapeHtml(carrierLabel)}` : ''}</p>
+            <p style="margin:0 0 10px;font-family:monospace">${escapeHtml(ship.trackingNumber)}</p>
+            ${ship.trackingUrl ? `<a href="${escapeHtml(ship.trackingUrl)}" style="display:inline-block;background:#ec3750;color:#fff;text-decoration:none;font-weight:700;padding:8px 16px;border-radius:999px">Track your package →</a>` : ''}
+            ${ship.estDeliveryDate ? `<p style="margin:10px 0 0;color:#8492a6;font-size:13px">Estimated delivery: ${escapeHtml(ship.estDeliveryDate)}</p>` : ''}
+        </div>`
+        : '';
     const html = shell(`Order #${ref} update`, `
         <p>${escapeHtml(line)}</p>
-        ${message ? `<p style="color:#8492a6">Note: ${escapeHtml(message)}</p>` : ''}`);
+        ${message ? `<p style="color:#8492a6">Note: ${escapeHtml(message)}</p>` : ''}
+        ${trackHtml}`);
     return { to, subject: `Update on your order #${ref}`, html, text };
 }
 

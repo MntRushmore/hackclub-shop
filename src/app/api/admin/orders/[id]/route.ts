@@ -15,8 +15,9 @@ const redis = new Redis({
     token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 });
 
-type Action = 'approve' | 'deny' | 'fulfill' | 'refund';
-const ACTION_STATUS: Record<Action, Order['status']> = {
+type StatusAction = 'approve' | 'deny' | 'fulfill' | 'refund';
+type Action = StatusAction | 'mark-test' | 'unmark-test';
+const ACTION_STATUS: Record<StatusAction, Order['status']> = {
     approve: 'approved',
     deny: 'denied',
     fulfill: 'fulfilled',
@@ -42,9 +43,26 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const orderId = params.id;
     const { action, message } = (await request.json()) as { action: Action; message?: string };
 
-    if (!action || !(action in ACTION_STATUS)) {
+    const isTestToggle = action === 'mark-test' || action === 'unmark-test';
+    if (!action || (!isTestToggle && !(action in ACTION_STATUS))) {
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
+
+    // Test-flag toggle: a simple field flip, no status/refund/email side effects.
+    if (isTestToggle) {
+        const isTest = action === 'mark-test';
+        const guest = await getGuestOrder(orderId);
+        if (guest) {
+            const updated = await updateGuestOrder(orderId, { isTest });
+            if (updated) void mirrorOrder(updated);
+            return NextResponse.json({ order: updated });
+        }
+        const updated = await setStudentOrderField(orderId, { isTest });
+        if (!updated) return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+        void mirrorOrder(updated);
+        return NextResponse.json({ order: updated });
+    }
+
     const newStatus = ACTION_STATUS[action];
 
     try {
@@ -156,4 +174,19 @@ function extractEmail(order: Order): string | undefined {
         if (typeof v === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return v;
     }
     return undefined;
+}
+
+/** Patch arbitrary fields on a student order in its user order array. */
+async function setStudentOrderField(orderId: string, patch: Partial<Order>): Promise<Order | null> {
+    const keys = await redis.keys('user:*:orders');
+    for (const key of keys) {
+        const orders = (await redis.get<Order[]>(key)) || [];
+        const idx = orders.findIndex(o => o.id === orderId);
+        if (idx === -1) continue;
+        const updated: Order = { ...orders[idx], ...patch };
+        orders[idx] = updated;
+        await redis.set(key, orders);
+        return updated;
+    }
+    return null;
 }
