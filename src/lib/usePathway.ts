@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 /**
  * The two storefront pathways.
  * - 'student': signed in with Hack Club → pays with points.
- * - 'guest':   logged out → pays real money via Stripe.
+ * - 'guest':   logged out → pays real money via an HCB donation.
  *
  * Pathway is derived purely from auth state; there is no manual toggle.
  */

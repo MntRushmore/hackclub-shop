@@ -43,7 +43,7 @@ export async function GET() {
 }
 
 // POST - Create a new student order (paid entirely in points).
-// Adult/guest orders go through the Stripe checkout route instead.
+// Adult/guest orders go through the HCB donation checkout route instead.
 export async function POST(request: Request) {
     const session = await getServerSession(authOptions);
 

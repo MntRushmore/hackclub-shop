@@ -5,7 +5,6 @@ import { authOptions } from '../../../auth/[...nextauth]/route';
 import { requireAdminPermission } from '../../../../../lib/adminAuth';
 import { getGuestOrder, updateGuestOrder } from '../../../../../lib/guestOrders';
 import { mirrorOrder } from '../../../../../lib/airtableMirror';
-import { getStripe, isStripeConfigured } from '../../../../../lib/stripe';
 import { restock } from '../../../../../lib/inventory';
 import { recordAudit, AuditAction } from '../../../../../lib/auditLog';
 import { sendEmail, buildStatusUpdate } from '../../../../../lib/email';
@@ -31,8 +30,10 @@ const ACTION_STATUS: Record<StatusAction, Order['status']> = {
  * action buttons. Handles both pathways:
  *   - student orders live in arrays under user:${userId}:orders
  *   - guest orders are standalone under order:${id}
- * Refund semantics differ by pathway: students get points credited back; guests
- * get a real Stripe refund via the API.
+ * Refund semantics differ by pathway: students get points credited back. Guest
+ * orders are paid by HCB donation, which can't be refunded through our read-only
+ * API token, so a guest refund flips the order to refunded + restocks and leaves
+ * a note for staff to issue the refund manually in HCB.
  */
 export async function POST(request: Request, { params }: { params: { id: string } }) {
     const session = await getServerSession(authOptions);
@@ -78,17 +79,17 @@ export async function POST(request: Request, { params }: { params: { id: string 
         // ── Guest (Stripe) order ──────────────────────────────────────────────
         const guest = await getGuestOrder(orderId);
         if (guest) {
+            // Guest refunds (HCB donations, and legacy Stripe orders) can't be
+            // pushed through our read-only token — staff issue the refund in HCB
+            // (or the Stripe dashboard for old orders). We flip state + restock
+            // and record a note so the manual step is visible in the order trail.
+            const refundNote = action === 'refund'
+                ? `${message ? message + ' — ' : ''}Refund the donation manually in HCB.`
+                : message;
+
             if (action === 'refund') {
                 if (guest.paymentStatus !== 'paid') {
                     return NextResponse.json({ error: 'Order is not paid; nothing to refund.' }, { status: 400 });
-                }
-                if (isStripeConfigured() && guest.stripePaymentIntentId) {
-                    try {
-                        await getStripe().refunds.create({ payment_intent: guest.stripePaymentIntentId });
-                    } catch (err) {
-                        console.error('[Admin order] Stripe refund failed:', err);
-                        return NextResponse.json({ error: 'Stripe refund failed. Check the dashboard.' }, { status: 502 });
-                    }
                 }
                 // Return the sold units to stock (best-effort).
                 if (guest.inventoryHold && guest.inventoryHold.length > 0) {
@@ -99,7 +100,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
             const updated = await updateGuestOrder(orderId, {
                 status: newStatus,
                 ...(action === 'refund' ? { paymentStatus: 'refunded' as const } : {}),
-                statusHistory: [...(guest.statusHistory || []), historyEntry(newStatus, message)],
+                statusHistory: [...(guest.statusHistory || []), historyEntry(newStatus, refundNote)],
             });
             if (updated) {
                 void mirrorOrder(updated);
