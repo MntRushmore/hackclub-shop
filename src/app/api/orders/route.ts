@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { Redis } from '@upstash/redis';
-import { authOptions } from '../auth/[...nextauth]/route';
+import { authOptions } from '../../../lib/authOptions';
 import { Order, ShippingAddress } from '../../../types/Order';
 import { isStructuredAddress, validateAddress } from '../../../lib/address';
 import { rateLimit, rateLimitResponse } from '../../../lib/rateLimit';
@@ -62,6 +62,8 @@ export async function POST(request: Request) {
 
     // Stock decremented for this attempt; restocked if the order then fails to save.
     let committedStock: StockLine[] | null = null;
+    // Points debited atomically up front; refunded if the order then fails to save.
+    let debitedPoints = 0;
     try {
         const { items, pointsRequired, shippingCountry, shippingPointsCost, checkoutData, csrfToken, idempotencyKey } = await request.json() as {
             items: { id: string; name: string; price: string; quantity: number; variant_id?: string | number }[];
@@ -75,7 +77,10 @@ export async function POST(request: Request) {
 
         const shippingPointsNum = typeof shippingPointsCost === 'number' ? shippingPointsCost : 0;
 
-        // Validate CSRF token
+        // Optional CSRF token: validated when present. (The app does not yet issue
+        // CSRF tokens to clients, so this is belt-and-suspenders; the primary
+        // protections are the same-site session cookie + the required idempotency
+        // key below + the server-side balance/stock recomputation.)
         if (csrfToken) {
             const csrfValid = await validateCSRFToken(csrfToken);
             if (!csrfValid) {
@@ -83,16 +88,30 @@ export async function POST(request: Request) {
             }
         }
 
-        // Check idempotency - prevent duplicate orders
-        if (idempotencyKey) {
-            const existingOrder = await redis.get<string>(`idempotency:${userId}:${idempotencyKey}`);
-            if (existingOrder) {
-                return NextResponse.json({ error: 'Order already processed', orderId: existingOrder }, { status: 409 });
-            }
+        // Idempotency is REQUIRED — it is the guard against duplicate/replayed
+        // orders racing the points + stock decrement. A client must not be able to
+        // disable it by simply omitting the key.
+        if (!idempotencyKey || typeof idempotencyKey !== 'string') {
+            return NextResponse.json({ error: 'Missing idempotency key.' }, { status: 400 });
+        }
+        const existingOrder = await redis.get<string>(`idempotency:${userId}:${idempotencyKey}`);
+        if (existingOrder) {
+            return NextResponse.json({ error: 'Order already processed', orderId: existingOrder }, { status: 409 });
         }
 
         if (!items || !Array.isArray(items) || items.length === 0) {
             return NextResponse.json({ error: 'No items in order' }, { status: 400 });
+        }
+
+        // pointsRequired must be a sane non-negative integer. It is cross-checked
+        // against the server-recomputed total below, but reject NaN/Infinity/
+        // fractional/negative up front so a crafted value can't reach the
+        // comparison in an unexpected state.
+        if (!Number.isInteger(pointsRequired) || pointsRequired < 0) {
+            return NextResponse.json({ error: 'Invalid points total.' }, { status: 400 });
+        }
+        if (shippingPointsCost !== undefined && (!Number.isInteger(shippingPointsCost) || shippingPointsCost < 0)) {
+            return NextResponse.json({ error: 'Invalid shipping points cost.' }, { status: 400 });
         }
 
         // Ensure all variant_ids are strings for consistent validation
@@ -145,22 +164,47 @@ export async function POST(request: Request) {
             }, { status: 400 });
         }
 
-        const pointsBalance = (await redis.get<number>(`user:${userId}:pointsBalance`)) ?? 0;
+        // Atomically debit points: re-read the balance and decrement in a single
+        // round trip so two concurrent orders from the same user can't both pass a
+        // stale balance check and double-spend. The Lua script decrements only if
+        // the balance covers the cost, returning the new balance, or -1 if it
+        // doesn't (insufficient funds). Without this the get→set below would be a
+        // classic check-then-set race exploitable with distinct idempotency keys.
+        const DEBIT_LUA = `
+            local bal = tonumber(redis.call('GET', KEYS[1]) or '0')
+            local cost = tonumber(ARGV[1])
+            if cost < 0 then return -1 end
+            if bal < cost then return -1 end
+            local nb = bal - cost
+            redis.call('SET', KEYS[1], nb)
+            return nb
+        `;
+        const balanceRedisKey = `user:${userId}:pointsBalance`;
+        const debitResult = Number(
+            await redis.eval(DEBIT_LUA, [balanceRedisKey], [String(verifiedPointsTotal)]),
+        );
 
-        if (pointsBalance < verifiedPointsTotal) {
+        if (debitResult < 0) {
+            const currentBalance = (await redis.get<number>(balanceRedisKey)) ?? 0;
             return NextResponse.json({
                 error: 'Insufficient points',
                 required: verifiedPointsTotal,
-                balance: pointsBalance
+                balance: currentBalance,
             }, { status: 400 });
         }
+        // Points are now committed; refund this exact amount if anything below fails.
+        debitedPoints = verifiedPointsTotal;
+        const newPointsBalance = debitResult;
 
         // Decrement stock immediately — points orders settle in-request, so there's
-        // no reservation window. Fails closed before any points are deducted; if
-        // anything below throws, we release the units so they aren't leaked.
+        // no reservation window. If it fails (oversold) or anything below throws,
+        // the catch/guard refunds the debited points and releases the units.
         const stockLines: StockLine[] = validation.items!.map(i => ({ variantId: i.variantId, quantity: i.quantity }));
         const stockResult = await commitImmediate(stockLines);
         if (!stockResult.ok) {
+            // Refund the points we just debited — this order won't happen.
+            await redis.incrby(`user:${userId}:pointsBalance`, debitedPoints);
+            debitedPoints = 0;
             const oversold = validation.items!.find(i => i.variantId === stockResult.variantId);
             const name = oversold?.name || 'An item';
             return NextResponse.json(
@@ -227,9 +271,8 @@ export async function POST(request: Request) {
             createdAt: now,
         };
 
-        // Deduct points
-        const newPointsBalance = pointsBalance - verifiedPointsTotal;
-
+        // Points were already debited atomically above (newPointsBalance =
+        // debitResult). We only need to append the transaction + order records.
         const currentPointsTransactions = await redis.get<PointsTransaction[]>(`user:${userId}:pointsTransactions`) || [];
 
         const pointsTransaction: PointsTransaction = {
@@ -247,8 +290,10 @@ export async function POST(request: Request) {
         const currentOrders = await redis.get<Order[]>(`user:${userId}:orders`) || [];
         const newOrders = [order, ...currentOrders];
 
+        // NOTE: do NOT re-set pointsBalance here — it was already debited
+        // atomically by the Lua script. Re-setting it to a value captured before
+        // a concurrent order ran would clobber that order's debit.
         const savePromises: Promise<unknown>[] = [
-            redis.set(`user:${userId}:pointsBalance`, newPointsBalance),
             redis.set(`user:${userId}:pointsTransactions`, newPointsTransactions),
             redis.set(`user:${userId}:orders`, newOrders),
         ];
@@ -264,6 +309,9 @@ export async function POST(request: Request) {
         }
 
         await Promise.all(savePromises);
+        // Order + transaction durably saved. The points are now legitimately
+        // spent; clear the refund marker so the catch can't claw them back.
+        debitedPoints = 0;
 
         // Best-effort mirror to Airtable for staff visibility (never blocks the order).
         void mirrorOrder(order, slackId);
@@ -282,9 +330,14 @@ export async function POST(request: Request) {
         });
     } catch (error) {
         console.error('[Orders API] Error creating order:', error);
-        // If we'd already decremented stock for this attempt, give it back so a
-        // failed save doesn't strand units. restock() is best-effort/no-throw.
+        // Roll back anything we committed for this failed attempt:
+        //  - give back stock so units aren't stranded (best-effort/no-throw)
+        //  - refund the atomically-debited points so the user isn't charged for
+        //    an order that never saved.
         if (committedStock) void restock(committedStock);
+        if (debitedPoints > 0) {
+            void redis.incrby(`user:${userId}:pointsBalance`, debitedPoints);
+        }
         return NextResponse.json({ error: 'Failed to create order' }, { status: 500 });
     }
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { Redis } from '@upstash/redis';
-import { authOptions } from '../../../auth/[...nextauth]/route';
+import { authOptions } from '../../../../../lib/authOptions';
 import { isAdmin } from '../../../../../lib/adminAuth';
 import { exchangeCodeForTokens } from '../../../../../lib/hcb';
 

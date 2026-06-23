@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Redis } from '@upstash/redis';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '../../auth/[...nextauth]/route';
+import { authOptions } from '../../../../lib/authOptions';
 import { requireAdminPermission } from '../../../../lib/adminAuth';
 import { resolveDualPrice } from '../../../../lib/variantPricing';
 import { getVariantStocks } from '../../../../lib/inventory';

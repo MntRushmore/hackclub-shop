@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../auth/[...nextauth]/route';
+import { authOptions } from '../../../../../lib/authOptions';
 import { requireAdminPermission } from '../../../../../lib/adminAuth';
 import { setAdminRole, removeAdmin } from '../../../../../lib/adminAuth';
 import { AdminRole } from '../../../../../types/Admin';

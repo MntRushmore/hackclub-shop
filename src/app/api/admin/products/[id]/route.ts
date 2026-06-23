@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { Redis } from '@upstash/redis';
-import { authOptions } from '../../../auth/[...nextauth]/route';
+import { authOptions } from '../../../../../lib/authOptions';
 import { requireAdminPermission } from '../../../../../lib/adminAuth';
 import { Product } from '../../../../../types/Admin';
 import { mirrorProduct, unmirrorProduct } from '../../../../../lib/airtableMirror';

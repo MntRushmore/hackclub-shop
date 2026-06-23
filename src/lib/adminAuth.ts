@@ -9,27 +9,21 @@ const redis = new Redis({
 
 function getGlobalAdmins(): string[] {
     const globalAdmins = process.env.GLOBAL_ADMINS || '';
-    const admins = globalAdmins.split(',').map(id => id.trim()).filter(Boolean);
-    console.log('[adminAuth] GLOBAL_ADMINS env:', process.env.GLOBAL_ADMINS);
-    console.log('[adminAuth] Parsed global admins:', admins);
-    return admins;
+    return globalAdmins.split(',').map(id => id.trim()).filter(Boolean);
 }
 
 export async function getAdminRole(userId: string): Promise<AdminRole | null> {
     const globalAdmins = getGlobalAdmins();
-    console.log('[adminAuth] Checking admin role for user:', userId);
-    console.log('[adminAuth] Global admins:', globalAdmins);
     if (globalAdmins.includes(userId)) {
-        console.log('[adminAuth] User is a global admin');
         return 'manager';
     }
 
     try {
-        const role = await redis.get<AdminRole>(`admin:${userId}:role`);
-        console.log('[adminAuth] Redis role for user:', role);
-        return role || null;
-    } catch (error) {
-        console.error('[adminAuth] Redis error:', error);
+        return (await redis.get<AdminRole>(`admin:${userId}:role`)) || null;
+    } catch {
+        // Fail closed: a Redis outage must not silently grant or deny in a way
+        // that leaks the allowlist. Log the error only, never the admin set.
+        console.error('[adminAuth] Redis error resolving admin role');
         return null;
     }
 }
