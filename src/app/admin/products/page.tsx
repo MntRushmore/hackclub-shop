@@ -99,7 +99,8 @@ export default function ProductsAdmin() {
             image_url: '',
             stock: '',
             weightOz: '',
-            unitCost: ''
+            unitCost: '',
+            sku: ''
         }],
         shippingOptions: [{ id: '', country: '', cost: '', costPoints: '' }],
         checkoutFields: [] as FormCheckoutField[],
@@ -225,7 +226,8 @@ export default function ProductsAdmin() {
                     image_url: '',
                     stock: '',
                     weightOz: '',
-                    unitCost: ''
+                    unitCost: '',
+                    sku: ''
                 }],
                 shippingOptions: [{ id: '', country: '', cost: '', costPoints: '' }],
                 checkoutFields: [],
@@ -261,6 +263,7 @@ export default function ProductsAdmin() {
                 stock: v.stock?.toString() || '',
                 weightOz: (v as any).weightOz?.toString() || '',
                 unitCost: (v as any).unitCost != null ? String((v as any).unitCost) : '',
+                sku: (v as any).sku || '',
             };
         });
 
@@ -281,7 +284,8 @@ export default function ProductsAdmin() {
                 image_url: '',
                 stock: '',
                 weightOz: '',
-                unitCost: ''
+                unitCost: '',
+                sku: ''
             }],
             shippingOptions: (product.shippingOptions || []).map(s => ({
                 id: s.id,
@@ -313,7 +317,8 @@ export default function ProductsAdmin() {
                 image_url: '',
                 stock: '',
                 weightOz: '',
-                unitCost: ''
+                unitCost: '',
+                sku: ''
             }],
             shippingOptions: [{ id: '', country: '', cost: '', costPoints: '' }],
             checkoutFields: [],
@@ -599,6 +604,25 @@ export default function ProductsAdmin() {
                                                             </button>
                                                         )}
                                                     </div>
+                                                    {/* Barcode SKU: managed in the Labels tool (keeps the sku index authoritative). */}
+                                                    <div className="mt-2 flex items-center gap-2 text-sm">
+                                                        <span className="text-xs font-black uppercase text-hackclub-muted">Barcode SKU</span>
+                                                        {variant.sku ? (
+                                                            <span className="font-mono font-bold text-hackclub-purple">{variant.sku}</span>
+                                                        ) : (
+                                                            <span className="text-hackclub-muted font-medium">{editingId && variant.variant_id ? 'none yet' : 'save the product first'}</span>
+                                                        )}
+                                                        {editingId && variant.variant_id && (
+                                                            <a
+                                                                href={`/admin/labels?variant=${encodeURIComponent(variant.variant_id)}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="ml-auto px-3 py-1 rounded-lg text-xs font-bold text-hackclub-purple border-2 border-hackclub-purple/30 hover:bg-hackclub-purple hover:text-white transition-colors"
+                                                            >
+                                                                {variant.sku ? 'Print / edit label' : 'Generate label'}
+                                                            </a>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             ))}
                                             <button
@@ -616,7 +640,8 @@ export default function ProductsAdmin() {
                                                         image_url: '',
                                                         stock: '',
                                                         weightOz: '',
-                                                        unitCost: ''
+                                                        unitCost: '',
+                                                        sku: ''
                                                     }]
                                                 })}
                                                 className="w-full px-4 py-2 border-2 border-dashed border-hackclub-green text-hackclub-green font-bold rounded-lg hover:bg-hackclub-green/10 transition-colors"

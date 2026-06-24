@@ -12,6 +12,7 @@ import { mirrorQuote, mirrorProduct } from '../../../../../../../lib/airtableMir
 import { recordAudit } from '../../../../../../../lib/auditLog';
 import { Product, ProductVariant } from '../../../../../../../types/Admin';
 import { landedUnitCost } from '../../../../../../../types/Sourcing';
+import { assignSku } from '../../../../../../../lib/sku';
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -99,6 +100,16 @@ export async function POST(
         };
 
         await redis.set(`product:${product.id}`, product);
+
+        // Auto-mint a SKU for the seeded variant so the drafted product is barcode-ready
+        // the moment it exists — the sourcing→catalog→label chain stays connected.
+        // assignSku persists onto the product and maintains the sku:{sku} index; a
+        // failure here must not block the accept (SKU is optional, mintable later).
+        try {
+            await assignSku(product, variantId);
+        } catch (err) {
+            console.error('[accept] SKU auto-assign failed:', err instanceof Error ? err.message : err);
+        }
         void mirrorProduct(product);
 
         // Link the quote → product and mark it accepted.

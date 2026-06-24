@@ -97,6 +97,11 @@ export async function POST(request: Request) {
                 if (cash !== undefined && cash > 0) variant.price_cash = cash;
                 if (points !== undefined && points > 0) variant.price_points = points;
 
+                // NOTE: SKU is intentionally NOT set here. SKUs are minted/edited only
+                // through assignSku() (POST /api/admin/labels), which maintains the
+                // sku:{sku} reverse index. A new product gets its SKUs from the Labels
+                // tool afterward; persisting an unindexed sku here would desync lookups.
+
                 return variant;
             }),
             shippingOptions: (body.shippingOptions || []).map((s: any, idx: number) => ({

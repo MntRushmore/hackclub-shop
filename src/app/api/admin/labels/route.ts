@@ -5,8 +5,9 @@ import { authOptions } from '../../../../lib/authOptions';
 import { requireAdminPermission } from '../../../../lib/adminAuth';
 import { Product } from '../../../../types/Admin';
 import { mirrorProduct } from '../../../../lib/airtableMirror';
-import { getVariantStocks, setStock } from '../../../../lib/inventory';
+import { getVariantStocks } from '../../../../lib/inventory';
 import { recordAudit } from '../../../../lib/auditLog';
+import { assignSku, buildSkuCandidate, variantKey } from '../../../../lib/sku';
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -14,10 +15,16 @@ const redis = new Redis({
 });
 
 /**
- * Admin inventory view + quick-adjust. Lists every variant across all products
- * with its live stock / reserved / available, and lets staff set a variant's
- * stock number directly (which updates both the product record and the inventory
- * cache, then re-mirrors the product to Airtable so the spreadsheet matches).
+ * Labels: the variant picker for the label designer/printer, plus SKU assignment.
+ *
+ *   GET  → every variant across all products with { sku, suggestedSku, stock } so the
+ *          designer can pick what to print and show which variants still need a SKU.
+ *   POST { productId, variantId, sku? } → assign/generate a store-unique SKU for one
+ *          variant (auto-generate when `sku` omitted), maintain the reverse index,
+ *          re-mirror the product, audit.
+ *
+ * Gated on canManageProducts (printing labels / minting SKUs is a catalog action; it
+ * does not touch cost basis). Mirror the inventory route's conventions exactly.
  */
 export async function GET() {
     const session = await getServerSession(authOptions);
@@ -31,25 +38,25 @@ export async function GET() {
         if (p) products.push(p);
     }
 
-    const variantIds = products.flatMap(p =>
-        (p.variants || []).map(v => String(v.variant_id || v.id)),
-    );
+    const variantIds = products.flatMap(p => (p.variants || []).map(variantKey));
     const stocks = await getVariantStocks(variantIds);
 
     const rows = products.flatMap(p =>
         (p.variants || []).map(v => {
-            const variantId = String(v.variant_id || v.id);
+            const variantId = variantKey(v);
             const s = stocks[variantId];
             return {
                 productId: p.id,
                 productName: p.name,
+                category: p.category,
+                draft: !!p.draft,
                 variantId,
                 variantName: v.name,
                 size: v.size,
                 color: v.color,
-                sku: v.sku ?? null,
-                stock: s?.stock ?? null,      // null = untracked/unlimited
-                reserved: s?.reserved ?? 0,
+                sku: v.sku || null,
+                suggestedSku: buildSkuCandidate(p, v),
+                stock: s?.stock ?? null,
                 available: s?.available ?? null,
             };
         }),
@@ -58,15 +65,15 @@ export async function GET() {
     return NextResponse.json({ rows });
 }
 
-export async function PATCH(request: Request) {
+export async function POST(request: Request) {
     const session = await getServerSession(authOptions);
     const can = await requireAdminPermission(session, 'canManageProducts');
     if (!can.allowed) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
 
-    const { productId, variantId, stock } = (await request.json()) as {
+    const { productId, variantId, sku } = (await request.json()) as {
         productId?: string;
         variantId?: string;
-        stock?: number | null;
+        sku?: string;
     };
     if (!productId || !variantId) {
         return NextResponse.json({ error: 'productId and variantId are required' }, { status: 400 });
@@ -75,34 +82,27 @@ export async function PATCH(request: Request) {
     const product = await redis.get<Product>(`product:${productId}`);
     if (!product) return NextResponse.json({ error: 'Product not found' }, { status: 404 });
 
-    // Normalize: empty/negative/NaN → untracked (unlimited).
-    const next = stock === null || stock === undefined || Number.isNaN(stock) || stock < 0
-        ? undefined
-        : Math.floor(stock);
+    let result;
+    try {
+        result = await assignSku(product, variantId, sku);
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Could not assign SKU';
+        const status = msg === 'Variant not found' ? 404 : 400;
+        return NextResponse.json({ error: msg }, { status });
+    }
 
-    let matched = false;
-    product.variants = (product.variants || []).map(v => {
-        if (String(v.variant_id || v.id) === String(variantId)) {
-            matched = true;
-            return { ...v, stock: next };
-        }
-        return v;
-    });
-    if (!matched) return NextResponse.json({ error: 'Variant not found' }, { status: 404 });
-
-    product.updatedAt = new Date();
-    await redis.set(`product:${productId}`, product);
-    await setStock(variantId, next === undefined ? null : next);
     void mirrorProduct(product);
 
-    void recordAudit({
-        action: 'inventory.adjust',
-        actorId: session?.user?.id || 'unknown',
-        actorEmail: session?.user?.email || undefined,
-        target: variantId,
-        summary: `Set stock for "${product.name}" variant ${variantId} to ${next === undefined ? 'unlimited' : next}`,
-        metadata: { productId, stock: next ?? null },
-    });
+    if (result.changed) {
+        void recordAudit({
+            action: 'inventory.sku.assign',
+            actorId: session?.user?.id || 'unknown',
+            actorEmail: session?.user?.email || undefined,
+            target: variantId,
+            summary: `Assigned SKU ${result.sku} to "${product.name}" variant ${variantId}`,
+            metadata: { productId, sku: result.sku },
+        });
+    }
 
-    return NextResponse.json({ ok: true, stock: next ?? null });
+    return NextResponse.json({ ok: true, sku: result.sku, changed: result.changed });
 }

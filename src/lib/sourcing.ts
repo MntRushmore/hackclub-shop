@@ -437,6 +437,64 @@ export async function receivePO(
     return { ok: true, po: saved, receiptIds };
 }
 
+export type ReceivePOLineResult =
+    | { ok: true; po: PurchaseOrder; receiptId: string; duplicate: boolean; poCompleted: boolean }
+    | { ok: false; error: string };
+
+/**
+ * Receive ONE line of a PO — the scan-to-receive path (Slice B). Posts the matched
+ * line through `receiveStock` with the SAME deterministic id `{poId}__{variantId}` that
+ * `receivePO` uses, so scanning a box and clicking "Receive PO" can never double-count
+ * the same line. Records the resulting receipt id on the PO, and once every line has a
+ * recorded receipt, flips the PO to `received`.
+ *
+ * `quantity`/`unitCost` default to the PO line's values (scan a box, accept the planned
+ * numbers) but may be overridden (partial/over delivery, price correction). Idempotent
+ * via the deterministic id: a re-scan of the same line is a no-op that reports duplicate.
+ */
+export async function receivePOLine(
+    poId: string,
+    variantId: string,
+    actor: { actorId: string; actorEmail?: string },
+    override?: { quantity?: number; unitCost?: number },
+): Promise<ReceivePOLineResult> {
+    const po = await getPO(poId);
+    if (!po) return { ok: false, error: 'Purchase order not found' };
+    if (po.status === 'cancelled') return { ok: false, error: 'Cannot receive a cancelled PO' };
+
+    const line = po.lines.find((l) => String(l.variantId) === String(variantId));
+    if (!line) return { ok: false, error: 'No PO line for that variant' };
+
+    const receiptId = `${po.id}__${line.variantId}`;
+    const res = await receiveStock({
+        productId: line.productId,
+        variantId: line.variantId,
+        quantity: override?.quantity ?? line.quantity,
+        unitCost: override?.unitCost ?? line.unitCost,
+        note: `PO ${po.id}${po.quoteId ? ` (quote ${po.quoteId})` : ''} — scanned`,
+        actorId: actor.actorId,
+        actorEmail: actor.actorEmail,
+        receiptId,
+    });
+    if (!res.ok) return { ok: false, error: res.error };
+
+    const duplicate = res.duplicate === true;
+
+    // Record this receipt id on the PO. Receipt ids are deterministic
+    // (`{poId}__{variantId}`), so the recorded set IS the set of received lines — the
+    // PO is complete once every line's deterministic id is present.
+    const recorded = new Set([...(po.receivedReceiptIds || []).map(String), receiptId]);
+    const poCompleted = po.lines.every((l) => recorded.has(`${po.id}__${l.variantId}`));
+
+    const saved = await savePO({
+        ...po,
+        status: poCompleted && po.status !== 'received' ? 'received' : po.status,
+        receivedReceiptIds: Array.from(recorded),
+    });
+
+    return { ok: true, po: saved, receiptId: res.receipt.id, duplicate, poCompleted };
+}
+
 export async function deletePO(id: string): Promise<void> {
     const existing = await getPO(id);
     await redis.del(poKey(id));

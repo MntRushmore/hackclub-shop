@@ -32,6 +32,7 @@ export async function GET() {
     const perms = await getAdminPermissions(session!.user!.id!);
     const canFinance = Boolean(perms?.canManageFinance);
     const canSourcing = Boolean(perms?.canManageSourcing);
+    const canProducts = Boolean(perms?.canManageProducts);
 
     const now = Date.now();
 
@@ -132,12 +133,27 @@ export async function GET() {
         uncostedVariants = valuation?.uncostedVariants ?? 0;
     }
 
+    // ── Unlabeled variants (published variants with no barcode SKU yet) ───────────
+    // The catalog→label connection surfaced as an action: these can't be scanned to
+    // receive until they have a label. Drafts are excluded (not yet sellable/sourced).
+    let unlabeledVariants = 0;
+    if (canProducts) {
+        for (const p of products) {
+            if ((p as { draft?: boolean }).draft) continue;
+            for (const v of p.variants || []) {
+                if (!(v as { sku?: string }).sku) unlabeledVariants++;
+            }
+        }
+    }
+
     return NextResponse.json({
         canFinance,
         canSourcing,
+        canProducts,
         generatedAt: new Date().toISOString(),
         cards: {
             lowStock: { count: lowStock.length, items: lowStock.slice(0, 6) },
+            labels: { unlabeledVariants },
             orders: {
                 unfulfilled: unfulfilled.length,
                 oldestDays: Math.round(oldestUnfulfilledDays),

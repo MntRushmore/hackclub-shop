@@ -32,6 +32,8 @@ export type AuditAction =
     | 'points.deduct'
     | 'inventory.adjust'
     | 'inventory.receive'
+    | 'inventory.count'
+    | 'inventory.sku.assign'
     | 'sourcing.vendor.create'
     | 'sourcing.vendor.update'
     | 'sourcing.vendor.delete'

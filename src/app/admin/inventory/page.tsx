@@ -12,6 +12,7 @@ interface Row {
     variantName: string;
     size?: string;
     color?: string;
+    sku?: string | null;
     stock: number | null;     // null = untracked/unlimited
     reserved: number;
     available: number | null;
@@ -146,11 +147,12 @@ export default function InventoryAdmin() {
                                         <th className="px-4 py-3 text-right">Reserved</th>
                                         <th className="px-4 py-3 text-right">Available</th>
                                         <th className="px-4 py-3 text-right">Set stock</th>
+                                        <th className="px-4 py-3 text-right">Label</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {visible.length === 0 ? (
-                                        <tr><td colSpan={5} className="px-4 py-10 text-center text-hackclub-muted font-bold">No variants{lowOnly ? ' are low on stock' : ''}.</td></tr>
+                                        <tr><td colSpan={6} className="px-4 py-10 text-center text-hackclub-muted font-bold">No variants{lowOnly ? ' are low on stock' : ''}.</td></tr>
                                     ) : visible.map(row => {
                                         const untracked = row.stock === null;
                                         const soldOut = row.available === 0;
@@ -160,6 +162,7 @@ export default function InventoryAdmin() {
                                                 <td className="px-4 py-3">
                                                     <div className="font-bold text-hackclub-dark">{row.productName}</div>
                                                     <div className="text-hackclub-muted">{row.variantName}{row.size ? ` · ${row.size}` : ''}{row.color ? ` · ${row.color}` : ''}</div>
+                                                    {row.sku && <div className="mt-0.5 font-mono text-xs text-hackclub-purple font-bold">{row.sku}</div>}
                                                 </td>
                                                 <td className="px-4 py-3 text-right font-mono">{untracked ? <span className="text-hackclub-muted">∞</span> : row.stock}</td>
                                                 <td className="px-4 py-3 text-right font-mono">{row.reserved || 0}</td>
@@ -193,6 +196,14 @@ export default function InventoryAdmin() {
                                                             {savingId === row.variantId ? '…' : 'Save'}
                                                         </button>
                                                     </div>
+                                                </td>
+                                                <td className="px-4 py-3 text-right">
+                                                    <Link
+                                                        href={`/admin/labels?variant=${encodeURIComponent(row.variantId)}`}
+                                                        className="inline-block px-3 py-1.5 rounded-lg text-xs font-bold text-hackclub-purple border-2 border-hackclub-purple/30 hover:bg-hackclub-purple hover:text-white transition-colors"
+                                                    >
+                                                        {row.sku ? 'Print label' : 'Make label'}
+                                                    </Link>
                                                 </td>
                                             </tr>
                                         );

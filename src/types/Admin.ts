@@ -78,6 +78,12 @@ export interface ProductVariant {
     // reorder (command center / reorder intelligence). Optional; unset = no reorder
     // signal. Does not affect checkout or availability.
     reorderPoint?: number;
+    // Barcode identity: a human-readable, store-wide-unique SKU (e.g. HC-STICKER-3IN-RED)
+    // that is printed on this variant's label and encoded in its barcode/QR. Resolution
+    // back to a variant uses the `sku:{sku}` reverse index (see src/lib/sku.ts). Optional;
+    // unset = not yet labeled. Non-secret (it lives on physical product) — never embed
+    // price/cost/PII. Does not affect checkout, pricing, or availability.
+    sku?: string;
 }
 
 export interface ShippingOption {

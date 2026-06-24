@@ -39,6 +39,7 @@ function POAdminInner() {
     const [vendors, setVendors] = useState<Vendor[]>([]);
     const [quotes, setQuotes] = useState<Quote[]>([]);
     const [pos, setPos] = useState<PurchaseOrder[]>([]);
+    const [skuMap, setSkuMap] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
     const [allowed, setAllowed] = useState(true);
     const [canFinance, setCanFinance] = useState(false);
@@ -79,6 +80,18 @@ function POAdminInner() {
                 setVendors(v.vendors || []);
                 setQuotes(q.quotes || []);
                 setPos(p.pos || []);
+
+                // Build a variantId → SKU map so PO lines can show the barcode SKU.
+                // Fire-and-forget: needs canManageProducts; degrade silently if absent.
+                try {
+                    const labelsRes = await fetch('/api/admin/labels');
+                    if (labelsRes.ok) {
+                        const data = await labelsRes.json();
+                        const map: Record<string, string> = {};
+                        for (const r of data.rows || []) if (r.sku) map[r.variantId] = r.sku;
+                        setSkuMap(map);
+                    }
+                } catch { /* no SKU column — fine */ }
             } catch {
                 setError('Failed to load purchase orders');
             } finally {
@@ -406,9 +419,12 @@ function POAdminInner() {
                                     </div>
                                     <div className="divide-y divide-hackclub-smoke border-y border-hackclub-smoke mb-3">
                                         {po.lines.map((l, i) => (
-                                            <div key={i} className="py-2 flex flex-wrap gap-x-4 text-sm">
+                                            <div key={i} className="py-2 flex flex-wrap items-center gap-x-4 text-sm">
                                                 <span className="font-bold text-hackclub-dark">{l.quantity}×</span>
                                                 <span className="text-hackclub-dark">{l.description || l.variantId}</span>
+                                                {skuMap[l.variantId] && (
+                                                    <span className="font-mono text-xs font-bold text-hackclub-purple px-1.5 py-0.5 rounded bg-hackclub-purple/10">{skuMap[l.variantId]}</span>
+                                                )}
                                                 <span className="text-hackclub-slate">@ {fmt(l.unitCost)}</span>
                                                 <span className="ml-auto font-bold text-hackclub-dark">{fmt(l.quantity * l.unitCost)}</span>
                                             </div>

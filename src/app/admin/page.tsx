@@ -163,6 +163,40 @@ export default function AdminDashboard() {
                             </Link>
                         </motion.div>
 
+                        {/* Labels */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.17 }}
+                        >
+                            <Link href="/admin/labels">
+                                <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-6 hover:shadow-xl hover:border-hackclub-purple transition-all cursor-pointer group">
+                                    <div className="w-12 h-12 bg-hackclub-purple/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-hackclub-purple/20 transition-colors">
+                                        <Icon glyph="grid" size={24} style={{ color: 'var(--hackclub-purple, #a633d6)' }} />
+                                    </div>
+                                    <h3 className="text-xl font-black text-hackclub-dark mb-2">Labels</h3>
+                                    <p className="text-hackclub-slate text-sm">Design Hack Club barcodes, scan-test them, and print label sheets</p>
+                                </div>
+                            </Link>
+                        </motion.div>
+
+                        {/* Scan to receive */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.18 }}
+                        >
+                            <Link href="/admin/receiving">
+                                <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-6 hover:shadow-xl hover:border-hackclub-green transition-all cursor-pointer group">
+                                    <div className="w-12 h-12 bg-hackclub-green/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-hackclub-green/20 transition-colors">
+                                        <Icon glyph="door-enter" size={24} style={{ color: 'var(--hackclub-green, #33d6a6)' }} />
+                                    </div>
+                                    <h3 className="text-xl font-black text-hackclub-dark mb-2">Scan to receive</h3>
+                                    <p className="text-hackclub-slate text-sm">Scan labels to receive stock, reconcile POs, look up, or cycle-count</p>
+                                </div>
+                            </Link>
+                        </motion.div>
+
                         {/* Coupons */}
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}

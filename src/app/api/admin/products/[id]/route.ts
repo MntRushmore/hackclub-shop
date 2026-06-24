@@ -84,6 +84,14 @@ export async function PUT(
             if (submittedCost !== undefined) variant.unitCost = submittedCost;
             else if (typeof priorCost === 'number') variant.unitCost = priorCost;
 
+            // SKU: preserve the existing value from Redis, never the submitted one.
+            // The sku:{sku} reverse index is the source of truth and is maintained
+            // ONLY by assignSku() (via /api/admin/labels). A plain product edit must
+            // not rewrite a SKU, or the index would desync. (Changing a SKU is a
+            // deliberate action done through the labels API.)
+            const priorSku = (priorVariant as any)?.sku;
+            if (typeof priorSku === 'string' && priorSku) variant.sku = priorSku;
+
             if (cash !== undefined && cash > 0) variant.price_cash = cash;
             if (points !== undefined && points > 0) variant.price_points = points;
 

@@ -14,6 +14,7 @@ import { motion } from 'framer-motion';
 interface Overview {
     canFinance: boolean;
     canSourcing: boolean;
+    canProducts?: boolean;
     cards: {
         lowStock: {
             count: number;
@@ -31,6 +32,7 @@ interface Overview {
         expiringQuotes: { count: number; items: Array<{ id: string; itemName: string; daysLeft: number }> };
         overduePOs: { count: number; openCount: number; items: Array<{ id: string; status: string }> };
         finance: { uncostedVariants: number };
+        labels?: { unlabeledVariants: number };
         recentActivity: Array<{ action: string; summary: string; actorEmail?: string; timestamp: string }>;
     };
 }
@@ -84,12 +86,14 @@ export default function CommandCenter() {
     if (!data) return null;
 
     const { cards } = data;
+    const unlabeled = cards.labels?.unlabeledVariants ?? 0;
     const nothing =
         cards.lowStock.count === 0 &&
         cards.orders.unfulfilled === 0 &&
         cards.expiringQuotes.count === 0 &&
         cards.overduePOs.count === 0 &&
-        (!data.canFinance || cards.finance.uncostedVariants === 0);
+        (!data.canFinance || cards.finance.uncostedVariants === 0) &&
+        (!data.canProducts || unlabeled === 0);
 
     return (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="mb-12">
@@ -194,6 +198,21 @@ export default function CommandCenter() {
                             </div>
                             <p className="text-sm text-hackclub-slate">
                                 {cards.finance.uncostedVariants > 0 ? 'Set unit costs so valuation + margins are right.' : 'Everything costed.'}
+                            </p>
+                        </div>
+                    </Link>
+                )}
+
+                {/* Labels: unlabeled variants */}
+                {data.canProducts && (
+                    <Link href="/admin/labels" className={unlabeled === 0 ? 'pointer-events-none' : ''}>
+                        <div className={`h-full bg-white rounded-2xl border-2 p-5 transition-all ${unlabeled > 0 ? 'border-hackclub-purple/40 hover:shadow-lg' : 'border-hackclub-smoke opacity-70'}`}>
+                            <div className="flex items-center justify-between mb-2">
+                                <h3 className="font-black text-hackclub-dark">Unlabeled stock</h3>
+                                <Stat value={unlabeled} label="variants, no barcode" tone="text-hackclub-purple" />
+                            </div>
+                            <p className="text-sm text-hackclub-slate">
+                                {unlabeled > 0 ? 'Generate SKUs + print labels so they can be scanned to receive.' : 'Everything labeled.'}
                             </p>
                         </div>
                     </Link>
