@@ -11,6 +11,8 @@ const redis = new Redis({
 
 interface AdminUserRow {
     userId: string;
+    name: string | null;
+    email: string | null;
     pointsBalance: number;
     slackId: string | null;
     role: string | null;
@@ -40,8 +42,10 @@ export async function GET() {
 
         const users: AdminUserRow[] = [];
         for (const userId of userIds) {
-            const [pointsBalance, slackId, orders, role] = await Promise.all([
+            const [pointsBalance, name, email, slackId, orders, role] = await Promise.all([
                 redis.get<number>(`user:${userId}:pointsBalance`),
+                redis.get<string>(`user:${userId}:name`),
+                redis.get<string>(`user:${userId}:email`),
                 redis.get<string>(`user:${userId}:slackId`),
                 redis.get<unknown[]>(`user:${userId}:orders`),
                 getAdminRole(userId),
@@ -49,6 +53,8 @@ export async function GET() {
 
             users.push({
                 userId,
+                name: name ?? null,
+                email: email ?? null,
                 pointsBalance: pointsBalance ?? 0,
                 slackId: slackId ?? null,
                 role: role ?? null,
