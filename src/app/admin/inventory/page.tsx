@@ -24,9 +24,7 @@ export default function InventoryAdmin() {
     const [rows, setRows] = useState<Row[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [notice, setNotice] = useState<string | null>(null);
     const [lowOnly, setLowOnly] = useState(false);
-    const [syncing, setSyncing] = useState(false);
     const [savingId, setSavingId] = useState<string | null>(null);
     const [edits, setEdits] = useState<Record<string, string>>({});
 
@@ -54,26 +52,6 @@ export default function InventoryAdmin() {
         if (session) load();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [session]);
-
-    const sync = async () => {
-        setSyncing(true);
-        setError(null);
-        setNotice(null);
-        try {
-            const res = await fetch('/api/admin/inventory/sync', { method: 'POST' });
-            const data = await res.json();
-            if (!res.ok || data.ok === false) {
-                setError(data.error || 'Sync failed');
-            } else {
-                setNotice(`Synced ${data.synced} variant${data.synced === 1 ? '' : 's'} from Airtable.`);
-                await load();
-            }
-        } catch {
-            setError('Sync failed');
-        } finally {
-            setSyncing(false);
-        }
-    };
 
     const saveStock = async (row: Row) => {
         const raw = edits[row.variantId];
@@ -136,19 +114,9 @@ export default function InventoryAdmin() {
                     <Link href="/admin" className="text-hackclub-slate hover:text-hackclub-dark mb-2 inline-block font-medium">
                         ← Back to Dashboard
                     </Link>
-                    <div className="flex flex-wrap items-end justify-between gap-4 mb-2">
-                        <h1 className="text-5xl sm:text-6xl font-black text-hackclub-dark">Inventory</h1>
-                        <button
-                            type="button"
-                            onClick={sync}
-                            disabled={syncing}
-                            className="bg-hackclub-blue hover:bg-blue-600 text-white font-bold px-5 py-2.5 rounded-full transition-colors disabled:opacity-50"
-                        >
-                            {syncing ? 'Syncing…' : 'Sync from Airtable'}
-                        </button>
-                    </div>
+                    <h1 className="text-5xl sm:text-6xl font-black text-hackclub-dark mb-2">Inventory</h1>
                     <p className="text-lg text-hackclub-slate font-medium mb-6">
-                        Stock is tracked per variant. Leave a stock field blank for unlimited. Airtable is the source of truth — edits here also update the product and re-sync to Airtable. For cost, valuation, and margins, see <Link href="/admin/finance" className="text-hackclub-blue hover:underline font-bold">Finance</Link>.
+                        Stock is tracked per variant in this dashboard. Leave a stock field blank for unlimited. For cost, valuation, and margins, see <Link href="/admin/finance" className="text-hackclub-blue hover:underline font-bold">Finance</Link>.
                     </p>
 
                     <div className="mb-6">
@@ -168,12 +136,6 @@ export default function InventoryAdmin() {
                             <p className="text-hackclub-red font-bold">{error}</p>
                         </div>
                     )}
-                    {notice && (
-                        <div className="mb-4 p-4 bg-hackclub-green/10 border-2 border-hackclub-green/40 rounded-xl">
-                            <p className="text-hackclub-green font-bold">{notice}</p>
-                        </div>
-                    )}
-
                     <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">

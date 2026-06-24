@@ -17,6 +17,7 @@
 
 import { Order } from '../types/Order';
 import { Product } from '../types/Admin';
+import { Vendor, Quote, PurchaseOrder, Asset } from '../types/Sourcing';
 import { formatAddress } from './address';
 
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
@@ -27,6 +28,10 @@ const TABLES = {
     orders: process.env.AIRTABLE_ORDERS_TABLE || 'Orders',
     users: process.env.AIRTABLE_USERS_TABLE || 'Users',
     coupons: process.env.AIRTABLE_COUPONS_TABLE || 'Coupons',
+    vendors: process.env.AIRTABLE_VENDORS_TABLE || 'Vendors',
+    quotes: process.env.AIRTABLE_QUOTES_TABLE || 'Quotes',
+    purchaseOrders: process.env.AIRTABLE_POS_TABLE || 'Purchase Orders',
+    assets: process.env.AIRTABLE_ASSETS_TABLE || 'Assets',
 } as const;
 
 const isConfigured = () => Boolean(AIRTABLE_API_KEY && AIRTABLE_BASE_ID);
@@ -232,4 +237,119 @@ export function mirrorCoupon(coupon: {
 
 export function unmirrorCoupon(couponId: string): Promise<void> {
     return safe(`delete coupon ${couponId}`, () => removeByKey(TABLES.coupons, 'Coupon Id', couponId));
+}
+
+// ── Vendors ───────────────────────────────────────────────────────────────────
+
+export function mirrorVendor(vendor: Vendor): Promise<void> {
+    return safe(`vendor ${vendor.id}`, () =>
+        upsert(TABLES.vendors, 'Vendor Id', vendor.id, {
+            'Vendor Id': vendor.id,
+            Name: vendor.name,
+            Website: vendor.website || '',
+            'Contact Name': vendor.contactName || '',
+            'Contact Email': vendor.contactEmail || '',
+            Tags: (vendor.tags || []).join(', '),
+            Notes: vendor.notes || '',
+            'Created At': vendor.createdAt,
+            'Updated At': vendor.updatedAt,
+        }),
+    );
+}
+
+export function unmirrorVendor(vendorId: string): Promise<void> {
+    return safe(`delete vendor ${vendorId}`, () => removeByKey(TABLES.vendors, 'Vendor Id', vendorId));
+}
+
+// ── Quotes ────────────────────────────────────────────────────────────────────
+
+export function mirrorQuote(quote: Quote): Promise<void> {
+    // Cheapest tier (highest minQty wins ties is irrelevant here) for a scannable
+    // "from $X" roll-up; the full tier table lives in Price Breaks JSON.
+    const cheapest = (quote.priceBreaks || []).reduce<number | null>(
+        (min, b) => (min === null || b.unitCost < min ? b.unitCost : min),
+        null,
+    );
+    return safe(`quote ${quote.id}`, () =>
+        upsert(TABLES.quotes, 'Quote Id', quote.id, {
+            'Quote Id': quote.id,
+            'Vendor Id': quote.vendorId,
+            'Item Name': quote.itemName,
+            'Product Id': quote.productId || '',
+            'Variant Hint': quote.variantHint || '',
+            'Price Breaks JSON': JSON.stringify(quote.priceBreaks || []),
+            'Lowest Unit Cost': cheapest ?? null,
+            MOQ: quote.moq ?? null,
+            'Lead Time Days': quote.leadTimeDays ?? null,
+            'Setup Fee': quote.setupFee ?? null,
+            'Shipping Estimate': quote.shippingEstimate ?? null,
+            Currency: quote.currency || 'USD',
+            'Valid Until': quote.validUntil || null,
+            Status: quote.status,
+            Notes: quote.notes || '',
+            'Created At': quote.createdAt,
+            'Updated At': quote.updatedAt,
+        }),
+    );
+}
+
+export function unmirrorQuote(quoteId: string): Promise<void> {
+    return safe(`delete quote ${quoteId}`, () => removeByKey(TABLES.quotes, 'Quote Id', quoteId));
+}
+
+// ── Purchase Orders ────────────────────────────────────────────────────────────
+
+export function mirrorPurchaseOrder(po: PurchaseOrder): Promise<void> {
+    const lineTotal = (po.lines || []).reduce((sum, l) => sum + l.quantity * l.unitCost, 0);
+    const total = lineTotal + (po.setupFee || 0) + (po.shippingCost || 0);
+    return safe(`po ${po.id}`, () =>
+        upsert(TABLES.purchaseOrders, 'PO Id', po.id, {
+            'PO Id': po.id,
+            'Vendor Id': po.vendorId,
+            'Quote Id': po.quoteId || '',
+            Status: po.status,
+            'Lines JSON': JSON.stringify(po.lines || []),
+            'Line Summary': (po.lines || []).map((l) => `${l.quantity}× ${l.description}`).join(', '),
+            'Units Total': (po.lines || []).reduce((sum, l) => sum + l.quantity, 0),
+            'Setup Fee': po.setupFee ?? null,
+            'Shipping Cost': po.shippingCost ?? null,
+            'Total Cost': Math.round(total * 100) / 100,
+            'Expected Date': po.expectedDate || null,
+            'Received Receipt Ids': (po.receivedReceiptIds || []).join(', '),
+            'Issued By': po.issuedBy || '',
+            'Created At': po.createdAt,
+            'Updated At': po.updatedAt,
+        }),
+    );
+}
+
+export function unmirrorPurchaseOrder(poId: string): Promise<void> {
+    return safe(`delete po ${poId}`, () => removeByKey(TABLES.purchaseOrders, 'PO Id', poId));
+}
+
+// ── Assets (design / art files) ────────────────────────────────────────────────
+
+export function mirrorAsset(asset: Asset): Promise<void> {
+    return safe(`asset ${asset.id}`, () =>
+        upsert(TABLES.assets, 'Asset Id', asset.id, {
+            'Asset Id': asset.id,
+            Filename: asset.filename,
+            Label: asset.label || '',
+            Kind: asset.kind,
+            Version: asset.version,
+            'Group Id': asset.assetGroupId,
+            'Mime Type': asset.mimeType,
+            URL: asset.blobUrl,
+            'Product Id': asset.productId || '',
+            'Variant Id': asset.variantId || '',
+            'Quote Id': asset.quoteId || '',
+            'PO Id': asset.poId || '',
+            'Uploaded By': asset.uploadedBy,
+            'Created At': asset.createdAt,
+        }),
+    );
+}
+
+export function unmirrorAsset(assetId: string): Promise<void> {
+    return safe(`delete asset ${assetId}`, () => removeByKey(TABLES.assets, 'Asset Id', assetId));
 }

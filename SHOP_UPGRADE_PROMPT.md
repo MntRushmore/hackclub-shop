@@ -242,6 +242,66 @@ filters action. All filtering layers on top of the existing pathway filter, so i
 stays correct for both `student` and `guest`. `/api/products` now returns
 `category` and `createdAt` per product.
 
+## 7d. Sourcing — Vendor & Quote Vault (shipped — Admin OS Slice 1)
+
+First slice of the connected admin OS (full spec in `ADMIN_OS_PROMPT.md`, model in
+`docs/SOURCING.md`). A **vendor vault** and **quote vault** with quantity price-breaks,
+plus a **compare-at-quantity** view that groups quotes by item and highlights the cheapest
+**landed unit cost** (`tier price + setup/qty + shipping/qty`, via `landedUnitCost()` in
+`src/types/Sourcing.ts`). New `canManageSourcing` permission (manager + store_manager),
+gated on page and API. New Airtable mirror tables `Vendors` + `Quotes` (write-only,
+fire-and-forget). Audit entries `sourcing.vendor.*` / `sourcing.quote.*`.
+
+**Files added:** `src/types/Sourcing.ts`, `src/lib/sourcing.ts`,
+`src/app/api/admin/sourcing/{vendors,quotes}/route.ts` + `[id]/route.ts`,
+`src/app/admin/sourcing/{page,vendors/page,quotes/page}.tsx`, `docs/SOURCING.md`.
+**Touched:** `airtableMirror.ts` (vendor/quote mirror), `auditLog.ts` (new actions),
+`types/Admin.ts` (`canManageSourcing`), `admin/page.tsx` (Sourcing card).
+**Not yet wired (defined in types):** PurchaseOrder, Asset — later slices.
+
+## 7e. Sourcing — Quote→Product→PO→Receiving pipeline (shipped — Admin OS Slice 4)
+
+The connective tissue (spec §3 of `ADMIN_OS_PROMPT.md`, model in `docs/SOURCING.md`).
+**Accept a quote** → creates a **draft** `Product` (excluded from storefront; no price;
+variant seeded with `unitCost = landedUnitCost`) and links the quote. **Start a PO** from
+it (`draft → issued → in_transit → received`). **Receive** posts every line through the
+existing **`receiveStock()`** costing ledger — the only path that moves stock + weighted-
+avg cost. Idempotent via a **deterministic receipt id** `{poId}__{variantId}` (claimed in
+`receiveStock`) plus a PO-level `receivedReceiptIds` guard; double-receive is a no-op.
+Receiving is gated on `canManageFinance` (it moves cost basis); everything else on
+`canManageSourcing`. New `Product.draft` + `ProductVariant.reorderPoint`; storefront
+`/api/products` and `/api/products/[id]` now exclude drafts. New Airtable mirror table
+`Purchase Orders`. Audit: `sourcing.quote.accept`, `sourcing.po.{create,status,receive,delete}`.
+
+**Files added:** `src/app/api/admin/sourcing/quotes/[id]/accept/route.ts`,
+`src/app/api/admin/sourcing/pos/route.ts` + `[id]/route.ts` + `[id]/receive/route.ts`,
+`src/app/admin/sourcing/pos/page.tsx`. **Touched:** `lib/sourcing.ts` (PO CRUD +
+idempotent `receivePO`), `airtableMirror.ts` (`mirrorPurchaseOrder`), `auditLog.ts`,
+`types/Admin.ts` (`draft`, `reorderPoint`), `api/products` + `[id]` (draft filter),
+`admin/sourcing/{page,quotes/page}.tsx` (POs card + pipeline buttons), `docs/SOURCING.md`.
+## 7f. Sourcing — Asset manager + Command center (shipped — Admin OS Slices 3 & 5)
+
+**Assets (Slice 3):** versioned design/art files (mockups, proofs, print-ready, source)
+attachable to a product, quote, and/or PO via reverse indexes. Dedicated Blob upload
+route (allows SVG/PDF/AI/EPS/ZIP up to 25MB — assets are downloaded, not rendered
+inline). Reusable `AssetPanel` wired into quote rows + PO cards; uploading a new version
+of a group bumps `version` and keeps history. New Airtable `Assets` table. Audit
+`sourcing.asset.{create,delete}`.
+
+**Command center (Slice 5):** `/admin` now leads with a live **"Needs attention"** feed
+(`CommandCenter.tsx`) over one aggregation endpoint `GET /api/admin/overview` — reorder
+(variants at/below `reorderPoint`, joined to cheapest open quote), unfulfilled orders,
+quotes expiring ≤14d, overdue POs, uncosted variants (finance-only), recent audit. The
+tool card grid stays below as secondary nav. Read-only, fire-and-forget, role-aware.
+
+**Files added:** `src/app/api/admin/sourcing/assets/route.ts` + `[id]/route.ts`,
+`src/app/admin/sourcing/AssetPanel.tsx`, `src/app/api/admin/overview/route.ts`,
+`src/app/admin/CommandCenter.tsx`. **Touched:** `lib/sourcing.ts` (Asset CRUD),
+`airtableMirror.ts` (`mirrorAsset`), `auditLog.ts`, `admin/page.tsx` (command center +
+"All tools" heading), `sourcing/{quotes,pos}/page.tsx` (asset panels).
+
+**The Admin OS program (`ADMIN_OS_PROMPT.md`) is now fully shipped** — all five slices.
+
 ## 8. Key files reference
 
 | Concern | Files |

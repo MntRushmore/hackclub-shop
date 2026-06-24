@@ -17,7 +17,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     try {
         const product = await redis.get<any>(`product:${productId}`);
 
-        if (!product) {
+        // Draft products (created from an accepted sourcing quote) aren't public —
+        // 404 them on the storefront just like a missing product, even by direct URL.
+        if (!product || product.draft) {
             return NextResponse.json({ message: 'Product not found' }, { status: 404 });
         }
 

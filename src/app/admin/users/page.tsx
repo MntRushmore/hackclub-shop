@@ -7,6 +7,8 @@ import { motion } from 'framer-motion';
 
 interface AdminUserRow {
     userId: string;
+    name: string | null;
+    email: string | null;
     pointsBalance: number;
     slackId: string | null;
     role: string | null;
@@ -39,6 +41,30 @@ export default function UsersAdmin() {
         if (status === 'authenticated') loadUsers();
     }, [status, loadUsers]);
     
+    // Backfill state
+    const [backfilling, setBackfilling] = useState(false);
+    const [backfillMessage, setBackfillMessage] = useState<string | null>(null);
+
+    const runBackfill = useCallback(async () => {
+        setBackfilling(true);
+        setBackfillMessage(null);
+        try {
+            const res = await fetch('/api/admin/users/backfill-identity', { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                const c = data.counts;
+                setBackfillMessage(`Backfilled ${c.namesFilled} name(s) and ${c.emailsFilled} email(s) across ${c.scanned} user(s).`);
+                loadUsers();
+            } else {
+                setBackfillMessage(data.error || 'Backfill failed');
+            }
+        } catch {
+            setBackfillMessage('Backfill failed');
+        } finally {
+            setBackfilling(false);
+        }
+    }, [loadUsers]);
+
     // Points state
     const [pointsUserId, setPointsUserId] = useState('');
     const [pointsAmount, setPointsAmount] = useState('');
@@ -102,7 +128,7 @@ export default function UsersAdmin() {
                 backgroundSize: '30px 30px',
             }}
         >
-            <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -114,20 +140,37 @@ export default function UsersAdmin() {
                     <h1 className="text-5xl sm:text-6xl font-black text-hackclub-dark mb-2">
                         Users
                     </h1>
-                    <p className="text-lg text-hackclub-slate font-medium mb-12">
+                    <p className="text-lg text-hackclub-slate font-medium mb-2">
                         View users and adjust their points
+                    </p>
+                    <p className="text-sm text-hackclub-slate/80 font-medium mb-12">
+                        Everyone here signed in with Hack Club — guest (HCB) buyers don&apos;t appear in this list.
                     </p>
 
                     <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-8 mb-8">
                         <div className="flex items-center justify-between mb-6">
                             <h2 className="text-2xl font-black text-hackclub-dark">All Users</h2>
-                            <button
-                                onClick={loadUsers}
-                                className="text-sm font-bold text-hackclub-slate hover:text-hackclub-dark"
-                            >
-                                ↻ Refresh
-                            </button>
+                            <div className="flex items-center gap-4">
+                                <button
+                                    onClick={runBackfill}
+                                    disabled={backfilling}
+                                    title="Fill in missing names/emails for users who haven't logged in since this was added (pulls from Slack)."
+                                    className="text-sm font-bold text-hackclub-slate hover:text-hackclub-dark disabled:opacity-50"
+                                >
+                                    {backfilling ? 'Backfilling…' : '⤓ Backfill names'}
+                                </button>
+                                <button
+                                    onClick={loadUsers}
+                                    className="text-sm font-bold text-hackclub-slate hover:text-hackclub-dark"
+                                >
+                                    ↻ Refresh
+                                </button>
+                            </div>
                         </div>
+
+                        {backfillMessage && (
+                            <p className="text-sm font-medium text-hackclub-slate mb-4">{backfillMessage}</p>
+                        )}
 
                         {usersLoading ? (
                             <p className="text-hackclub-slate font-medium">Loading users…</p>
@@ -138,7 +181,8 @@ export default function UsersAdmin() {
                                 <table className="w-full text-left text-sm">
                                     <thead>
                                         <tr className="border-b-2 border-hackclub-smoke text-hackclub-slate">
-                                            <th className="py-2 pr-4 font-bold">User ID</th>
+                                            <th className="py-2 pr-4 font-bold">User</th>
+                                            <th className="py-2 pr-4 font-bold">Email</th>
                                             <th className="py-2 pr-4 font-bold">Points</th>
                                             <th className="py-2 pr-4 font-bold">Orders</th>
                                             <th className="py-2 pr-4 font-bold">Role</th>
@@ -151,7 +195,11 @@ export default function UsersAdmin() {
                                                 onClick={() => { setPointsUserId(u.userId); }}
                                                 className="border-b border-hackclub-smoke/50 hover:bg-hackclub-smoke/20 cursor-pointer"
                                             >
-                                                <td className="py-2 pr-4 font-mono text-hackclub-dark">{u.userId}</td>
+                                                <td className="py-2 pr-4">
+                                                    <div className="font-bold text-hackclub-dark">{u.name || 'Unknown'}</div>
+                                                    <div className="font-mono text-xs text-hackclub-slate">{u.userId}</div>
+                                                </td>
+                                                <td className="py-2 pr-4 text-hackclub-slate break-all">{u.email || '—'}</td>
                                                 <td className="py-2 pr-4 font-bold text-hackclub-dark">{u.pointsBalance}</td>
                                                 <td className="py-2 pr-4 text-hackclub-slate">{u.orderCount}</td>
                                                 <td className="py-2 pr-4 text-hackclub-slate">{u.role || '—'}</td>

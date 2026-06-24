@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import Icon from 'supercons';
+import CommandCenter from './CommandCenter';
 
 export default function AdminDashboard() {
     const { data: session, status } = useSession();
@@ -107,6 +108,9 @@ export default function AdminDashboard() {
                         Manage your store
                     </p>
 
+                    <CommandCenter />
+
+                    <h2 className="text-2xl font-black text-hackclub-dark mb-4">All tools</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {/* Projects */}
                         <motion.div

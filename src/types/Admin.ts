@@ -18,6 +18,10 @@ export interface AdminPermissions {
     // separate from canViewStats (order stats) and canManageProducts so cost
     // basis and margin are only visible to finance-trusted roles.
     canManageFinance: boolean;
+    // Sourcing: manage vendors, quotes, purchase orders, and design assets. Cost
+    // basis shown inside the sourcing tools is still gated by canManageFinance, so
+    // a store_manager can run procurement without seeing margins.
+    canManageSourcing: boolean;
 }
 
 export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
@@ -29,6 +33,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
         canViewStats: true,
         canManageAdmins: true,
         canManageFinance: true,
+        canManageSourcing: true,
     },
     store_manager: {
         canManageUsers: false,
@@ -38,6 +43,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
         canViewStats: true,
         canManageAdmins: false,
         canManageFinance: false,
+        canManageSourcing: true,
     },
     reader: {
         canManageUsers: false,
@@ -47,6 +53,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermissions> = {
         canViewStats: true,
         canManageAdmins: false,
         canManageFinance: false,
+        canManageSourcing: false,
     },
 };
 
@@ -67,6 +74,10 @@ export interface ProductVariant {
     // hand or recomputed as a weighted average when stock is received (see
     // src/lib/costing.ts). Drives inventory valuation and COGS. Missing = uncosted.
     unitCost?: number;
+    // Sourcing: when available stock falls to/below this, the variant is flagged for
+    // reorder (command center / reorder intelligence). Optional; unset = no reorder
+    // signal. Does not affect checkout or availability.
+    reorderPoint?: number;
 }
 
 export interface ShippingOption {
@@ -96,6 +107,11 @@ export interface Product {
     variants: ProductVariant[];
     shippingOptions: ShippingOption[];
     checkoutFields: CheckoutField[];
+    // Sourcing pipeline: a product created from an accepted quote starts as a draft.
+    // Drafts are excluded from the storefront (`/api/products`) until an admin
+    // publishes them (sets prices + clears the flag in the product editor). Existing
+    // products have no flag and render as before.
+    draft?: boolean;
     createdAt: Date;
     updatedAt: Date;
 }
