@@ -14,7 +14,9 @@ export async function GET() {
     const rawProducts: any[] = [];
     for (const key of keys) {
         const product = await redis.get<any>(key);
-        if (product) rawProducts.push(product);
+        // Draft products (e.g. created from an accepted sourcing quote) are not yet
+        // for sale — never surface them on the storefront until published.
+        if (product && !product.draft) rawProducts.push(product);
     }
 
     // Enrich variants with live availability in one batched stock read. `available`

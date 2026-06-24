@@ -31,7 +31,20 @@ export type AuditAction =
     | 'points.grant'
     | 'points.deduct'
     | 'inventory.adjust'
-    | 'inventory.receive';
+    | 'inventory.receive'
+    | 'sourcing.vendor.create'
+    | 'sourcing.vendor.update'
+    | 'sourcing.vendor.delete'
+    | 'sourcing.quote.create'
+    | 'sourcing.quote.update'
+    | 'sourcing.quote.delete'
+    | 'sourcing.quote.accept'
+    | 'sourcing.po.create'
+    | 'sourcing.po.status'
+    | 'sourcing.po.receive'
+    | 'sourcing.po.delete'
+    | 'sourcing.asset.create'
+    | 'sourcing.asset.delete';
 
 export interface AuditEntry {
     id: string;
