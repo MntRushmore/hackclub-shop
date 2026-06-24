@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { Redis } from '@upstash/redis';
 import { authOptions } from '../../../../../lib/authOptions';
 import { requireAdminPermission } from '../../../../../lib/adminAuth';
+import { getStripe, isStripeConfigured } from '../../../../../lib/stripe';
 import { getGuestOrder, updateGuestOrder } from '../../../../../lib/guestOrders';
 import { mirrorOrder } from '../../../../../lib/airtableMirror';
 import { restock } from '../../../../../lib/inventory';
@@ -76,26 +77,50 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const newStatus = ACTION_STATUS[action];
 
     try {
-        // ── Guest (Stripe) order ──────────────────────────────────────────────
+        // ── Guest order ───────────────────────────────────────────────────────
         const guest = await getGuestOrder(orderId);
         if (guest) {
-            // Guest refunds (HCB donations, and legacy Stripe orders) can't be
-            // pushed through our read-only token — staff issue the refund in HCB
-            // (or the Stripe dashboard for old orders). We flip state + restock
-            // and record a note so the manual step is visible in the order trail.
-            const refundNote = action === 'refund'
-                ? `${message ? message + ' — ' : ''}Refund the donation manually in HCB.`
-                : message;
+            // Refund semantics depend on how the order was paid:
+            //   - Stripe (the current cash path): push a real refund through the
+            //     Stripe API against the saved payment intent. If we can't (Stripe
+            //     unconfigured, or no payment intent on the order), DON'T silently
+            //     claim success — flip state + restock but leave a note so staff
+            //     issue the refund manually in the Stripe dashboard.
+            //   - HCB donations (the prior era): can't be refunded through our
+            //     read-only token, so always flip state + restock + manual note.
+            const isHcbOrder = guest.paymentMethod === 'hcb';
 
+            // Computed during the refund attempt; appended to the status note so
+            // the manual step (if any) is visible in the order trail.
+            let manualRefundNote: string | undefined;
             if (action === 'refund') {
                 if (guest.paymentStatus !== 'paid') {
                     return NextResponse.json({ error: 'Order is not paid; nothing to refund.' }, { status: 400 });
+                }
+                if (isHcbOrder) {
+                    manualRefundNote = 'Refund the donation manually in HCB.';
+                } else if (isStripeConfigured() && guest.stripePaymentIntentId) {
+                    // Stripe order with a payment intent: refund via the API.
+                    try {
+                        await getStripe().refunds.create({ payment_intent: guest.stripePaymentIntentId });
+                    } catch (err) {
+                        console.error('[Admin order] Stripe refund failed:', err);
+                        return NextResponse.json({ error: 'Stripe refund failed. Check the dashboard.' }, { status: 502 });
+                    }
+                } else {
+                    // Stripe order we can't auto-refund (no intent / Stripe off).
+                    // Surface it instead of pretending the money moved.
+                    manualRefundNote = 'Refund this payment manually in the Stripe dashboard (no automatic refund was issued).';
                 }
                 // Return the sold units to stock (best-effort).
                 if (guest.inventoryHold && guest.inventoryHold.length > 0) {
                     void restock(guest.inventoryHold);
                 }
             }
+
+            const refundNote = action === 'refund' && manualRefundNote
+                ? `${message ? message + ' — ' : ''}${manualRefundNote}`
+                : message;
 
             const updated = await updateGuestOrder(orderId, {
                 status: newStatus,

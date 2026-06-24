@@ -1,30 +1,116 @@
 'use client';
-import { useEffect, useContext, Suspense } from 'react';
+import { useEffect, useState, useContext, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { CartContext } from '../../context/CartContext';
 
+type GuestStatus = 'loading' | 'processing' | 'paid' | 'notfound' | 'slow';
+
 /**
- * Student (points) order success page. Points orders settle in-request, so by
- * the time we land here the order is already placed — no polling needed. Guest
- * (HCB donation) orders confirm on `/hcb/callback` instead, which reconciles the
- * donation before showing success.
+ * Order success page, both pathways:
+ *  - Student (points) orders settle in-request, so landing here means the order
+ *    is already placed — show success immediately.
+ *  - Guest (Stripe) orders return here with `?session_id=`. The webhook finalizes
+ *    the order asynchronously, so poll the status until it flips to `paid` (the
+ *    redirect itself is never proof of payment). The cart is cleared only once
+ *    payment is confirmed.
  */
 const ThankYouInner = () => {
+  const searchParams = useSearchParams();
+  const sessionId = searchParams.get('session_id');
+  const isGuest = Boolean(sessionId);
+  const [status, setStatus] = useState<GuestStatus>(isGuest ? 'loading' : 'paid');
   const cartContext = useContext(CartContext);
 
-  // Clear the cart on success — both the in-memory context (so the nav badge
-  // resets) and localStorage. Idempotent with the clear at checkout.
+  // Student order: cart already cleared at checkout; clear again here (idempotent)
+  // so the nav badge resets. Guests clear only on confirmed payment (below).
   useEffect(() => {
-    cartContext?.clearCart();
-  }, [cartContext]);
+    if (!isGuest) cartContext?.clearCart();
+  }, [isGuest, cartContext]);
+
+  useEffect(() => {
+    if (!isGuest) return;
+
+    let cancelled = false;
+    let attempts = 0;
+    // The webhook finalizes asynchronously; give it a generous budget (~90s at
+    // 1.5s) so a slow/retried delivery doesn't strand a customer who DID pay.
+    const MAX_ATTEMPTS = 60;
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/checkout/stripe/status?session_id=${encodeURIComponent(sessionId!)}`);
+        if (cancelled) return;
+        // A 404 right after the redirect is usually the session→order pointer not
+        // being readable yet (write replication lag), NOT a real missing order —
+        // so keep polling rather than declaring it lost. Only show "not found"
+        // if it's still 404 once the whole budget is exhausted.
+        if (res.status !== 404) {
+          const data = await res.json();
+          if (data.paymentStatus === 'paid') {
+            // Confirmed paid — now it's safe to clear the cart.
+            cartContext?.clearCart();
+            setStatus('paid');
+            return;
+          }
+          setStatus('processing');
+        }
+      } catch {
+        if (!cancelled) setStatus('processing');
+      }
+
+      attempts += 1;
+      if (cancelled) return;
+      if (attempts < MAX_ATTEMPTS) {
+        setTimeout(poll, 1500);
+      } else {
+        // Budget exhausted. If we never saw the order at all it's likely genuinely
+        // missing; otherwise the payment is just confirming slower than we waited.
+        // Either way DON'T clear the cart (payment wasn't confirmed) and tell the
+        // customer we'll email them — they aren't stranded.
+        setStatus((s) => (s === 'loading' ? 'notfound' : 'slow'));
+      }
+    };
+
+    poll();
+    return () => {
+      cancelled = true;
+    };
+  }, [isGuest, sessionId, cartContext]);
+
+  const heading =
+    status === 'paid' ? 'Thank You!'
+      : status === 'notfound' ? 'Order not found'
+        : status === 'slow' ? 'Almost there…'
+          : 'Almost there…';
+  const sub =
+    status === 'paid'
+      ? 'Your order has been successfully placed.'
+      : status === 'notfound'
+        ? "We couldn't find that order. If you were charged, contact us and we'll sort it out."
+        : status === 'slow'
+          ? "Your payment is taking a little longer than usual to confirm. If you completed it, you're all set — we'll email your confirmation as soon as it lands."
+          : 'Your payment is being confirmed. This usually takes a few seconds.';
 
   return (
     <div className="bg-white min-h-screen flex flex-col items-center justify-center text-hackclub-dark text-center px-4">
-      <h1 className="text-5xl font-black text-hackclub-red mb-4">Thank You!</h1>
-      <p className="text-2xl font-bold mb-2">Your order has been successfully placed.</p>
-      <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
+      <h1 className="text-5xl font-black text-hackclub-red mb-4">{heading}</h1>
+      <p className="text-2xl font-bold mb-2 max-w-xl">{sub}</p>
+      {status === 'processing' && (
+        <p className="text-hackclub-muted mb-8 animate-pulse">Confirming payment…</p>
+      )}
+      {status === 'paid' && (
+        <p className="text-hackclub-muted mb-8">A confirmation has been sent to your email.</p>
+      )}
+      <div className="flex flex-wrap items-center justify-center gap-3 mt-2">
         <Link href="/shop" className="inline-block bg-hackclub-red hover:bg-hackclub-orange text-white font-bold px-8 py-3 rounded-full shadow-lg transition-colors">Continue Shopping</Link>
-        <Link href="/orders" className="inline-block border-2 border-hackclub-smoke hover:border-hackclub-slate text-hackclub-slate font-bold px-8 py-3 rounded-full transition-colors">View your orders</Link>
+        {isGuest
+          ? (status === 'paid' || status === 'slow') && (
+              <Link href="/orders/track" className="inline-block border-2 border-hackclub-smoke hover:border-hackclub-slate text-hackclub-slate font-bold px-8 py-3 rounded-full transition-colors">Track your order</Link>
+            )
+          : (
+              <Link href="/orders" className="inline-block border-2 border-hackclub-smoke hover:border-hackclub-slate text-hackclub-slate font-bold px-8 py-3 rounded-full transition-colors">View your orders</Link>
+            )}
       </div>
     </div>
   );

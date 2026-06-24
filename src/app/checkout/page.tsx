@@ -20,10 +20,10 @@ const Checkout = () => {
     const { status } = useSession();
     const { isStudent: isStudentPathway, isAdminMode } = usePathway();
     // Admins (full-catalog mode) choose how to pay per order. Everyone else is
-    // fixed: students pay points, guests donate via HCB.
-    const [adminPayMode, setAdminPayMode] = useState<'points' | 'hcb'>('points');
+    // fixed: students pay points, guests pay by card via Stripe.
+    const [adminPayMode, setAdminPayMode] = useState<'points' | 'card'>('points');
     // The single switch the rest of checkout keys off: true = points checkout,
-    // false = HCB donation checkout.
+    // false = Stripe card checkout.
     const payWithPoints = isAdminMode ? adminPayMode === 'points' : isStudentPathway;
     const cartContext = useContext(CartContext);
     const pointsContext = useContext(PointsContext);
@@ -138,7 +138,7 @@ const Checkout = () => {
 
     // Guest (cash) totals. Guests now choose a live shipping rate, so the shipping
     // amount comes from selectedRate (falls back to 0 until one is chosen). For an
-    // admin paying HCB, a points-only item (no cash price) is charged at 1pt = $1.
+    // admin paying by card, a points-only item (no cash price) is charged at 1pt = $1.
     const itemsCash = cart.reduce((total, item) => {
         const cash = item.price_cash || (isAdminMode ? pointsToUsd(item.price_points || 0) : 0);
         return total + cash * item.quantity;
@@ -240,7 +240,8 @@ const Checkout = () => {
         }
     };
 
-    // Guest path: pay by donating on HCB's hosted page, then reconcile.
+    // Guest path: pay with a card via Stripe Checkout. Stripe Tax computes sales
+    // tax (and collects the billing/shipping address) on its hosted page.
     const handleGuestCheckout = async () => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(guestEmail)) {
@@ -251,7 +252,7 @@ const Checkout = () => {
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch('/api/checkout/hcb', {
+            const response = await fetch('/api/checkout/stripe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -265,19 +266,15 @@ const Checkout = () => {
                 }),
             });
             const data = await response.json();
-            if (!response.ok || !data.donateUrl || !data.orderId) {
+            if (!response.ok || !data.url) {
                 setError(data.error || 'Failed to start checkout');
                 setLoading(false);
                 return;
             }
-            // Open HCB's pre-filled donation page in a new tab, and take THIS tab
-            // to the waiting screen, which polls until the donation reconciles.
-            // The cart is cleared only once the donation lands (on the callback
-            // page), so an abandoned donation keeps the cart intact. The donate
-            // URL is forwarded so the callback can re-offer it if the popup was
-            // blocked.
-            window.open(data.donateUrl, '_blank', 'noopener,noreferrer');
-            router.push(`/hcb/callback?orderId=${encodeURIComponent(data.orderId)}&donate=${encodeURIComponent(data.donateUrl)}`);
+            // Hand off to Stripe's hosted Checkout. The cart is cleared only once
+            // payment is confirmed (on the thank-you page, which polls the
+            // webhook-settled status), so an abandoned payment keeps the cart.
+            window.location.href = data.url;
         } catch {
             setError('Failed to connect to server. Please try again.');
             setLoading(false);
@@ -313,7 +310,7 @@ const Checkout = () => {
                         <div>
                             <h1 className="text-3xl font-black mb-2 text-hackclub-red">Checkout</h1>
                             <h2 className="text-lg font-bold text-hackclub-slate">
-                                {payWithPoints ? 'Pay with your points.' : 'Complete your order with a donation via HCB.'}
+                                {payWithPoints ? 'Pay with your points.' : 'Complete your order with a secure card payment.'}
                             </h2>
                         </div>
 
@@ -322,7 +319,7 @@ const Checkout = () => {
                             <div className="p-4 rounded-2xl bg-hackclub-smoke/30 border-2 border-hackclub-smoke">
                                 <label className="block font-bold text-hackclub-dark mb-3">Payment method (admin)</label>
                                 <div className="flex gap-2">
-                                    {(['points', 'hcb'] as const).map((m) => (
+                                    {(['points', 'card'] as const).map((m) => (
                                         <button
                                             key={m}
                                             type="button"
@@ -333,7 +330,7 @@ const Checkout = () => {
                                                     : 'bg-white border-hackclub-smoke text-hackclub-slate hover:border-hackclub-slate'
                                             }`}
                                         >
-                                            {m === 'points' ? 'Pay with points' : 'Donate via HCB'}
+                                            {m === 'points' ? 'Pay with points' : 'Pay with card'}
                                         </button>
                                     ))}
                                 </div>
@@ -423,7 +420,7 @@ const Checkout = () => {
                                     onChange={(e) => setGuestEmail(e.target.value)}
                                     className="w-full px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
                                 />
-                                <p className="text-xs text-hackclub-muted">We&apos;ll send your order confirmation here. You&apos;ll complete payment as a donation on HCB&apos;s secure page.</p>
+                                <p className="text-xs text-hackclub-muted">We&apos;ll send your order confirmation here. You&apos;ll enter your card and shipping details on Stripe&apos;s secure checkout, where any sales tax is calculated.</p>
                             </motion.div>
                         )}
 
@@ -483,9 +480,12 @@ const Checkout = () => {
                                 </div>
                             )}
                             <div className="flex justify-between items-center text-xl font-black pt-2 border-t border-hackclub-smoke">
-                                <span>{payWithPoints ? 'Points Required:' : 'Total:'}</span>
+                                <span>{payWithPoints ? 'Points Required:' : 'Subtotal:'}</span>
                                 <span className="text-hackclub-dark">{payWithPoints ? formatPoints(requiredPoints) : formatCash(cashTotal)}</span>
                             </div>
+                            {!payWithPoints && (
+                                <p className="text-xs text-hackclub-muted text-right">Any applicable sales tax is calculated at checkout.</p>
+                            )}
                             {payWithPoints && (
                                 <div className="flex justify-between items-center text-sm text-hackclub-slate">
                                     <span>Your points:</span>
@@ -523,11 +523,11 @@ const Checkout = () => {
                                 {loading ? (
                                     <motion.span key="processing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="inline-flex items-center justify-center gap-2">
                                         <span className="inline-block w-5 h-5 border-[3px] border-white/40 border-t-white rounded-full animate-spin" aria-hidden="true" />
-                                        {payWithPoints ? 'Processing…' : 'Opening donation page…'}
+                                        {payWithPoints ? 'Processing…' : 'Redirecting to checkout…'}
                                     </motion.span>
                                 ) : canCheckout ? (
                                     <motion.span key="checkout" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                                        {payWithPoints ? 'Checkout →' : 'Donate via HCB →'}
+                                        {payWithPoints ? 'Checkout →' : 'Pay with card →'}
                                     </motion.span>
                                 ) : (
                                     <motion.span key="insufficient" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>

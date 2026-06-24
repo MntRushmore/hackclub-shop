@@ -141,7 +141,10 @@ export default function OrdersAdmin() {
     const visibleOrders = filteredOrders.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
 
     const exportCsv = () => {
-        const headers = ['Order ID', 'Pathway', 'Status', 'Payment', 'Buyer', 'Items', 'Total (USD)', 'Points', 'Tracking', 'Created'];
+        // Total (USD) is what the customer paid (tax-inclusive once Stripe settles);
+        // Tax (USD) breaks out the collected sales tax so bookkeeping can back out
+        // the pass-through liability. Points/HCB/pre-tax orders have no tax → 0.00.
+        const headers = ['Order ID', 'Pathway', 'Status', 'Payment', 'Buyer', 'Items', 'Total (USD)', 'Tax (USD)', 'Points', 'Tracking', 'Created'];
         const rows = filteredOrders.map((o) => [
             o.id,
             o.pathway,
@@ -150,6 +153,7 @@ export default function OrdersAdmin() {
             o.pathway === 'guest' ? o.guestEmail || '' : o.userId,
             o.items.map((i) => `${i.quantity}x ${i.name}`).join('; '),
             o.totalAmount.toFixed(2),
+            (o.taxAmount || 0).toFixed(2),
             o.pointsSpent || 0,
             o.shipment?.trackingNumber || '',
             new Date(o.createdAt).toISOString(),

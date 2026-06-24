@@ -297,6 +297,12 @@ const OrdersPage = () => {
                                                      <p className="font-bold text-hackclub-dark">${(order.shippingCost || 0).toFixed(2)}</p>
                                                  </div>
                                              ) : null}
+                                             {order.taxAmount ? (
+                                                 <div className="flex justify-between items-center">
+                                                     <p className="font-bold text-hackclub-slate">Sales tax:</p>
+                                                     <p className="font-bold text-hackclub-dark">${(order.taxAmount || 0).toFixed(2)}</p>
+                                                 </div>
+                                             ) : null}
                                              <div className="flex justify-between items-center pt-2 border-t border-hackclub-smoke">
                                                  <p className="font-bold text-hackclub-slate">Cash Due:</p>
                                                  <p className="text-lg font-black text-hackclub-dark">${(order.totalAmount || 0).toFixed(2)}</p>

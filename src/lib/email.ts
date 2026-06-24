@@ -99,9 +99,25 @@ function itemsHtml(order: Order): string {
     return order.items.map(i => `<li>${i.quantity}× ${escapeHtml(i.name)}</li>`).join('');
 }
 function priceLine(order: Order): string {
-    return order.pathway === 'guest'
-        ? `Total: $${order.totalAmount.toFixed(2)}`
-        : `Total: ${order.pointsSpent} points`;
+    if (order.pathway !== 'guest') {
+        return `Total: ${order.pointsSpent} points`;
+    }
+    // When Stripe Tax was applied, totalAmount is tax-INCLUSIVE — show the
+    // breakdown so the customer can see items, shipping, and tax separately
+    // (otherwise the total looks higher than the items with no explanation).
+    const usd = (n: number) => `$${n.toFixed(2)}`;
+    if (order.taxAmount && order.taxAmount > 0) {
+        const parts = [`Subtotal: ${usd(order.subtotal)}`];
+        if (order.shippingCost > 0) parts.push(`Shipping: ${usd(order.shippingCost)}`);
+        parts.push(`Tax: ${usd(order.taxAmount)}`);
+        parts.push(`Total: ${usd(order.totalAmount)}`);
+        return parts.join('\n');
+    }
+    return `Total: ${usd(order.totalAmount)}`;
+}
+/** HTML form of priceLine: escape, then render the multi-line breakdown with <br>. */
+function priceLineHtml(order: Order): string {
+    return escapeHtml(priceLine(order)).replace(/\n/g, '<br>');
 }
 function shippingLine(order: Order): string {
     return order.shippingAddress ? formatAddress(order.shippingAddress) : (order.shippingCountry || '');
@@ -133,7 +149,7 @@ export function buildOrderConfirmation(order: Order, to: string): EmailMessage {
     const html = shell('Thanks for your order!', `
         <p>Your order <strong>#${ref}</strong> is confirmed.</p>
         <ul>${itemsHtml(order)}</ul>
-        <p><strong>${escapeHtml(priceLine(order))}</strong></p>
+        <p><strong>${priceLineHtml(order)}</strong></p>
         <p style="color:#8492a6">Shipping to: ${escapeHtml(shippingLine(order))}</p>
         <p>We'll email you again when it ships.</p>
         ${trackHtml}`);
@@ -149,7 +165,7 @@ export function buildAdminNewOrder(order: Order): EmailMessage | null {
     const html = shell('New order', `
         <p><strong>#${ref}</strong> — ${escapeHtml(order.pathway)} order from ${escapeHtml(who)}</p>
         <ul>${itemsHtml(order)}</ul>
-        <p><strong>${escapeHtml(priceLine(order))}</strong></p>
+        <p><strong>${priceLineHtml(order)}</strong></p>
         <p style="color:#8492a6">Shipping to: ${escapeHtml(shippingLine(order))}</p>
         <p>Manage it in the admin dashboard.</p>`);
     return { to: ADMIN_EMAIL, subject: `New ${order.pathway} order #${ref}`, html, text };

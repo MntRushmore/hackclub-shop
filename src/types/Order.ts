@@ -59,9 +59,9 @@ export interface OrderShipment {
 /** Which storefront an order came through. */
 export type OrderPathway = 'student' | 'guest';
 /**
- * How the order was paid. `hcb` is the current guest cash path (a donation made
- * on HCB's hosted page, reconciled via the v4 API). `stripe` is retained only
- * for orders placed before the HCB migration so they still read correctly.
+ * How the order was paid. `stripe` is the current guest cash path (a Stripe
+ * Checkout card payment; Stripe Tax computes sales tax). `hcb` is retained for
+ * orders placed during the HCB-donation era so they still read correctly.
  */
 export type OrderPaymentMethod = 'points' | 'stripe' | 'hcb';
 /** Settlement state of the money/points charge. */
@@ -93,13 +93,14 @@ export interface Order {
     couponDiscount?: number;
     shippingCost: number;        // USD shipping (guest/Stripe orders)
     shippingPointsCost?: number; // points shipping (student orders)
-    totalAmount: number;         // cash total charged (USD)
+    totalAmount: number;         // cash total charged (USD); set to Stripe's amount_total (incl. tax) once paid
+    taxAmount?: number;          // sales tax charged (USD), from Stripe Tax; absent on points/HCB/pre-tax orders
     creditsPaid: number;         // legacy; always 0 now that credits are retired
-    // HCB donation linkage (current guest cash path).
-    hcb?: OrderHcb;
-    // Stripe linkage (legacy guest orders placed before the HCB migration).
+    // Stripe linkage (current guest cash path).
     stripeSessionId?: string;
     stripePaymentIntentId?: string;
+    // HCB donation linkage — guest orders placed during the HCB-donation era.
+    hcb?: OrderHcb;
     shippingCountry?: string;
     shippingAddress?: ShippingAddress;
     // Postage/tracking, set at fulfillment time (Pirate Ship / EasyPost).

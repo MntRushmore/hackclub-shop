@@ -72,8 +72,13 @@ export async function GET(request: Request) {
         // still returned for the admin page to optionally show.
         const realOrders = filteredOrders.filter(o => !o.isTest);
 
+        // Revenue is what we earned, not what we collected — sales tax (Stripe Tax,
+        // folded into totalAmount on payment) is a pass-through liability, so back
+        // it out. Old/points/HCB orders have no taxAmount and net to totalAmount.
+        const netRevenue = (o: typeof realOrders[number]) => o.totalAmount - (o.taxAmount || 0);
+
         totalOrders = realOrders.length;
-        totalRevenue = realOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+        totalRevenue = realOrders.reduce((sum, o) => sum + netRevenue(o), 0);
 
         realOrders.forEach(order => {
             ordersByStatus[order.status] = (ordersByStatus[order.status] || 0) + 1;
@@ -97,7 +102,7 @@ export async function GET(request: Request) {
             .map(([name, data]) => ({ id: name, ...data }));
 
         // Points vs cash split (real orders): cash revenue (USD) vs points spent.
-        const cashRevenue = realOrders.filter(o => o.pathway === 'guest').reduce((s, o) => s + o.totalAmount, 0);
+        const cashRevenue = realOrders.filter(o => o.pathway === 'guest').reduce((s, o) => s + netRevenue(o), 0);
         const pointsSpent = realOrders.filter(o => o.pathway === 'student').reduce((s, o) => s + (o.pointsSpent || 0), 0);
         const guestOrderCount = realOrders.filter(o => o.pathway === 'guest').length;
         const studentOrderCount = realOrders.filter(o => o.pathway === 'student').length;
@@ -107,7 +112,7 @@ export async function GET(request: Request) {
         for (const o of realOrders) {
             const day = new Date(o.createdAt).toISOString().slice(0, 10);
             if (!dayBuckets[day]) dayBuckets[day] = { revenue: 0, orders: 0 };
-            dayBuckets[day].revenue += o.totalAmount;
+            dayBuckets[day].revenue += netRevenue(o);
             dayBuckets[day].orders += 1;
         }
         const timeSeries = Object.entries(dayBuckets)
