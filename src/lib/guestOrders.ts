@@ -3,12 +3,14 @@ import { Redis } from '@upstash/redis';
 import { Order } from '../types/Order';
 
 /**
- * Storage for guest (adult / HCB donation) orders.
+ * Storage for guest (adult / Stripe) orders.
  *
  * Students' orders live under `user:${userId}:orders` (Hack Club id). Guests have
  * no account, so each order is stored standalone under `order:${orderId}` and
- * indexed by a hash of their email so they can be looked up later. The HCB
- * reconciler and callback page resolve a guest order by its id directly.
+ * indexed by a hash of their email so they can be looked up later. A pointer from
+ * the Stripe Checkout Session id to the order id lets the webhook and the
+ * thank-you page resolve the order without trusting client input. (Orders placed
+ * during the HCB era have an `hcb` block instead and are resolved by id.)
  */
 
 const redis = new Redis({
@@ -29,12 +31,22 @@ export async function saveGuestOrder(order: Order): Promise<void> {
         const ids = (await redis.get<string[]>(idxKey)) || [];
         writes.push(redis.set(idxKey, [order.id, ...ids]));
     }
+    if (order.stripeSessionId) {
+        writes.push(redis.set(`stripe:session:${order.stripeSessionId}`, order.id));
+    }
 
     await Promise.all(writes);
 }
 
 export async function getGuestOrder(orderId: string): Promise<Order | null> {
     return (await redis.get<Order>(`order:${orderId}`)) ?? null;
+}
+
+/** Resolve a guest order from its Stripe Checkout Session id (webhook + thank-you). */
+export async function getGuestOrderBySession(sessionId: string): Promise<Order | null> {
+    const orderId = await redis.get<string>(`stripe:session:${sessionId}`);
+    if (!orderId) return null;
+    return getGuestOrder(orderId);
 }
 
 /**
