@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import Label, { LABEL_TEMPLATES, LabelStyle } from './Label';
 import ScanTester from './ScanTester';
+import TestSheet, { TestSheetItem } from './TestSheet';
 
 interface VariantRow {
     productId: string;
@@ -18,6 +19,7 @@ interface VariantRow {
     size?: string;
     color?: string;
     sku: string | null;
+    scanCode: string | null;
     suggestedSku: string;
     stock: number | null;
     available: number | null;
@@ -101,7 +103,7 @@ function LabelsDesigner() {
             });
             const data = await res.json();
             if (!res.ok) { setError(data.error || 'Could not assign SKU'); return; }
-            setRows(prev => prev.map(r => r.variantId === row.variantId ? { ...r, sku: data.sku } : r));
+            setRows(prev => prev.map(r => r.variantId === row.variantId ? { ...r, sku: data.sku, scanCode: data.scanCode } : r));
         } catch {
             setError('Could not assign SKU');
         } finally {
@@ -122,14 +124,14 @@ function LabelsDesigner() {
     // The set of labels to print: each selected variant repeated `qty` times. Variants
     // without a SKU are skipped (you can't encode nothing) — surfaced in the count.
     const printJobs = useMemo(() => {
-        const jobs: { sku: string; productName: string; variantName: string; size?: string; color?: string }[] = [];
+        const jobs: { sku: string; scanCode?: string; productName: string; variantName: string; size?: string; color?: string }[] = [];
         let missingSku = 0;
         for (const row of rows) {
             const n = qty[row.variantId] || 0;
             if (n <= 0) continue;
             if (!row.sku) { missingSku += n; continue; }
             for (let i = 0; i < n; i++) {
-                jobs.push({ sku: row.sku, productName: row.productName, variantName: row.variantName, size: row.size, color: row.color });
+                jobs.push({ sku: row.sku, scanCode: row.scanCode || undefined, productName: row.productName, variantName: row.variantName, size: row.size, color: row.color });
             }
         }
         return { jobs, missingSku };
@@ -137,6 +139,23 @@ function LabelsDesigner() {
 
     const selectedCount = useMemo(() => Object.values(qty).filter(n => n > 0).length, [qty]);
     const perPage = template.cols * template.rows;
+
+    // Every variant that HAS a SKU → the 4×6 scannable test sheet (all barcodes).
+    const testSheetItems: TestSheetItem[] = useMemo(
+        () => rows.filter(r => r.sku).map(r => ({
+            sku: r.sku as string,
+            scanCode: r.scanCode || undefined,
+            productName: r.productName,
+            variantName: [r.variantName, r.size, r.color].filter(Boolean).join(' · '),
+        })),
+        [rows],
+    );
+
+    // Which print layout the browser print dialog should render. We swap this just
+    // before calling window.print() so the two print-only blocks never both show.
+    const [printMode, setPrintMode] = useState<'labels' | 'testsheet'>('labels');
+    const printLabels = () => { setPrintMode('labels'); requestAnimationFrame(() => window.print()); };
+    const printTestSheet = () => { setPrintMode('testsheet'); requestAnimationFrame(() => window.print()); };
 
     const bumpLowStock = () => {
         const next: Record<string, number> = {};
@@ -315,16 +334,25 @@ function LabelsDesigner() {
                             <span className="text-hackclub-muted font-medium"> · {selectedCount} variant{selectedCount === 1 ? '' : 's'} · {Math.ceil(printJobs.jobs.length / perPage) || 0} page{Math.ceil(printJobs.jobs.length / perPage) === 1 ? '' : 's'} of {template.name.split('—')[0].trim()}</span>
                             {printJobs.missingSku > 0 && <span className="ml-2 text-hackclub-orange font-bold">· {printJobs.missingSku} skipped (no SKU)</span>}
                         </div>
-                        <button type="button" disabled={printJobs.jobs.length === 0} onClick={() => window.print()}
-                            className="px-6 py-2.5 rounded-full font-black bg-hackclub-green hover:bg-hackclub-cyan text-white disabled:opacity-40 transition-colors">
-                            Print sheet
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button type="button" disabled={testSheetItems.length === 0} onClick={printTestSheet}
+                                title="Every SKU as a big, rotated, scannable Code 128 — sized for a 4×6 sheet"
+                                className="px-5 py-2.5 rounded-full font-black bg-white/10 hover:bg-white/20 text-white border-2 border-white/20 disabled:opacity-40 transition-colors">
+                                4×6 test sheet · {testSheetItems.length} SKU{testSheetItems.length === 1 ? '' : 's'}
+                            </button>
+                            <button type="button" disabled={printJobs.jobs.length === 0} onClick={printLabels}
+                                className="px-6 py-2.5 rounded-full font-black bg-hackclub-green hover:bg-hackclub-cyan text-white disabled:opacity-40 transition-colors">
+                                Print labels
+                            </button>
+                        </div>
                     </div>
                 </motion.div>
             </div>
 
-            {/* ===== PRINT SHEET (only visible when printing) ===== */}
-            <PrintSheet jobs={printJobs.jobs} style={style} templateId={templateId} />
+            {/* ===== PRINT LAYOUTS (only one renders, only when printing) ===== */}
+            {printMode === 'labels'
+                ? <PrintSheet jobs={printJobs.jobs} style={style} templateId={templateId} />
+                : <TestSheet items={testSheetItems} />}
         </div>
     );
 }

@@ -55,6 +55,7 @@ export async function GET() {
                 size: v.size,
                 color: v.color,
                 sku: v.sku || null,
+                scanCode: v.scanCode || null,
                 suggestedSku: buildSkuCandidate(p, v),
                 stock: s?.stock ?? null,
                 available: s?.available ?? null,
@@ -99,10 +100,10 @@ export async function POST(request: Request) {
             actorId: session?.user?.id || 'unknown',
             actorEmail: session?.user?.email || undefined,
             target: variantId,
-            summary: `Assigned SKU ${result.sku} to "${product.name}" variant ${variantId}`,
-            metadata: { productId, sku: result.sku },
+            summary: `Assigned SKU ${result.sku} (barcode ${result.scanCode}) to "${product.name}" variant ${variantId}`,
+            metadata: { productId, sku: result.sku, scanCode: result.scanCode },
         });
     }
 
-    return NextResponse.json({ ok: true, sku: result.sku, changed: result.changed });
+    return NextResponse.json({ ok: true, sku: result.sku, scanCode: result.scanCode, changed: result.changed });
 }

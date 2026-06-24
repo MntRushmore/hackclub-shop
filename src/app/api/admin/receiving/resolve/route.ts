@@ -4,7 +4,7 @@ import { Redis } from '@upstash/redis';
 import { authOptions } from '../../../../../lib/authOptions';
 import { requireAdminPermission } from '../../../../../lib/adminAuth';
 import { Product } from '../../../../../types/Admin';
-import { resolveSku, variantKey } from '../../../../../lib/sku';
+import { resolveScan, variantKey } from '../../../../../lib/sku';
 import { getVariantStock } from '../../../../../lib/inventory';
 import { readVariantReceipts } from '../../../../../lib/costing';
 import { listPOs } from '../../../../../lib/sourcing';
@@ -28,13 +28,14 @@ export async function GET(request: Request) {
     if (!can.allowed) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
 
     const { searchParams } = new URL(request.url);
-    const sku = (searchParams.get('sku') || '').trim();
-    if (!sku) return NextResponse.json({ error: 'sku is required' }, { status: 400 });
+    // Accept whatever the scanner emits: the short barcode code OR the full SKU.
+    const scanned = (searchParams.get('code') || searchParams.get('sku') || '').trim();
+    if (!scanned) return NextResponse.json({ error: 'code is required' }, { status: 400 });
 
-    const variantId = await resolveSku(sku);
+    const variantId = await resolveScan(scanned);
     if (!variantId) {
         return NextResponse.json(
-            { error: 'unknown', message: 'No variant has that SKU. Generate a label for it first (Labels).' },
+            { error: 'unknown', message: 'Nothing matches that barcode. Generate a label for it first (Labels).' },
             { status: 404 },
         );
     }
@@ -94,7 +95,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
         ok: true,
-        sku: variant.sku || sku,
+        sku: variant.sku || scanned,
+        scanCode: variant.scanCode || null,
         productId,
         productName: product.name,
         variantId: String(variantId),

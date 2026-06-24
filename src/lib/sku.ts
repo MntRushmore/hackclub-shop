@@ -26,6 +26,11 @@ const redis = new Redis({
 
 /** Reverse index: a scanned SKU → the variant it identifies (O(1) scan resolution). */
 const skuKey = (sku: string) => `sku:${normalizeSku(sku)}`;
+/** Reverse index: a scanned SHORT code → the variant. The barcode encodes this. */
+const scanKey = (code: string) => `scancode:${normalizeSku(code)}`;
+/** Monotonic counter behind the short codes (HC-1000, HC-1001, …). */
+const SCAN_SEQ_KEY = 'scancode:seq';
+const SCAN_SEQ_START = 1000;
 
 /** The canonical variant identifier used everywhere (inventory, costing, receipts). */
 export const variantKey = (v: Pick<ProductVariant, 'variant_id' | 'id'>) =>
@@ -85,6 +90,32 @@ export async function resolveSku(rawSku: string): Promise<string | null> {
     }
 }
 
+/**
+ * Resolve whatever a scanner emits — the SHORT code the barcode encodes (HC-1042) OR
+ * the full human-readable SKU — to a variant id. Tries the scan-code index first (that's
+ * what's on the physical barcode), then the SKU index. Null if neither matches.
+ */
+export async function resolveScan(raw: string): Promise<string | null> {
+    const v = normalizeSku(raw);
+    if (!v) return null;
+    try {
+        const byCode = await redis.get<string>(scanKey(v));
+        if (byCode) return String(byCode);
+    } catch (err) {
+        console.error('[sku] scan resolve failed:', err instanceof Error ? err.message : err);
+    }
+    return resolveSku(v);
+}
+
+/** Mint the next short scan code (HC-####), claiming its index for the variant. */
+async function mintScanCode(variantId: string): Promise<string> {
+    // Atomic increment gives each variant a unique number; index it to the variant.
+    const n = await redis.incr(SCAN_SEQ_KEY);
+    const code = `HC-${SCAN_SEQ_START + Number(n)}`;
+    await redis.set(scanKey(code), variantId);
+    return code;
+}
+
 /** Is this SKU free, or already claimed by a *different* variant? */
 async function skuTaken(sku: string, byVariantId: string): Promise<boolean> {
     const owner = await redis.get<string>(skuKey(sku));
@@ -93,6 +124,7 @@ async function skuTaken(sku: string, byVariantId: string): Promise<boolean> {
 
 export interface AssignSkuResult {
     sku: string;          // the normalized SKU now stored on the variant + indexed
+    scanCode: string;     // the short code encoded in the barcode (minted if absent)
     changed: boolean;     // false if the variant already had exactly this SKU
 }
 
@@ -118,8 +150,24 @@ export async function assignSku(
         : buildSkuCandidate(product, variant);
     if (!base) throw new Error('Could not derive a SKU');
 
+    // The short scan code is stable once minted — mint on first assignment only.
+    const ensureScanCode = async (): Promise<string> => {
+        if (variant.scanCode) {
+            // Re-affirm the index in case it was lost, then keep the existing code.
+            await redis.set(scanKey(variant.scanCode), variantId);
+            return variant.scanCode;
+        }
+        return mintScanCode(variantId);
+    };
+
     if (variant.sku && normalizeSku(variant.sku) === base) {
-        return { sku: base, changed: false };
+        // SKU unchanged, but make sure a scan code exists (older variants may lack one).
+        if (!variant.scanCode) {
+            variant.scanCode = await ensureScanCode();
+            product.updatedAt = new Date();
+            await redis.set(`product:${product.id}`, product);
+        }
+        return { sku: base, scanCode: variant.scanCode, changed: false };
     }
 
     // Find a free SKU: base, then base-2, base-3, … (cap the probe; collisions are rare).
@@ -129,10 +177,12 @@ export async function assignSku(
     }
 
     const prev = variant.sku ? normalizeSku(variant.sku) : null;
+    const scanCode = await ensureScanCode();
 
     // Persist onto the variant, then move the index. Order: write product first so the
     // SKU is durable even if the index write hiccups; then claim new, release old.
     variant.sku = sku;
+    variant.scanCode = scanCode;
     product.updatedAt = new Date();
     await redis.set(`product:${product.id}`, product);
 
@@ -145,5 +195,5 @@ export async function assignSku(
         }
     }
 
-    return { sku, changed: true };
+    return { sku, scanCode, changed: true };
 }

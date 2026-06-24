@@ -79,11 +79,16 @@ export interface ProductVariant {
     // signal. Does not affect checkout or availability.
     reorderPoint?: number;
     // Barcode identity: a human-readable, store-wide-unique SKU (e.g. HC-STICKER-3IN-RED)
-    // that is printed on this variant's label and encoded in its barcode/QR. Resolution
-    // back to a variant uses the `sku:{sku}` reverse index (see src/lib/sku.ts). Optional;
-    // unset = not yet labeled. Non-secret (it lives on physical product) — never embed
+    // that is PRINTED on this variant's label and read by humans. Resolution back to a
+    // variant uses the `sku:{sku}` reverse index (see src/lib/sku.ts). Optional; unset =
+    // not yet labeled. Non-secret (it lives on physical product) — never embed
     // price/cost/PII. Does not affect checkout, pricing, or availability.
     sku?: string;
+    // The SHORT code actually ENCODED in the barcode (e.g. HC-1042). Long SKUs make a
+    // Code 128 too wide to fit/scan on a 4in label, so the barcode carries this compact
+    // code and the human-readable SKU prints as text. Minted alongside the SKU and
+    // indexed at `scancode:{code}`. A scan resolves via either the code or the full SKU.
+    scanCode?: string;
 }
 
 export interface ShippingOption {

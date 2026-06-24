@@ -43,6 +43,8 @@ export const LABEL_TEMPLATES: LabelTemplate[] = [
 
 export interface LabelData {
     sku: string;
+    /** The SHORT code encoded in the barcode (falls back to sku if absent). */
+    scanCode?: string;
     productName?: string;
     variantName?: string;
     size?: string;
@@ -98,9 +100,12 @@ export default function Label({
     widthMm: number;
     heightMm: number;
 }) {
+    // The barcode encodes the SHORT scan code (compact → fits + scans). The full SKU
+    // prints as text. Fall back to the SKU if no scan code has been minted yet.
+    const payload = data.scanCode || data.sku;
     const barcodeSvg = useMemo(
-        () => renderSymbolSVG(data.sku, { scale: 3, heightMm: 12, includeText: false }),
-        [data.sku],
+        () => renderSymbolSVG(payload, { scale: 3, heightMm: 12, includeText: false }),
+        [payload],
     );
 
     const variantLine = data.variantName
@@ -160,10 +165,16 @@ export default function Label({
                     dangerouslySetInnerHTML={{ __html: sizeSvg(barcodeSvg) }}
                 />
                 {style.showSku && (
-                    <div style={{ textAlign: 'center', marginTop: '0.3mm' }}>
-                        <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: '2.2mm', fontWeight: 700, letterSpacing: '0.06em' }}>
-                            {data.sku || '—'}
-                        </span>
+                    <div style={{ textAlign: 'center', marginTop: '0.3mm', lineHeight: 1.1 }}>
+                        {/* Big: the short scan code (what the barcode is). Small: full SKU. */}
+                        <div style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: '2.8mm', fontWeight: 700, letterSpacing: '0.08em' }}>
+                            {payload || '—'}
+                        </div>
+                        {data.scanCode && data.sku && data.sku !== data.scanCode && (
+                            <div style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: '1.7mm', fontWeight: 600, color: '#8492a6', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {data.sku}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
