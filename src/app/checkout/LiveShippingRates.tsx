@@ -10,6 +10,10 @@ export interface SelectedRate {
     shipmentId: string;
     cost: number;
     label: string;
+    // Server-stamped quote id binding this rate to the priced cart + address.
+    // Echoed back at checkout so the server can confirm the rate was offered
+    // for THIS order. Absent on the EasyPost-off flat fallback.
+    quoteId?: string;
 }
 
 interface RateOption {
@@ -47,6 +51,7 @@ export default function LiveShippingRates({
     const [error, setError] = useState<string | null>(null);
     const [needsAddress, setNeedsAddress] = useState(false);
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [quoteId, setQuoteId] = useState<string | undefined>(undefined);
     const reqSeq = useRef(0);
 
     // Build a stable signature of the inputs that affect rates, so we refetch when
@@ -106,6 +111,7 @@ export default function LiveShippingRates({
                 }
                 const opts: RateOption[] = data.options || [];
                 setOptions(opts);
+                setQuoteId(data.quoteId);
                 // Auto-select the cheapest (first) so a valid default is always set.
                 if (opts.length > 0) {
                     const first = opts[0];
@@ -115,6 +121,7 @@ export default function LiveShippingRates({
                         shipmentId: first.shipmentId || '',
                         cost: first.cost,
                         label: `${first.carrier} ${first.service}`.trim(),
+                        quoteId: data.quoteId,
                     });
                 }
             } catch {
@@ -133,6 +140,7 @@ export default function LiveShippingRates({
             shipmentId: o.shipmentId || '',
             cost: o.cost,
             label: `${o.carrier} ${o.service}`.trim(),
+            quoteId,
         });
     };
 

@@ -16,7 +16,8 @@ import { isStructuredAddress, validateAddress, COUNTRIES } from '../../../../lib
 import { rateLimit, rateLimitResponse } from '../../../../lib/rateLimit';
 import { saveGuestOrder } from '../../../../lib/guestOrders';
 import { reserve, release, StockLine } from '../../../../lib/inventory';
-import { validateRate, isShippingConfigured } from '../../../../lib/shipping';
+import { validateQuotedRate, isShippingConfigured } from '../../../../lib/shipping';
+import { cartAddressFingerprint } from '../../../../lib/checkoutUtils';
 import { Order, ShippingAddress } from '../../../../types/Order';
 
 // Countries Stripe Checkout will let the shopper enter an address for, when
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
             email?: string;
             shippingCountry?: string;
             checkoutData?: Record<string, string | ShippingAddress>;
-            selectedRate?: { rateId: string; shipmentId: string };
+            selectedRate?: { rateId: string; shipmentId: string; quoteId?: string };
         };
 
         if (!items || !Array.isArray(items) || items.length === 0) {
@@ -132,14 +133,24 @@ export async function POST(request: Request) {
             );
         }
 
-        // Resolve the USD shipping cost. If the customer picked a live EasyPost
-        // rate, re-validate it SERVER-SIDE (never trust the client's price) and use
-        // the authoritative amount. Otherwise fall back to the product's flat
-        // per-country rate (EasyPost-off behaviour).
+        // Resolve the USD shipping cost. When EasyPost is configured, the customer
+        // MUST have picked a live rate from a quote we stamped for THIS cart +
+        // address (validateQuotedRate re-reads the authoritative price and rejects
+        // a rate id reused from a different/cheaper shipment). The flat per-country
+        // fallback is ONLY used when EasyPost is off — it can't be reached by
+        // omitting the rate to dodge shipping.
         let shippingCost = 0;
         let validatedRate: { carrier: string; service: string; rate: number; estDeliveryDays?: number } | null = null;
-        if (selectedRate?.rateId && selectedRate.shipmentId && isShippingConfigured()) {
-            validatedRate = await validateRate(selectedRate.shipmentId, selectedRate.rateId);
+        if (isShippingConfigured()) {
+            if (!selectedRate?.rateId || !selectedRate.quoteId) {
+                await release(holdLines);
+                return NextResponse.json(
+                    { error: 'Please select a shipping option before continuing to payment.' },
+                    { status: 400 },
+                );
+            }
+            const fingerprint = cartAddressFingerprint(items, shippingAddress);
+            validatedRate = await validateQuotedRate(selectedRate.quoteId, selectedRate.rateId, fingerprint);
             if (!validatedRate) {
                 await release(holdLines);
                 return NextResponse.json(

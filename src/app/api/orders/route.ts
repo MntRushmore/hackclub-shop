@@ -10,7 +10,8 @@ import { validateCSRFToken } from '../../../lib/csrf';
 import { validateCartItems } from '../../../lib/productValidation';
 import { isAdmin } from '../../../lib/adminAuth';
 import { usdToPoints } from '../../../lib/paymentUtils';
-import { validateRate, isShippingConfigured } from '../../../lib/shipping';
+import { validateQuotedRate, isShippingConfigured } from '../../../lib/shipping';
+import { cartAddressFingerprint } from '../../../lib/checkoutUtils';
 import { commitImmediate, restock, StockLine } from '../../../lib/inventory';
 import { mirrorOrder, mirrorUser } from '../../../lib/airtableMirror';
 import { sendEmail, buildOrderConfirmation, buildAdminNewOrder } from '../../../lib/email';
@@ -72,20 +73,43 @@ export async function POST(request: Request) {
             pointsRequired: number;
             shippingPointsCost?: number;
             shippingCountry?: string;
-            selectedRate?: { rateId: string; shipmentId: string };
+            selectedRate?: { rateId: string; shipmentId: string; quoteId?: string };
             checkoutData?: Record<string, string | ShippingAddress>;
             csrfToken?: string;
             idempotencyKey?: string;
         };
 
+        // Resolve the destination address up front: it's needed both to bind the
+        // shipping quote (below) and to persist on the order (later).
+        let shippingAddress: ShippingAddress | undefined;
+        for (const value of Object.values(checkoutData || {})) {
+            if (isStructuredAddress(value)) { shippingAddress = value as ShippingAddress; break; }
+        }
+        if (shippingAddress) {
+            const addrErrors = validateAddress(shippingAddress);
+            if (addrErrors.length > 0) {
+                return NextResponse.json({ error: addrErrors[0] }, { status: 400 });
+            }
+        }
+
         // Points shipping = the live EasyPost rate, re-validated SERVER-SIDE and
-        // converted to points at 1pt=$1. The client's shippingPointsCost is NEVER
-        // trusted for the charge (only echoed in the mismatch error). When no live
-        // rate is chosen (or EasyPost is off), shipping is free in points.
+        // converted to points at 1pt=$1. The chosen rate must come from a quote we
+        // stamped for THIS exact cart + address (validateQuotedRate), so a client
+        // can't reuse a cheap/light shipment's rate id on a heavier order. The
+        // client's shippingPointsCost is NEVER trusted for the charge. When
+        // EasyPost is configured, a shippable order REQUIRES a valid quoted rate —
+        // it can't be omitted to get free shipping.
         let shippingPointsNum = 0;
         let validatedRate: { carrier: string; service: string; rate: number; estDeliveryDays?: number } | null = null;
-        if (selectedRate?.rateId && selectedRate.shipmentId && isShippingConfigured()) {
-            validatedRate = await validateRate(selectedRate.shipmentId, selectedRate.rateId);
+        if (isShippingConfigured()) {
+            if (!selectedRate?.rateId || !selectedRate.quoteId) {
+                return NextResponse.json(
+                    { error: 'Please select a shipping option before placing your order.' },
+                    { status: 400 },
+                );
+            }
+            const fingerprint = cartAddressFingerprint(items, shippingAddress);
+            validatedRate = await validateQuotedRate(selectedRate.quoteId, selectedRate.rateId, fingerprint);
             if (!validatedRate) {
                 return NextResponse.json(
                     { error: 'That shipping option is no longer available. Please re-select shipping.' },
@@ -236,20 +260,7 @@ export async function POST(request: Request) {
         }
         committedStock = stockLines;
 
-        // Extract + validate the structured shipping address (if present in checkoutData).
-        let shippingAddress: ShippingAddress | undefined;
-        for (const value of Object.values(checkoutData || {})) {
-            if (isStructuredAddress(value)) {
-                shippingAddress = value as ShippingAddress;
-                break;
-            }
-        }
-        if (shippingAddress) {
-            const addrErrors = validateAddress(shippingAddress);
-            if (addrErrors.length > 0) {
-                return NextResponse.json({ error: addrErrors[0] }, { status: 400 });
-            }
-        }
+        // shippingAddress was resolved + validated up front (needed for the quote).
         // Prefer the address's country for shipping when available.
         const resolvedShippingCountry = shippingAddress?.country || shippingCountry;
 

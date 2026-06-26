@@ -17,9 +17,65 @@
  * SHIP_FROM_* env vars for the origin address postage ships from.
  */
 
+import { Redis } from '@upstash/redis';
 import { ShippingAddress } from '../types/Order';
 
 const API_BASE = 'https://api.easypost.com/v2';
+
+const redis = new Redis({
+    url: process.env.UPSTASH_REDIS_REST_URL!,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+});
+
+/** A server-stamped shipping quote, bound to the cart+address it was priced for. */
+interface ShippingQuote {
+    fingerprint: string;   // cartAddressFingerprint at quote time
+    shipmentId: string;    // EasyPost shipment the rates belong to
+    rateIds: string[];     // the rate ids actually offered to the customer
+    weightOz: number;      // parcel weight used to price the rates
+}
+
+const QUOTE_TTL_SECONDS = 30 * 60; // 30 min — long enough to finish checkout
+
+/**
+ * Persist a shipping quote so checkout can confirm the chosen rate was actually
+ * offered for THIS cart + address. Returns the quote id the client echoes back.
+ */
+export async function stampShippingQuote(
+    quoteId: string,
+    quote: ShippingQuote,
+): Promise<void> {
+    await redis.set(`shipquote:${quoteId}`, JSON.stringify(quote), { ex: QUOTE_TTL_SECONDS });
+}
+
+/**
+ * Re-validate a customer-chosen rate at checkout, BOUND to the cart it was priced
+ * for. Confirms (1) the quote exists and matches this cart+address fingerprint,
+ * (2) the chosen rate was one we offered, and (3) the live EasyPost price (the
+ * authoritative amount to charge). Returns null on any mismatch so the caller
+ * fails closed and re-prompts for shipping.
+ */
+export async function validateQuotedRate(
+    quoteId: string,
+    rateId: string,
+    fingerprint: string,
+): Promise<{ carrier: string; service: string; rate: number; estDeliveryDays?: number; shipmentId: string } | null> {
+    if (!isShippingConfigured()) return null;
+    let quote: ShippingQuote | null = null;
+    try {
+        const raw = await redis.get<string | ShippingQuote>(`shipquote:${quoteId}`);
+        quote = typeof raw === 'string' ? (JSON.parse(raw) as ShippingQuote) : (raw ?? null);
+    } catch {
+        return null;
+    }
+    if (!quote) return null;
+    if (quote.fingerprint !== fingerprint) return null;       // cart/address changed
+    if (!quote.rateIds.includes(rateId)) return null;          // rate not offered for this cart
+    // Price is still re-read live from EasyPost (never trust a stored number).
+    const validated = await validateRate(quote.shipmentId, rateId);
+    if (!validated) return null;
+    return { ...validated, shipmentId: quote.shipmentId };
+}
 
 export function isShippingConfigured(): boolean {
     return Boolean(process.env.EASYPOST_API_KEY);

@@ -1,8 +1,10 @@
+import { randomUUID } from 'crypto';
 import { NextResponse } from 'next/server';
 import { Redis } from '@upstash/redis';
 import { isStructuredAddress, validateAddress } from '../../../../lib/address';
 import { rateLimit, rateLimitResponse } from '../../../../lib/rateLimit';
-import { getRates, isShippingConfigured, defaultParcelOz } from '../../../../lib/shipping';
+import { getRates, isShippingConfigured, defaultParcelOz, stampShippingQuote } from '../../../../lib/shipping';
+import { cartAddressFingerprint } from '../../../../lib/checkoutUtils';
 import { ShippingAddress } from '../../../../types/Order';
 
 const redis = new Redis({
@@ -144,5 +146,17 @@ export async function POST(request: Request) {
     const options: RateOption[] = [toOption(standard, 'Standard')];
     if (express) options.push(toOption(express, 'Express'));
 
-    return NextResponse.json({ configured: true, shipmentId: result.shipmentId, options });
+    // Stamp a server-side quote bound to this cart + address so checkout can
+    // confirm the chosen rate was actually offered for THIS order (prevents
+    // reusing a cheap/light shipment's rate id on a heavier order).
+    const quoteId = randomUUID();
+    const fingerprint = cartAddressFingerprint(items, address);
+    await stampShippingQuote(quoteId, {
+        fingerprint,
+        shipmentId: result.shipmentId!,
+        rateIds: options.map(o => o.id).filter(id => id !== 'flat'),
+        weightOz,
+    });
+
+    return NextResponse.json({ configured: true, shipmentId: result.shipmentId, quoteId, options });
 }

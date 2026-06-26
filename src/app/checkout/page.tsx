@@ -251,7 +251,7 @@ const Checkout = () => {
                     // shippingPointsCost is sent only for the mismatch error message.
                     shippingPointsCost,
                     ...(selectedRate?.shipmentId
-                        ? { selectedRate: { rateId: selectedRate.rateId, shipmentId: selectedRate.shipmentId } }
+                        ? { selectedRate: { rateId: selectedRate.rateId, shipmentId: selectedRate.shipmentId, quoteId: selectedRate.quoteId } }
                         : {}),
                     checkoutData,
                     idempotencyKey,
@@ -295,7 +295,7 @@ const Checkout = () => {
                     shippingCountry: selectedShipping?.country,
                     checkoutData,
                     ...(selectedRate?.shipmentId
-                        ? { selectedRate: { rateId: selectedRate.rateId, shipmentId: selectedRate.shipmentId } }
+                        ? { selectedRate: { rateId: selectedRate.rateId, shipmentId: selectedRate.shipmentId, quoteId: selectedRate.quoteId } }
                         : {}),
                 }),
             });
