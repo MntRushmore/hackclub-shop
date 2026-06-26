@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useContext } from 'react';
+import React, { useContext, useEffect, useRef } from 'react';
 import { CartContext } from '../../context/CartContext';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -19,6 +19,44 @@ const CartModal: React.FC<CartModalProps> = ({ isOpen, onClose }) => {
   const pointsContext = useContext(PointsContext);
   const router = useRouter();
   const { isStudent } = usePathway();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const previouslyFocused = useRef<HTMLElement | null>(null);
+
+  // Dialog semantics: close on Escape, move focus into the panel on open and
+  // restore it on close, and keep Tab focus trapped inside while open so
+  // keyboard users aren't stranded behind the overlay.
+  useEffect(() => {
+    if (!isOpen) return;
+    previouslyFocused.current = document.activeElement as HTMLElement | null;
+    panelRef.current?.focus();
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const focusables = panelRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusables || focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      previouslyFocused.current?.focus?.();
+    };
+  }, [isOpen, onClose]);
 
   if (!cartContext || cartContext.cart === null) {
     return null;
@@ -42,22 +80,29 @@ const CartModal: React.FC<CartModalProps> = ({ isOpen, onClose }) => {
             transition={{ duration: 0.2 }}
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[10001]"
             onClick={onClose}
+            aria-hidden="true"
           />
 
           <motion.div
+            ref={panelRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cart-modal-title"
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed right-0 top-0 h-[calc(100vh-2rem)] my-4 w-full sm:w-[500px] bg-white rounded-l-2xl shadow-2xl z-[10002] flex flex-col"
+            className="fixed right-0 top-0 h-[calc(100vh-2rem)] my-4 w-full sm:w-[500px] bg-white rounded-l-2xl shadow-2xl z-[10002] flex flex-col focus:outline-none"
           >
             <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-white rounded-tl-2xl">
-              <h2 className="text-2xl font-black text-hackclub-dark">Your Cart</h2>
+              <h2 id="cart-modal-title" className="text-2xl font-black text-hackclub-dark">Your Cart</h2>
               <button
                 onClick={onClose}
-                className="text-hackclub-slate hover:text-hackclub-dark transition-colors"
+                aria-label="Close cart"
+                className="w-11 h-11 -mr-2 flex items-center justify-center rounded-full text-hackclub-slate hover:text-hackclub-dark hover:bg-hackclub-smoke transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hackclub-red/50"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg aria-hidden="true" className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
@@ -97,16 +142,18 @@ const CartModal: React.FC<CartModalProps> = ({ isOpen, onClose }) => {
                               whileHover={{ scale: 1.1 }}
                               whileTap={{ scale: 0.9 }}
                               onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                              className="w-6 h-6 rounded-full bg-hackclub-smoke hover:bg-hackclub-muted text-hackclub-dark font-bold flex items-center justify-center"
+                              aria-label={`Decrease quantity of ${item.name}`}
+                              className="w-9 h-9 rounded-full bg-hackclub-smoke hover:bg-hackclub-muted text-hackclub-dark font-bold flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hackclub-red/50"
                             >
                               −
                             </motion.button>
-                            <span className="font-bold text-hackclub-dark min-w-[20px] text-center">{item.quantity}</span>
+                            <span className="font-bold text-hackclub-dark min-w-[24px] text-center" aria-live="polite">{item.quantity}</span>
                             <motion.button
                               whileHover={{ scale: 1.1 }}
                               whileTap={{ scale: 0.9 }}
                               onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                              className="w-6 h-6 rounded-full bg-hackclub-smoke hover:bg-hackclub-muted text-hackclub-dark font-bold flex items-center justify-center"
+                              aria-label={`Increase quantity of ${item.name}`}
+                              className="w-9 h-9 rounded-full bg-hackclub-smoke hover:bg-hackclub-muted text-hackclub-dark font-bold flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hackclub-red/50"
                             >
                               +
                             </motion.button>
@@ -115,10 +162,11 @@ const CartModal: React.FC<CartModalProps> = ({ isOpen, onClose }) => {
                         <motion.button
                           whileHover={{ scale: 1.1 }}
                           whileTap={{ scale: 0.9 }}
-                          className="text-hackclub-red hover:text-hackclub-orange transition-colors self-start"
+                          aria-label={`Remove ${item.name} from cart`}
+                          className="w-11 h-11 flex items-center justify-center rounded-full text-hackclub-red hover:text-hackclub-orange hover:bg-hackclub-smoke transition-colors self-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hackclub-red/50"
                           onClick={() => removeFromCart(item.id)}
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg aria-hidden="true" className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
                         </motion.button>
@@ -133,7 +181,7 @@ const CartModal: React.FC<CartModalProps> = ({ isOpen, onClose }) => {
                     exit={{ opacity: 0 }}
                     className="text-center py-12"
                   >
-                    <svg className="w-16 h-16 mx-auto text-hackclub-muted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg aria-hidden="true" className="w-16 h-16 mx-auto text-hackclub-muted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
                     <p className="text-hackclub-muted font-bold">Your cart is empty</p>
