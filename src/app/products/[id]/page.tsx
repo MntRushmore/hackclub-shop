@@ -171,7 +171,7 @@ const ProductPage = () => {
                                             setSelectedVariant(variant);
                                         }
                                     }}
-                                    className="border-2 border-gray-300 rounded-xl p-3 w-full bg-white text-hackclub-dark font-bold focus:outline-none focus:border-hackclub-red transition-colors"
+                                    className="border-2 border-gray-300 rounded-xl p-3 w-full bg-white text-hackclub-dark font-bold focus:outline-none focus-visible:border-hackclub-red focus-visible:ring-2 focus-visible:ring-hackclub-red/40 transition-colors"
                                 >
                                     {variants.map((variant, idx) => (
                                         <option key={`${variant.id || variant.variant_id}_${idx}`} value={variant.id || variant.variant_id}>

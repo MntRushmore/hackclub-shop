@@ -240,7 +240,7 @@ const Shop = () => {
                             onChange={(e) => setQuery(e.target.value)}
                             placeholder="Search merch…"
                             aria-label="Search products"
-                            className="w-full pl-11 pr-4 py-3 rounded-full border-2 border-hackclub-smoke bg-white text-hackclub-dark font-medium focus:outline-none focus:border-hackclub-red transition-colors"
+                            className="w-full pl-11 pr-4 py-3 rounded-full border-2 border-hackclub-smoke bg-white text-hackclub-dark font-medium focus:outline-none focus-visible:border-hackclub-red focus-visible:ring-2 focus-visible:ring-hackclub-red/40 transition-colors"
                         />
                     </div>
                     <label className="sr-only" htmlFor="sort">Sort products</label>
@@ -248,7 +248,7 @@ const Shop = () => {
                         id="sort"
                         value={sort}
                         onChange={(e) => setSort(e.target.value as SortKey)}
-                        className="px-4 py-3 rounded-full border-2 border-hackclub-smoke bg-white text-hackclub-dark font-bold focus:outline-none focus:border-hackclub-red transition-colors"
+                        className="px-4 py-3 rounded-full border-2 border-hackclub-smoke bg-white text-hackclub-dark font-bold focus:outline-none focus-visible:border-hackclub-red focus-visible:ring-2 focus-visible:ring-hackclub-red/40 transition-colors"
                     >
                         <option value="featured">Featured</option>
                         <option value="price-asc">Price: low to high</option>

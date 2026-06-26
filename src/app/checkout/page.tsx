@@ -386,7 +386,7 @@ const Checkout = () => {
                                     autoComplete="email"
                                     value={guestEmail}
                                     onChange={(e) => setGuestEmail(e.target.value)}
-                                    className="w-full px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
+                                    className="w-full px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus-visible:border-hackclub-red focus-visible:ring-2 focus-visible:ring-hackclub-red/40 text-hackclub-dark font-medium"
                                 />
                                 <p className="text-xs text-hackclub-muted">For your order confirmation &amp; tracking. You&apos;ll only enter your card on Stripe&apos;s secure page — your shipping address below is passed along, so you won&apos;t retype it.</p>
                             </motion.div>
@@ -396,7 +396,7 @@ const Checkout = () => {
                             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-2xl bg-hackclub-smoke/30 border-2 border-hackclub-smoke space-y-3">
                                 <p className="font-bold text-hackclub-dark">Shipping address</p>
                                 {checkoutFields.map((field, idx) => {
-                                    const inputClass = "w-full px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium";
+                                    const inputClass = "w-full px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus-visible:border-hackclub-red focus-visible:ring-2 focus-visible:ring-hackclub-red/40 text-hackclub-dark font-medium";
                                     if (field.type === 'address') {
                                         const addr = (checkoutData[field.name] as ShippingAddress) || EMPTY_ADDRESS;
                                         // Wrap in a <form> so (a) browser autofill recognises it as one
