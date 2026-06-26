@@ -210,17 +210,62 @@ export async function POST(request: Request) {
             };
         });
 
+        // The shopper already entered their shipping address on our checkout page
+        // (it's what the live shipping rate was quoted against). To avoid making
+        // them retype it on Stripe's page, pre-create a Customer with that address
+        // and attach it to the session — Stripe then shows it pre-filled and uses
+        // it for tax, so we can turn OFF Stripe's own shipping_address_collection.
+        // Falls back to email-only + address collection if we don't have one.
+        let customerId: string | undefined;
+        if (shippingAddress && email) {
+            try {
+                const customer = await stripe.customers.create({
+                    email,
+                    name: shippingAddress.name || undefined,
+                    shipping: {
+                        name: shippingAddress.name || email,
+                        address: {
+                            line1: shippingAddress.line1,
+                            line2: shippingAddress.line2 || undefined,
+                            city: shippingAddress.city,
+                            state: shippingAddress.state,
+                            postal_code: shippingAddress.postal_code,
+                            country: shippingAddress.country || 'US',
+                        },
+                    },
+                    // Mirror to the billing address too so Stripe Tax has a jurisdiction
+                    // even before the shopper touches anything.
+                    address: {
+                        line1: shippingAddress.line1,
+                        line2: shippingAddress.line2 || undefined,
+                        city: shippingAddress.city,
+                        state: shippingAddress.state,
+                        postal_code: shippingAddress.postal_code,
+                        country: shippingAddress.country || 'US',
+                    },
+                });
+                customerId = customer.id;
+            } catch (err) {
+                // Non-fatal: fall back to email-only + Stripe address collection.
+                console.error('[checkout] customer pre-fill failed, falling back:', err instanceof Error ? err.message : err);
+            }
+        }
+        const prefilled = Boolean(customerId);
+
         const session = await stripe.checkout.sessions.create({
             mode: 'payment',
             line_items: lineItems,
-            ...(email ? { customer_email: email } : {}),
+            ...(customerId ? { customer: customerId } : (email ? { customer_email: email } : {})),
             ...(shippingCost > 0
                 ? {
                     shipping_options: [{
                         shipping_rate_data: {
                             type: 'fixed_amount',
+                            // Carrier + service so the shopper, the Stripe receipt, and
+                            // the accountants all see exactly which shipping level was
+                            // sold (e.g. "USPS Priority") — a separate line from the merch.
                             display_name: validatedRate
-                                ? `${validatedRate.carrier} ${validatedRate.service}`.trim()
+                                ? `Shipping — ${validatedRate.carrier} ${validatedRate.service}`.trim()
                                 : (country ? `Shipping (${country})` : 'Shipping'),
                             fixed_amount: { amount: Math.round(shippingCost * 100), currency: 'usd' },
                             ...(taxEnabled
@@ -230,16 +275,17 @@ export async function POST(request: Request) {
                     }],
                 }
                 : {}),
-            // Stripe Tax needs a customer address to know which jurisdiction to
-            // tax. Collecting the shipping address in Checkout gives it that.
-            // (NB: `customer_update` can only be passed alongside a `customer` id —
-            // we only have `customer_email` here — so it must NOT be set, or
-            // session creation errors. automatic_tax + address collection alone
-            // are sufficient.)
+            // Stripe Tax needs an address for the jurisdiction. When we pre-filled a
+            // Customer with the shipping address, Stripe already has it — so we do NOT
+            // re-collect it (no duplicate entry), and we allow customer_update so the
+            // shopper can still edit it on Stripe if needed. When we have no address,
+            // fall back to collecting it on Stripe's page.
             ...(taxEnabled
                 ? {
                     automatic_tax: { enabled: true },
-                    shipping_address_collection: { allowed_countries: ALLOWED_COUNTRIES },
+                    ...(prefilled
+                        ? { customer_update: { shipping: 'auto' as const, address: 'auto' as const } }
+                        : { shipping_address_collection: { allowed_countries: ALLOWED_COUNTRIES } }),
                 }
                 : {}),
             success_url: `${origin}/thank-you?session_id={CHECKOUT_SESSION_ID}`,

@@ -388,6 +388,23 @@ export default function OrdersAdmin() {
                                             );
                                         })()}
 
+                                        {/* Shipping LEVEL the customer paid for, shown as soon as the
+                                            order exists (before a label is bought) so staff know exactly
+                                            what postage to purchase. Once a label is bought + tracking
+                                            recorded, the block below replaces this with tracking info. */}
+                                        {order.shipment && !order.shipment.trackingNumber && (order.shipment.carrier || order.shipment.service) && (
+                                            <div className="mt-4 pt-4 border-t-2 border-hackclub-smoke flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                                                <span className="font-bold text-hackclub-dark">📦 Customer paid for:</span>
+                                                <span className="font-bold text-hackclub-blue">
+                                                    {`${order.shipment.carrier || ''} ${order.shipment.service || ''}`.trim()}
+                                                </span>
+                                                {typeof order.shipment.cost === 'number' && (
+                                                    <span className="text-hackclub-slate">(${order.shipment.cost.toFixed(2)})</span>
+                                                )}
+                                                <span className="text-xs text-hackclub-muted">— buy this shipping level</span>
+                                            </div>
+                                        )}
+
                                         {order.shipment?.trackingNumber && (
                                             <div className="mt-4 pt-4 border-t-2 border-hackclub-smoke flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                                                 <span className="font-bold text-hackclub-dark">

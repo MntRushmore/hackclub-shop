@@ -9,7 +9,7 @@ import { CartContext } from '../../context/CartContext';
 import { PointsContext } from '../../context/PointsContext';
 import { ShippingOption, CheckoutField } from '../../types/Admin';
 import { ShippingAddress } from '../../types/Order';
-import { COUNTRIES, EMPTY_ADDRESS, validateAddress } from '../../lib/address';
+import { EMPTY_ADDRESS, validateAddress } from '../../lib/address';
 import { formatPoints, formatCash, usdToPoints, pointsToUsd } from '../../lib/paymentUtils';
 import { usePathway } from '../../lib/usePathway';
 import LiveShippingRates, { SelectedRate } from './LiveShippingRates';
@@ -65,7 +65,7 @@ const Checkout = () => {
                         setShippingOptions(shipping);
                         setSelectedShipping(shipping.length > 0 ? shipping[0] : null);
 
-                        const fields = (product.checkoutFields && product.checkoutFields.length > 0)
+                        const rawFields: CheckoutField[] = (product.checkoutFields && product.checkoutFields.length > 0)
                             ? product.checkoutFields.map((f: any, idx: number) => ({
                                 id: f.id || `field_${Date.now()}_${idx}`,
                                 name: f.name,
@@ -73,11 +73,19 @@ const Checkout = () => {
                                 type: f.type,
                                 required: f.required,
                             }))
+                            // Default: a single address block. The recipient NAME lives inside
+                            // the address; EMAIL is collected once via the dedicated receipt-email
+                            // input (guest path) — so we no longer add standalone name/email fields
+                            // that made the shopper type the same thing two or three times.
                             : [
-                                { id: `field_${Date.now()}_1`, name: 'name', label: 'Full Name', type: 'text', required: true },
-                                { id: `field_${Date.now()}_2`, name: 'email', label: 'Email', type: 'email', required: true },
-                                { id: `field_${Date.now()}_3`, name: 'address', label: 'Shipping Address', type: 'address', required: true },
+                                { id: `field_${Date.now()}_addr`, name: 'address', label: 'Shipping address', type: 'address', required: true },
                             ];
+                        // Strip standalone name/email fields: name is in the address block and
+                        // email is the receipt-email input, so these would be duplicates. (A
+                        // product's own custom non-name/email fields are kept as-is.)
+                        const fields = rawFields.filter(
+                            (f) => !(f.type !== 'address' && (f.name === 'name' || f.name === 'email')),
+                        );
                         setCheckoutFields(fields);
 
                         // Seed each address field with EMPTY_ADDRESS so the address
@@ -185,6 +193,32 @@ const Checkout = () => {
     const updateAddressField = (fieldName: string, key: keyof ShippingAddress, val: string) => {
         const current = (checkoutData[fieldName] as ShippingAddress) || EMPTY_ADDRESS;
         setCheckoutData({ ...checkoutData, [fieldName]: { ...current, [key]: val } });
+    };
+
+    // Browser autofill sets input.value in the DOM but does NOT reliably fire
+    // React's synthetic onChange — so a one-click autofill could leave checkoutData
+    // stale and the live-rate lookup would never run (the user had to retype or
+    // flip the country to force it). This sweep reads the actual DOM values of the
+    // address fields and syncs any that React missed. Bound to onInput (which
+    // autofill DOES fire) and onBlur as a backstop.
+    const syncAutofill = (fieldName: string, form: HTMLFormElement | null) => {
+        if (!form) return;
+        const read = (name: string) =>
+            (form.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | null)?.value ?? '';
+        const current = (checkoutData[fieldName] as ShippingAddress) || EMPTY_ADDRESS;
+        const next: ShippingAddress = {
+            ...current,
+            name: read('name') || current.name,
+            line1: read('address-line1') || current.line1,
+            line2: read('address-line2') || current.line2,
+            city: read('city') || current.city,
+            state: read('state') || current.state,
+            postal_code: read('postal_code') || current.postal_code,
+            country: read('country') || current.country || 'US',
+        };
+        // Only update if something actually changed, to avoid a render loop.
+        const changed = (Object.keys(next) as (keyof ShippingAddress)[]).some((k) => next[k] !== current[k]);
+        if (changed) setCheckoutData({ ...checkoutData, [fieldName]: next });
     };
 
     const itemsPayload = () => cart.map((item) => ({
@@ -341,43 +375,64 @@ const Checkout = () => {
                             rendered below, after the address fields). Points orders
                             pay the rate converted to points at 1pt = $1. */}
 
+                        {/* Email first (guest/card path) — collected once here for the
+                            receipt + confirmation; not re-asked anywhere else on this page. */}
+                        {!payWithPoints && cart.length > 0 && (
+                            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-2xl bg-hackclub-smoke/30 border-2 border-hackclub-smoke space-y-2">
+                                <label className="block font-bold text-hackclub-dark">Email</label>
+                                <input
+                                    type="email"
+                                    placeholder="you@example.com"
+                                    autoComplete="email"
+                                    value={guestEmail}
+                                    onChange={(e) => setGuestEmail(e.target.value)}
+                                    className="w-full px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
+                                />
+                                <p className="text-xs text-hackclub-muted">For your order confirmation &amp; tracking. You&apos;ll only enter your card on Stripe&apos;s secure page — your shipping address below is passed along, so you won&apos;t retype it.</p>
+                            </motion.div>
+                        )}
+
                         {cart.length > 0 && checkoutFields.length > 0 && (
                             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-2xl bg-hackclub-smoke/30 border-2 border-hackclub-smoke space-y-3">
-                                <p className="font-bold text-hackclub-dark">Shipping Information</p>
+                                <p className="font-bold text-hackclub-dark">Shipping address</p>
                                 {checkoutFields.map((field, idx) => {
                                     const inputClass = "w-full px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium";
                                     if (field.type === 'address') {
                                         const addr = (checkoutData[field.name] as ShippingAddress) || EMPTY_ADDRESS;
+                                        // Wrap in a <form> so (a) browser autofill recognises it as one
+                                        // address group and fills all fields at once, and (b) the
+                                        // autofill sweep can read every field's DOM value by name even
+                                        // when React's onChange didn't fire for some of them.
+                                        const onSweep = (e: React.SyntheticEvent) =>
+                                            syncAutofill(field.name, (e.currentTarget as HTMLElement).closest('form'));
                                         return (
-                                            <div key={field.id || `field_${idx}`} className="space-y-2">
+                                            <form key={field.id || `field_${idx}`} className="space-y-2" onInput={onSweep} onBlur={onSweep} autoComplete="on">
                                                 <label className="block text-sm font-bold text-hackclub-slate mb-1">
                                                     {field.label}
                                                     {field.required && <span className="text-hackclub-red">*</span>}
                                                 </label>
-                                                <input className={inputClass} placeholder="Full name" autoComplete="name"
+                                                <input className={inputClass} name="name" placeholder="Full name" autoComplete="shipping name"
                                                     value={addr.name} onChange={(e) => updateAddressField(field.name, 'name', e.target.value)} />
-                                                <input className={inputClass} placeholder="Address line 1" autoComplete="address-line1"
+                                                <input className={inputClass} name="address-line1" placeholder="Address line 1" autoComplete="shipping address-line1"
                                                     value={addr.line1} onChange={(e) => updateAddressField(field.name, 'line1', e.target.value)} />
-                                                <input className={inputClass} placeholder="Address line 2 (optional)" autoComplete="address-line2"
+                                                <input className={inputClass} name="address-line2" placeholder="Address line 2 (optional)" autoComplete="shipping address-line2"
                                                     value={addr.line2 || ''} onChange={(e) => updateAddressField(field.name, 'line2', e.target.value)} />
                                                 <div className="grid grid-cols-2 gap-2">
-                                                    <input className={inputClass} placeholder="City" autoComplete="address-level2"
+                                                    <input className={inputClass} name="city" placeholder="City" autoComplete="shipping address-level2"
                                                         value={addr.city} onChange={(e) => updateAddressField(field.name, 'city', e.target.value)} />
-                                                    <input className={inputClass} placeholder="State / Province" autoComplete="address-level1"
+                                                    <input className={inputClass} name="state" placeholder="State" autoComplete="shipping address-level1"
                                                         value={addr.state} onChange={(e) => updateAddressField(field.name, 'state', e.target.value)} />
                                                 </div>
                                                 <div className="grid grid-cols-2 gap-2">
-                                                    <input className={inputClass} placeholder="Postal code" autoComplete="postal-code"
+                                                    <input className={inputClass} name="postal_code" placeholder="ZIP code" autoComplete="shipping postal-code" inputMode="numeric"
                                                         value={addr.postal_code} onChange={(e) => updateAddressField(field.name, 'postal_code', e.target.value)} />
-                                                    <select className={inputClass} autoComplete="country"
-                                                        value={addr.country} onChange={(e) => updateAddressField(field.name, 'country', e.target.value)}>
-                                                        <option value="" disabled>Select country…</option>
-                                                        {COUNTRIES.map((c) => (
-                                                            <option key={c.code} value={c.code}>{c.name}</option>
-                                                        ))}
-                                                    </select>
+                                                    {/* USA-only: country is fixed to US (not a dropdown the
+                                                        user can mis-set or autofill can leave blank). Kept as
+                                                        a named hidden input so the autofill sweep reads it. */}
+                                                    <input type="hidden" name="country" value="US" />
+                                                    <div className={`${inputClass} flex items-center text-hackclub-muted bg-hackclub-smoke/40 cursor-not-allowed`}>United States</div>
                                                 </div>
-                                            </div>
+                                            </form>
                                         );
                                     }
                                     return (
@@ -406,21 +461,6 @@ const Checkout = () => {
                                         </div>
                                     );
                                 })}
-                            </motion.div>
-                        )}
-
-                        {!payWithPoints && cart.length > 0 && (
-                            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-2xl bg-hackclub-smoke/30 border-2 border-hackclub-smoke space-y-2">
-                                <label className="block font-bold text-hackclub-dark">Email for receipt</label>
-                                <input
-                                    type="email"
-                                    placeholder="you@example.com"
-                                    autoComplete="email"
-                                    value={guestEmail}
-                                    onChange={(e) => setGuestEmail(e.target.value)}
-                                    className="w-full px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus:border-hackclub-red text-hackclub-dark font-medium"
-                                />
-                                <p className="text-xs text-hackclub-muted">We&apos;ll send your order confirmation here. You&apos;ll enter your card and shipping details on Stripe&apos;s secure checkout, where any sales tax is calculated.</p>
                             </motion.div>
                         )}
 
