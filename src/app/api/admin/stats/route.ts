@@ -119,9 +119,10 @@ export async function GET(request: Request) {
             .sort((a, b) => a[0].localeCompare(b[0]))
             .map(([date, v]) => ({ date, revenue: Number(v.revenue.toFixed(2)), orders: v.orders }));
 
-        // Abandoned/expired guest sessions (orders denied while still unpaid),
-        // scoped to the selected period like the other aggregates.
-        const abandonedSessions = filteredOrders.filter(o => o.pathway === 'guest' && o.paymentStatus === 'unpaid' && o.status === 'denied').length;
+        // Guest checkouts still in flight (unpaid). Abandoned ones are deleted when
+        // their Stripe session expires (~30 min), so this only reflects live, not-yet-
+        // -paid sessions. Scoped to the selected period like the other aggregates.
+        const abandonedSessions = filteredOrders.filter(o => o.pathway === 'guest' && o.paymentStatus === 'unpaid').length;
 
         // Low-stock count across tracked variants (available ≤ 5).
         let lowStockCount = 0;

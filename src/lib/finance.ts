@@ -244,12 +244,12 @@ export async function getCogsAndMargin(period: Period = 'all', now = new Date())
     const variants = indexVariants(products);
     const start = periodStart(period, now);
 
-    // Only orders that represent a real sale: paid (or fulfilled/approved) — never
-    // unpaid/abandoned guest sessions or denied/refunded orders.
+    // Only orders that represent a real sale: paid (received/fulfilled/delivered) —
+    // never unpaid/abandoned guest sessions or refunded orders.
     const sold = orders.filter((o) => {
         if (start && new Date(o.createdAt) < start) return false;
         if (o.paymentStatus === 'refunded') return false;
-        if (o.status === 'denied' || o.status === 'refunded') return false;
+        if (o.status === 'refunded') return false;
         if (o.pathway === 'guest') return o.paymentStatus === 'paid';
         return true; // student/points orders settle in-request
     });
@@ -399,7 +399,7 @@ export async function getWeeklySeries(weeks = 12, now = new Date()): Promise<Wee
     for (const o of orders) {
         const isCash = o.pathway === 'guest';
         if (isCash && o.paymentStatus !== 'paid') continue;
-        if (o.paymentStatus === 'refunded' || o.status === 'denied' || o.status === 'refunded') continue;
+        if (o.paymentStatus === 'refunded' || o.status === 'refunded') continue;
         const b = ensure(new Date(o.createdAt));
         b.orders++;
         for (const item of o.items || []) {
@@ -503,7 +503,7 @@ export async function getWeeklyReport(weekContaining = new Date()): Promise<Week
     for (const o of orders) {
         const isCash = o.pathway === 'guest';
         if (isCash && o.paymentStatus !== 'paid') continue;
-        if (o.paymentStatus === 'refunded' || o.status === 'denied' || o.status === 'refunded') continue;
+        if (o.paymentStatus === 'refunded' || o.status === 'refunded') continue;
         const ts = new Date(o.createdAt).getTime();
         for (const item of o.items || []) {
             if (item.variantId) {

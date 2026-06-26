@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../../../../lib/authOptions';
 import { requireAdminPermission } from '../../../../../../lib/adminAuth';
-import { findOrder, patchOrder, orderEmail } from '../../../../../../lib/orderStore';
+import { findOrder, patchOrder, orderEmail, indexTracker } from '../../../../../../lib/orderStore';
 import { mirrorOrder } from '../../../../../../lib/airtableMirror';
 import { sendEmail, buildStatusUpdate } from '../../../../../../lib/email';
 import {
@@ -104,10 +104,14 @@ export async function POST(request: Request, { params }: { params: { id: string 
             trackingUrl: bought.trackingUrl || (bought.trackingNumber ? fallbackTrackingUrl(bought.carrier, bought.trackingNumber) : undefined),
             labelUrl: bought.labelUrl,
             easypostShipmentId: bought.shipmentId,
+            trackerId: bought.trackerId,
             cost: bought.cost,
             estDeliveryDate: bought.estDeliveryDate,
             shippedAt: new Date(),
         };
+        // Point the EasyPost tracker id at this order so the delivery webhook can
+        // resolve it on a 'delivered' scan and auto-advance the order.
+        if (bought.trackerId) void indexTracker(bought.trackerId, params.id);
     } else if (body.action === 'manual') {
         if (!body.trackingNumber) {
             return NextResponse.json({ error: 'trackingNumber is required' }, { status: 400 });

@@ -20,6 +20,7 @@ const ACTION_COLOR: Record<string, string> = {
     'order.deny': 'bg-red-100 text-red-800',
     'order.fulfill': 'bg-green-100 text-green-800',
     'order.refund': 'bg-orange-100 text-orange-800',
+    'order.mark-delivered': 'bg-green-100 text-green-800',
     'order.ship': 'bg-cyan-100 text-cyan-800',
     'order.mark-test': 'bg-gray-100 text-gray-600',
     'order.unmark-test': 'bg-gray-100 text-gray-600',

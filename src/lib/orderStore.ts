@@ -52,6 +52,23 @@ export async function patchOrder(orderId: string, patch: Partial<Order>): Promis
     return null;
 }
 
+/**
+ * Point an EasyPost tracker id at the order it belongs to (set when a label is
+ * bought). The EasyPost delivery webhook resolves the order through this pointer
+ * instead of scanning every order. Works for either pathway — it maps to an id
+ * that `findOrder` resolves.
+ */
+export async function indexTracker(trackerId: string, orderId: string): Promise<void> {
+    await redis.set(`tracker:${trackerId}`, orderId);
+}
+
+/** Resolve any order (guest or student) from its EasyPost tracker id, or null. */
+export async function findOrderByTracker(trackerId: string): Promise<Order | null> {
+    const orderId = await redis.get<string>(`tracker:${trackerId}`);
+    if (!orderId) return null;
+    return findOrder(orderId);
+}
+
 /** Best-effort email for an order: explicit guest email, else a checkoutData email. */
 export function orderEmail(order: Order): string | undefined {
     if (order.guestEmail) return order.guestEmail;

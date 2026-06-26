@@ -167,6 +167,7 @@ export type BuyLabelResult =
           trackingUrl?: string;
           labelUrl?: string;
           shipmentId: string;
+          trackerId?: string;   // EasyPost tracker id; subscribed to for delivery webhooks
           cost?: number;
           estDeliveryDate?: string;
       }
@@ -185,7 +186,7 @@ interface EpShipment {
     tracking_code?: string;
     selected_rate?: EpRate;
     postage_label?: { label_url?: string };
-    tracker?: { public_url?: string; est_delivery_date?: string };
+    tracker?: { id?: string; public_url?: string; est_delivery_date?: string };
 }
 
 /**
@@ -282,6 +283,7 @@ export async function buyLabel(shipmentId: string, rateId?: string): Promise<Buy
             trackingUrl: bought.tracker?.public_url,
             labelUrl: bought.postage_label?.label_url,
             shipmentId: bought.id,
+            trackerId: bought.tracker?.id,
             cost: bought.selected_rate ? parseFloat(bought.selected_rate.rate) : undefined,
             estDeliveryDate: bought.tracker?.est_delivery_date,
         };

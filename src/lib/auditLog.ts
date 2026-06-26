@@ -21,10 +21,13 @@ const KEY = 'audit:log';
 const MAX_ENTRIES = 1000;
 
 export type AuditAction =
+    // approve/deny/fulfill are retired actions, kept so historical log entries
+    // written before the lifecycle change still type-check on read.
     | 'order.approve'
     | 'order.deny'
     | 'order.fulfill'
     | 'order.refund'
+    | 'order.mark-delivered'
     | 'order.mark-test'
     | 'order.unmark-test'
     | 'order.ship'

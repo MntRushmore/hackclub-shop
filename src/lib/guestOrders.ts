@@ -73,3 +73,26 @@ export async function updateGuestOrder(orderId: string, patch: Partial<Order>): 
     await redis.set(`order:${orderId}`, updated);
     return updated;
 }
+
+/**
+ * Delete an abandoned guest order entirely. An expired Stripe checkout was never
+ * paid, so it isn't a real order — remove the record plus its session pointer and
+ * its entry in the buyer's email index so it never surfaces anywhere.
+ */
+export async function deleteGuestOrder(orderId: string): Promise<void> {
+    const existing = await getGuestOrder(orderId);
+    const dels: Promise<unknown>[] = [redis.del(`order:${orderId}`)];
+    if (existing?.stripeSessionId) {
+        dels.push(redis.del(`stripe:session:${existing.stripeSessionId}`));
+    }
+    if (existing?.shipment?.trackerId) {
+        dels.push(redis.del(`tracker:${existing.shipment.trackerId}`));
+    }
+    if (existing?.guestEmail) {
+        const idxKey = emailKey(existing.guestEmail);
+        const ids = (await redis.get<string[]>(idxKey)) || [];
+        const next = ids.filter(id => id !== orderId);
+        dels.push(next.length ? redis.set(idxKey, next) : redis.del(idxKey));
+    }
+    await Promise.all(dels);
+}

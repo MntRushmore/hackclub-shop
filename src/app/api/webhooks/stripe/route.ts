@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type Stripe from 'stripe';
 import { getStripe } from '../../../../lib/stripe';
-import { getGuestOrder, getGuestOrderBySession, updateGuestOrder } from '../../../../lib/guestOrders';
+import { getGuestOrder, getGuestOrderBySession, updateGuestOrder, deleteGuestOrder } from '../../../../lib/guestOrders';
 import { mirrorOrder } from '../../../../lib/airtableMirror';
 import { sendEmail, buildOrderConfirmation, buildAdminNewOrder } from '../../../../lib/email';
 import { commitReserved, release, claimOrderSettlement } from '../../../../lib/inventory';
@@ -92,14 +92,14 @@ export async function POST(request: Request) {
 
                 const updated = await updateGuestOrder(order.id, {
                     paymentStatus: 'paid',
-                    status: 'approved',
+                    status: 'received',
                     stripePaymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : undefined,
                     totalAmount: amountTotal,
                     ...(taxAmount !== undefined ? { taxAmount } : {}),
                     guestEmail: email,
                     statusHistory: [
                         ...order.statusHistory,
-                        { status: 'approved', timestamp: new Date(), message: 'Payment received via Stripe' },
+                        { status: 'received', timestamp: new Date(), message: 'Payment received via Stripe' },
                     ],
                 });
 
@@ -116,14 +116,15 @@ export async function POST(request: Request) {
                 const session = event.data.object as Stripe.Checkout.Session;
                 const order = await getGuestOrderBySession(session.id);
                 if (order && order.paymentStatus === 'unpaid') {
-                    // Free the held units — the guest never paid. Same one-time
-                    // claim so a duplicate expiry can't race a late completion.
+                    // The guest never paid, so this was never a real order. Free the
+                    // held units (one-time claim so a duplicate expiry can't race a
+                    // late completion) and delete the record so it doesn't clog admin.
                     if (order.inventoryHold && order.inventoryHold.length > 0) {
                         if (await claimOrderSettlement(order.id)) {
                             await release(order.inventoryHold);
                         }
                     }
-                    await updateGuestOrder(order.id, { status: 'denied' });
+                    await deleteGuestOrder(order.id);
                 }
                 break;
             }

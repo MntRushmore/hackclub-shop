@@ -57,14 +57,12 @@ export default function OrdersAdmin() {
 
     const getStatusColor = (status: Order['status']) => {
         switch (status) {
-            case 'pending':
+            case 'received':
                 return 'bg-yellow-100 text-yellow-800';
-            case 'approved':
-                return 'bg-blue-100 text-blue-800';
             case 'fulfilled':
+                return 'bg-blue-100 text-blue-800';
+            case 'delivered':
                 return 'bg-green-100 text-green-800';
-            case 'denied':
-                return 'bg-red-100 text-red-800';
             case 'refunded':
                 return 'bg-orange-100 text-orange-800';
             default:
@@ -72,19 +70,33 @@ export default function OrdersAdmin() {
         }
     };
 
+    // 'received' reads better to staff as "Order received" than the bare word.
+    const statusLabel = (status: Order['status']) => (status === 'received' ? 'Order received' : status);
+
     const handleAction = async (
         e: React.MouseEvent,
         order: Order,
-        action: 'approve' | 'deny' | 'fulfill' | 'refund' | 'mark-test' | 'unmark-test',
+        action: 'refund' | 'mark-delivered' | 'mark-test' | 'unmark-test',
     ) => {
         e.stopPropagation();
 
         let message: string | undefined;
-        if (action === 'deny' || action === 'refund') {
+        if (action === 'refund') {
+            // Explicit confirmation gate — a refund is irreversible money movement
+            // (issues a real Stripe refund / credits points back). Guards against
+            // an accidental click while testing whether the buttons work.
+            const isCard = order.pathway === 'guest';
+            const confirmMsg = isCard
+                ? `Refund $${order.totalAmount.toFixed(2)} to ${order.guestEmail || 'this customer'}? This issues a real Stripe refund and cannot be undone.`
+                : `Refund ${order.pointsSpent} points for order #${order.id.slice(-8)}? This credits the points back and cannot be undone.`;
+            if (!window.confirm(confirmMsg)) return;
+
             const reason = window.prompt('Reason (optional):');
             // Cancelling the prompt aborts the action; an empty string is allowed.
             if (reason === null) return;
             message = reason || undefined;
+        } else if (action === 'mark-delivered') {
+            if (!window.confirm(`Mark order #${order.id.slice(-8)} as delivered?`)) return;
         }
 
         setError(null);
@@ -120,6 +132,11 @@ export default function OrdersAdmin() {
                 .toLowerCase();
         const q = query.trim().toLowerCase();
         return orders.filter((o) => {
+            // Hide unpaid guest placeholders: a guest order sits 'unpaid' only while
+            // its Stripe checkout is in flight (or abandoned, pending deletion). It
+            // isn't a real order until the webhook marks it paid, so keep it out of
+            // the admin queue. Points orders are paid at creation → never 'unpaid'.
+            if (o.pathway === 'guest' && o.paymentStatus === 'unpaid') return false;
             if (!showTest && o.isTest) return false;
             if (statusFilter !== 'all' && o.status !== statusFilter) return false;
             if (pathwayFilter !== 'all' && o.pathway !== pathwayFilter) return false;
@@ -223,10 +240,9 @@ export default function OrdersAdmin() {
                             className="px-4 py-2.5 rounded-full border-2 border-hackclub-smoke bg-white text-hackclub-dark font-bold focus:outline-none focus:border-hackclub-red"
                         >
                             <option value="all">All statuses</option>
-                            <option value="pending">Pending</option>
-                            <option value="approved">Approved</option>
+                            <option value="received">Order received</option>
                             <option value="fulfilled">Fulfilled</option>
-                            <option value="denied">Denied</option>
+                            <option value="delivered">Delivered</option>
                             <option value="refunded">Refunded</option>
                         </select>
                         <select
@@ -316,7 +332,7 @@ export default function OrdersAdmin() {
                                                     </span>
                                                 )}
                                                 <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${getStatusColor(order.status)}`}>
-                                                    {order.status}
+                                                    {statusLabel(order.status)}
                                                 </span>
                                             </div>
                                         </div>
@@ -341,15 +357,16 @@ export default function OrdersAdmin() {
                                             const isActing = actingOrderId === order.id;
                                             const btnBase = 'px-4 py-2 rounded-xl text-sm font-bold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
                                             const refundLabel = order.pathway === 'guest' ? 'Refund (card)' : 'Refund (points)';
-                                            const actions: { action: 'approve' | 'deny' | 'fulfill' | 'refund'; label: string; className: string }[] = [];
+                                            const actions: { action: 'refund' | 'mark-delivered'; label: string; className: string }[] = [];
 
-                                            if (order.status === 'pending') {
-                                                actions.push({ action: 'approve', label: 'Approve', className: 'bg-hackclub-green hover:bg-green-600' });
-                                                actions.push({ action: 'deny', label: 'Deny', className: 'bg-hackclub-red hover:bg-red-600' });
-                                            } else if (order.status === 'approved') {
-                                                // Fulfillment now goes through the shipping panel (below); keep refund here.
-                                                actions.push({ action: 'refund', label: refundLabel, className: 'bg-hackclub-red hover:bg-red-600' });
-                                            } else if (order.status === 'fulfilled') {
+                                            // Lifecycle: received → (ship via panel below) fulfilled →
+                                            // (carrier scan / manual) delivered. No approve/deny gate —
+                                            // paid orders are real on arrival. Refund is always available
+                                            // on a live order until it's already refunded.
+                                            if (order.status === 'fulfilled') {
+                                                actions.push({ action: 'mark-delivered', label: 'Mark delivered', className: 'bg-hackclub-green hover:bg-green-600' });
+                                            }
+                                            if (order.status !== 'refunded') {
                                                 actions.push({ action: 'refund', label: refundLabel, className: 'bg-hackclub-red hover:bg-red-600' });
                                             }
 
@@ -362,7 +379,7 @@ export default function OrdersAdmin() {
 
                                             return (
                                                 <div className="mt-4 flex flex-wrap gap-2">
-                                                    {order.status === 'approved' && (
+                                                    {order.status === 'received' && (
                                                         <ShippingPanel order={order} onShipped={applyUpdate} onError={setError} />
                                                     )}
                                                     {actions.map(({ action, label, className }) => (

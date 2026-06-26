@@ -202,11 +202,16 @@ export default function StatsAdmin() {
                                 className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-6"
                             >
                                 <h2 className="text-2xl font-black text-hackclub-dark mb-6">Orders by Status</h2>
-                                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                                    {['pending', 'approved', 'fulfilled', 'denied', 'refunded'].map((status) => (
-                                        <div key={status} className="text-center p-4 bg-hackclub-smoke/30 rounded-lg">
-                                            <p className="text-hackclub-slate text-sm font-bold capitalize mb-2">{status}</p>
-                                            <p className="text-3xl font-black text-hackclub-dark">{stats.ordersByStatus[status] || 0}</p>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    {[
+                                        { key: 'received', label: 'Received' },
+                                        { key: 'fulfilled', label: 'Fulfilled' },
+                                        { key: 'delivered', label: 'Delivered' },
+                                        { key: 'refunded', label: 'Refunded' },
+                                    ].map(({ key, label }) => (
+                                        <div key={key} className="text-center p-4 bg-hackclub-smoke/30 rounded-lg">
+                                            <p className="text-hackclub-slate text-sm font-bold mb-2">{label}</p>
+                                            <p className="text-3xl font-black text-hackclub-dark">{stats.ordersByStatus[key] || 0}</p>
                                         </div>
                                     ))}
                                 </div>

@@ -15,6 +15,10 @@ import { formatAddress } from './address';
 import { unsubscribeUrl } from './emailSuppression';
 
 const FROM = process.env.EMAIL_FROM || 'Hack Club Shop <shop@hackclub.com>';
+// Where customer replies should land. The From address (orders@…) is a sending
+// identity that isn't actively monitored, so point replies at the support inbox.
+// Falls back to the public support address so replies are never dropped.
+const REPLY_TO = process.env.EMAIL_REPLY_TO || 'shop@hackclub.com';
 const ADMIN_EMAIL = process.env.ADMIN_ORDER_EMAIL; // staff inbox for new-order alerts
 // Public base URL for links in emails (no request context here). Falls back
 // through the URLs already configured for the app.
@@ -106,6 +110,7 @@ async function sendViaProvider(msg: EmailMessage): Promise<void> {
             body: JSON.stringify({
                 from: FROM,
                 to: msg.to,
+                reply_to: REPLY_TO,
                 subject: msg.subject,
                 html: msg.html,
                 text: msg.text,
@@ -131,6 +136,7 @@ async function sendViaProvider(msg: EmailMessage): Promise<void> {
             body: JSON.stringify({
                 From: FROM,
                 To: msg.to,
+                ReplyTo: REPLY_TO,
                 Subject: msg.subject,
                 HtmlBody: msg.html,
                 TextBody: msg.text,
@@ -249,6 +255,7 @@ function shell(title: string, bodyHtml: string, opts: ShellOpts = {}): string {
             <!-- Footer -->
             <tr><td style="background:#ffffff;border-top:1px solid ${LINE};padding:22px 30px 26px">
               <p style="margin:0;color:${INK};font-size:13px;font-weight:700">Hack Club Shop</p>
+              <p style="margin:5px 0 0;color:${MUTED};font-size:12px;line-height:1.6">Questions? Just reply to this email or write <a href="mailto:shop@hackclub.com" style="color:${RED};text-decoration:underline">shop@hackclub.com</a>.</p>
               <p style="margin:5px 0 0;color:#b3bdca;font-size:12px;line-height:1.6">8605 Santa Monica Blvd #86294, West Hollywood, CA 90069</p>
               ${unsub}
             </td></tr>
@@ -327,13 +334,13 @@ export function buildAdminNewOrder(order: Order): EmailMessage | null {
     return { to: ADMIN_EMAIL, subject: `New ${order.pathway} order #${ref}`, html, text };
 }
 
-/** Status-change email to the customer (approved / denied / fulfilled / refunded). */
+/** Status-change email to the customer (received / fulfilled / delivered / refunded). */
 export function buildStatusUpdate(order: Order, to: string, message?: string): EmailMessage {
     const ref = order.id.slice(-8);
     const map: Record<string, string> = {
-        approved: 'Your order has been approved and is being prepared.',
+        received: 'We received your order and are getting it ready.',
         fulfilled: 'Your order has shipped!',
-        denied: 'Your order was denied.',
+        delivered: 'Your order was delivered. Enjoy!',
         refunded: 'Your order has been refunded.',
     };
     const line = map[order.status] || `Your order status is now: ${order.status}.`;
@@ -359,15 +366,15 @@ export function buildStatusUpdate(order: Order, to: string, message?: string): E
         </table>`
         : '';
     const eyebrowMap: Record<string, string> = {
-        approved: 'Order approved',
+        received: 'Order received',
         fulfilled: 'On its way',
-        denied: 'Order update',
+        delivered: 'Delivered',
         refunded: 'Refund issued',
     };
     const titleMap: Record<string, string> = {
-        approved: 'Your order is being prepared',
+        received: 'We got your order',
         fulfilled: 'Your order has shipped',
-        denied: 'About your order',
+        delivered: 'Your order was delivered',
         refunded: 'Your order was refunded',
     };
     const html = shell(titleMap[order.status] || `Order #${ref} update`, `

@@ -307,9 +307,11 @@ export async function POST(request: Request) {
                   }
                 : {}),
             checkoutData: checkoutData || {},
-            status: 'pending',
+            // Points are debited atomically at creation (below), so there's no
+            // approval gate — the order is immediately a real, paid order.
+            status: 'received',
             statusHistory: [
-                { status: 'pending', timestamp: now }
+                { status: 'received', timestamp: now }
             ],
             createdAt: now,
         };

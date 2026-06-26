@@ -17,12 +17,10 @@ const redis = new Redis({
     token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 });
 
-type StatusAction = 'approve' | 'deny' | 'fulfill' | 'refund';
+type StatusAction = 'mark-delivered' | 'refund';
 type Action = StatusAction | 'mark-test' | 'unmark-test';
 const ACTION_STATUS: Record<StatusAction, Order['status']> = {
-    approve: 'approved',
-    deny: 'denied',
-    fulfill: 'fulfilled',
+    'mark-delivered': 'delivered',
     refund: 'refunded',
 };
 
@@ -118,6 +116,10 @@ export async function POST(request: Request, { params }: { params: { id: string 
                 }
             }
 
+            if (action === 'mark-delivered' && guest.status !== 'fulfilled') {
+                return NextResponse.json({ error: 'Only a shipped (fulfilled) order can be marked delivered.' }, { status: 400 });
+            }
+
             const refundNote = action === 'refund' && manualRefundNote
                 ? `${message ? message + ' — ' : ''}${manualRefundNote}`
                 : message;
@@ -125,6 +127,9 @@ export async function POST(request: Request, { params }: { params: { id: string 
             const updated = await updateGuestOrder(orderId, {
                 status: newStatus,
                 ...(action === 'refund' ? { paymentStatus: 'refunded' as const } : {}),
+                ...(action === 'mark-delivered' && guest.shipment
+                    ? { shipment: { ...guest.shipment, deliveredAt: new Date() } }
+                    : {}),
                 statusHistory: [...(guest.statusHistory || []), historyEntry(newStatus, refundNote)],
             });
             if (updated) {
@@ -155,7 +160,7 @@ function historyEntry(status: Order['status'], message?: string): OrderStatusUpd
 }
 
 function actionLabel(action: StatusAction): string {
-    return { approve: 'Approved', deny: 'Denied', fulfill: 'Fulfilled', refund: 'Refunded' }[action];
+    return { 'mark-delivered': 'Marked delivered', refund: 'Refunded' }[action];
 }
 
 /**

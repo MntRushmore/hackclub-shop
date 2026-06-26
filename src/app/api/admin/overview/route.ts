@@ -100,7 +100,8 @@ export async function GET() {
     }
 
     // ── Orders needing action ────────────────────────────────────────────────────
-    const unfulfilled = orders.filter((o) => o.status === 'pending' || o.status === 'approved');
+    // "Needs shipping": paid + received but not yet shipped out.
+    const unfulfilled = orders.filter((o) => o.status === 'received');
     const oldestUnfulfilledDays = unfulfilled.reduce((max, o) => {
         const age = (now - new Date(o.createdAt).getTime()) / DAYS;
         return Math.max(max, age);

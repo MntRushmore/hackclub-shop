@@ -69,8 +69,10 @@ export default function ShippingPanel({
     // The rate the customer picked + paid for at checkout, if any.
     const chosen = order.shipment?.chosenAtCheckout ? order.shipment : undefined;
 
-    const buyRate = async (shipId: string, rateId: string, key: string, e: React.MouseEvent) => {
+    const buyRate = async (shipId: string, rateId: string, key: string, e: React.MouseEvent, label?: string) => {
         stop(e);
+        // Buying a label spends real money. Confirm before charging.
+        if (!window.confirm(`Buy this shipping label${label ? ` (${label})` : ''}? This purchases postage and marks the order fulfilled.`)) return;
         setBuying(key);
         onError('');
         try {
@@ -95,12 +97,14 @@ export default function ShippingPanel({
 
     const buy = async (rate: ShippingRate, e: React.MouseEvent) => {
         if (!shipmentId) return;
-        await buyRate(shipmentId, rate.id, rate.id, e);
+        await buyRate(shipmentId, rate.id, rate.id, e, `${rate.carrier} ${rate.service} — $${rate.rate.toFixed(2)}`);
     };
 
     const buyChosen = async (e: React.MouseEvent) => {
         if (!chosen?.easypostShipmentId || !chosen.chosenRateId) return;
-        await buyRate(chosen.easypostShipmentId, chosen.chosenRateId, 'chosen', e);
+        const label = [chosen.carrier, chosen.service].filter(Boolean).join(' ')
+            + (typeof chosen.cost === 'number' ? ` — $${chosen.cost.toFixed(2)}` : '');
+        await buyRate(chosen.easypostShipmentId, chosen.chosenRateId, 'chosen', e, label);
     };
 
     const recordManual = async (e: React.MouseEvent) => {

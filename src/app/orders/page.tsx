@@ -55,14 +55,12 @@ const OrdersPage = () => {
 
     const getStatusColor = (status: Order['status']) => {
         switch (status) {
-            case 'pending':
+            case 'received':
                 return 'bg-yellow-100 text-yellow-800';
-            case 'approved':
-                return 'bg-blue-100 text-blue-800';
             case 'fulfilled':
+                return 'bg-blue-100 text-blue-800';
+            case 'delivered':
                 return 'bg-green-100 text-green-800';
-            case 'denied':
-                return 'bg-red-100 text-red-800';
             case 'refunded':
                 return 'bg-orange-100 text-orange-800';
             default:
@@ -378,6 +376,11 @@ const OrdersPage = () => {
                             </AnimatePresence>
                         </div>
                     )}
+
+                    <p className="text-center text-sm text-hackclub-muted mt-10">
+                        Questions about an order? Email{' '}
+                        <a href="mailto:shop@hackclub.com" className="text-hackclub-blue font-bold hover:underline">shop@hackclub.com</a>
+                    </p>
                 </motion.div>
             </div>
         </div>

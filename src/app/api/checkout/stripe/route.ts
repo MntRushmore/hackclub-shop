@@ -302,6 +302,10 @@ export async function POST(request: Request) {
             success_url: `${origin}/thank-you?session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: `${origin}/checkout`,
             metadata: { orderId },
+            // Expire the session quickly (Stripe's minimum is 30 min) so abandoned
+            // checkouts release their inventory hold and get cleaned up promptly via
+            // the checkout.session.expired webhook, instead of sitting ~24h.
+            expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
         });
 
         const now = new Date();
@@ -349,8 +353,11 @@ export async function POST(request: Request) {
                   }
                 : {}),
             checkoutData: checkoutData || {},
-            status: 'pending',
-            statusHistory: [{ status: 'pending', timestamp: now }],
+            // Placeholder until payment settles. It stays 'unpaid', and the admin
+            // list hides unpaid guest orders, so this never shows as a real order.
+            // The webhook flips it to 'received' on payment, or deletes it on expiry.
+            status: 'received',
+            statusHistory: [{ status: 'received', timestamp: now }],
             createdAt: now,
         };
 

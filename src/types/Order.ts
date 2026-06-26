@@ -29,7 +29,7 @@ export interface ShippingAddress {
 }
 
 export interface OrderStatusUpdate {
-    status: 'pending' | 'approved' | 'fulfilled' | 'denied' | 'refunded';
+    status: 'received' | 'fulfilled' | 'delivered' | 'refunded';
     timestamp: Date;
     message?: string;
 }
@@ -47,9 +47,11 @@ export interface OrderShipment {
     trackingUrl?: string;      // public carrier/EasyPost tracking page
     labelUrl?: string;         // postage label PDF/PNG (EasyPost-hosted)
     easypostShipmentId?: string;
+    trackerId?: string;        // EasyPost tracker id; the delivery webhook matches on this
     cost?: number;             // postage paid, USD (for the audit/stats trail)
     estDeliveryDate?: string;  // ISO date string when known
     shippedAt?: Date;
+    deliveredAt?: Date;        // set when the carrier confirms delivery (tracker webhook / manual)
     // Set when the customer chose+paid a live EasyPost rate at checkout, so admin
     // fulfillment can buy that exact label. Not yet purchased.
     chosenRateId?: string;
@@ -109,7 +111,7 @@ export interface Order {
     // webhook commits these on payment or releases them if the session expires.
     inventoryHold?: { variantId: string; quantity: number }[];
     checkoutData: Record<string, string | ShippingAddress>;
-    status: 'pending' | 'approved' | 'fulfilled' | 'denied' | 'refunded';
+    status: 'received' | 'fulfilled' | 'delivered' | 'refunded';
     statusHistory: OrderStatusUpdate[];
     createdAt: Date;
     // When true, the order is a test/junk order: hidden from the default admin

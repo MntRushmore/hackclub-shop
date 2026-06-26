@@ -32,8 +32,8 @@ export async function GET(request: Request) {
         return NextResponse.json({ found: true, orderId: order.id, paymentStatus: 'paid' });
     }
 
-    // Refunded/denied orders are terminal; don't try to re-pay them.
-    if (order.paymentStatus === 'refunded' || order.status === 'denied') {
+    // Refunded orders are terminal; don't try to re-pay them.
+    if (order.paymentStatus === 'refunded') {
         return NextResponse.json({ found: true, orderId: order.id, paymentStatus: order.paymentStatus });
     }
 
@@ -66,11 +66,11 @@ export async function GET(request: Request) {
 
         const updated = await updateGuestOrder(order.id, {
             paymentStatus: 'paid',
-            status: 'approved',
+            status: 'received',
             hcb: { ...(order.hcb || {}), donationTxId: match.txId, donatedAt: match.donatedAt },
             statusHistory: [
                 ...order.statusHistory,
-                { status: 'approved', timestamp: new Date(), message: 'Donation received via HCB' },
+                { status: 'received', timestamp: new Date(), message: 'Donation received via HCB' },
             ],
         });
 
