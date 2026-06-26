@@ -65,11 +65,16 @@ const ProductCard: React.FC<ProductCardProps> = ({
                         height={400}
                         className="w-full h-48 object-contain rounded-xl z-20"
                     />
-                    <div className={`absolute bottom-0 right-0 w-full h-full bg-gradient-to-t from-[${gradientFrom}] to-[${gradientTo}] opacity-50 rounded-md shadow-lg -z-10 `}></div>
+                    {/* Gradient colors are dynamic props — Tailwind's JIT can't
+                        generate from-[${var}] classes, so set it as an inline style. */}
+                    <div
+                        className="absolute bottom-0 right-0 w-full h-full opacity-50 rounded-md shadow-lg -z-10"
+                        style={{ backgroundImage: `linear-gradient(to top, ${gradientFrom}, ${gradientTo})` }}
+                    ></div>
                 </Link>
             </div>
 
-            <h3 className="text-xl font-semibold mt-4 text-hackclub-text text-center">
+            <h3 className="text-xl font-semibold mt-4 text-hackclub-dark text-center">
                 {product.name}
             </h3>
 
@@ -90,7 +95,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
                     <select
                         value={selectedVariantId}
                         onChange={(e) => setSelectedVariantId(isNaN(Number(e.target.value)) ? e.target.value : Number(e.target.value))}
-                        className="px-4 py-2 rounded-full border bg-white text-gray-700 focus:outline-none"
+                        className="px-4 py-2 rounded-full border-2 border-hackclub-smoke bg-white text-hackclub-slate focus-visible:outline-none focus-visible:border-hackclub-red focus-visible:ring-2 focus-visible:ring-hackclub-red/40"
                     >
                         {product.sync_variants.map((variant) => (
                             <option key={variant.variant_id} value={variant.variant_id}>
@@ -102,7 +107,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
             )}
 
             <button
-                className="mt-2 bg-[#338eda] text-white py-2 px-4 rounded-full hover:bg-[#2a6bb8] transition-colors shadow-sm"
+                className="mt-2 bg-hackclub-blue text-white py-2 px-4 rounded-full hover:brightness-90 transition-[filter,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hackclub-blue/50 shadow-sm"
                 style={{
                     boxShadow: '4px 4px 10px rgba(0,0,0,0.1)',
                 }}
