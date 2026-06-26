@@ -1,15 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Redis } from '@upstash/redis';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../../lib/authOptions';
-import { requireAdminPermission } from '../../../../lib/adminAuth';
 import { getVariantStocks } from '../../../../lib/inventory';
 import { getCatalogProduct } from '../../../../lib/catalog';
-
-const redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL!,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-});
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
     const productId = params.id;
@@ -62,54 +53,6 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     }
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
-    const session = await getServerSession(authOptions);
-    const canManage = await requireAdminPermission(session, 'canManageProducts');
-
-    if (!canManage.allowed) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-
-    const productId = params.id;
-
-    try {
-        const product = await redis.get<any>(`product:${productId}`);
-        if (!product) {
-            return NextResponse.json({ error: 'Product not found' }, { status: 404 });
-        }
-
-        const body = await req.json();
-        const updated = {
-            ...product,
-            ...body,
-            id: productId,
-            createdAt: product.createdAt,
-            updatedAt: new Date(),
-        };
-
-        await redis.set(`product:${productId}`, updated);
-        return NextResponse.json({ product: updated });
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: 'Failed to update product' }, { status: 500 });
-    }
-}
-
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-    const session = await getServerSession(authOptions);
-    const canManage = await requireAdminPermission(session, 'canManageProducts');
-
-    if (!canManage.allowed) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-
-    const productId = params.id;
-
-    try {
-        await redis.del(`product:${productId}`);
-        return NextResponse.json({ success: true });
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: 'Failed to delete product' }, { status: 500 });
-    }
-}
+// Catalog edits (update/delete a product) happen in the Stripe Dashboard now —
+// Stripe is the source of truth. The old PUT/DELETE handlers that wrote the Redis
+// product store were removed in the Stripe-catalog migration.

@@ -327,7 +327,7 @@ export default function ReceivingScan() {
                                 </div>
                                 <div className="mt-3 flex gap-2">
                                     <Link href={`/admin/labels?variant=${encodeURIComponent(resolved.variantId)}`} className="px-3 py-1.5 rounded-lg text-xs font-bold text-hackclub-purple border-2 border-hackclub-purple/30 hover:bg-hackclub-purple hover:text-white transition-colors">Labels</Link>
-                                    <Link href="/admin/inventory" className="px-3 py-1.5 rounded-lg text-xs font-bold text-hackclub-blue border-2 border-hackclub-blue/30 hover:bg-hackclub-blue hover:text-white transition-colors">Inventory</Link>
+                                    <Link href="https://dashboard.stripe.com/products" className="px-3 py-1.5 rounded-lg text-xs font-bold text-hackclub-blue border-2 border-hackclub-blue/30 hover:bg-hackclub-blue hover:text-white transition-colors">Inventory</Link>
                                 </div>
                             </motion.div>
                         )}

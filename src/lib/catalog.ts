@@ -15,11 +15,15 @@
  */
 
 import { Redis } from '@upstash/redis';
+import type { Product } from '../types/Admin';
 import { getStripe, isStripeConfigured } from './stripe';
 import {
     CATALOG_MANAGED_FLAG,
     fromStripePrice,
     parseProductConfig,
+    toStripeProduct,
+    toStripePrice,
+    variantKey,
     type CatalogProduct,
     type CatalogVariant,
 } from './catalogMapping';
@@ -199,4 +203,147 @@ export async function getCatalogVariant(
         if (variant) return { product, variant };
     }
     return null;
+}
+
+// ---------------------------------------------------------------------------
+// Write-back: operational flows (receiving, SKU) update Stripe, not Redis
+// ---------------------------------------------------------------------------
+
+/**
+ * Patch a variant's Stripe Price metadata in place and refresh the cache entry.
+ * This is how the operational flows that USED to write the Redis product store
+ * (stock receipt, SKU minting) persist now that Stripe is the source of truth:
+ * stock / unitCost / sku / scanCode all live in Price.metadata.
+ *
+ * Resolves the Price by its variant_id (found via getCatalogVariant, which gives
+ * us the stripePriceId). Only the provided keys are changed; others are left as-is.
+ * Best-effort: a Stripe/Redis hiccup logs and returns false rather than throwing
+ * into a caller — matching the fire-and-forget contract of inventory/costing.
+ *
+ * Numeric fields are stringified (Stripe metadata is string-valued); passing
+ * `null` for a field deletes that metadata key (e.g. clearing a stock number to
+ * make a variant untracked).
+ */
+export async function updateVariantStripeMetadata(
+    variantId: string,
+    patch: Partial<{ stock: number | null; unitCost: number | null; sku: string | null; scanCode: string | null }>,
+): Promise<boolean> {
+    if (!isStripeConfigured()) {
+        console.error('[catalog] updateVariantStripeMetadata: Stripe not configured');
+        return false;
+    }
+    try {
+        const found = await getCatalogVariant(variantId);
+        if (!found || !found.variant.stripePriceId) {
+            console.error('[catalog] updateVariantStripeMetadata: no Stripe Price for variant', variantId);
+            return false;
+        }
+        const priceId = found.variant.stripePriceId;
+
+        // Stripe deletes a metadata key when its value is passed as empty string.
+        const meta: Record<string, string> = {};
+        const set = (key: string, value: number | string | null | undefined) => {
+            if (value === undefined) return; // not part of this patch → leave untouched
+            meta[key] = value === null ? '' : String(value);
+        };
+        set('stock', patch.stock);
+        set('unit_cost', patch.unitCost);
+        set('sku', patch.sku);
+        set('scan_code', patch.scanCode);
+        if (Object.keys(meta).length === 0) return true;
+
+        const stripe = getStripe();
+        await stripe.prices.update(priceId, { metadata: meta });
+
+        // Reproject the owning product so the cache reflects the change immediately
+        // (the price.updated webhook will also fire, but we don't want to wait on it).
+        await refreshProductCacheById(found.product.stripeProductId);
+        return true;
+    } catch (err) {
+        console.error('[catalog] updateVariantStripeMetadata failed:', err instanceof Error ? err.message : err);
+        return false;
+    }
+}
+
+/**
+ * Create or update a single shop Product in Stripe (Product + one Price per
+ * variant), then cache it. Idempotent: matches an existing Stripe Product by
+ * shop_product_id, so re-accepting/re-running updates rather than duplicating.
+ * Returns the resulting CatalogProduct, or null on failure.
+ *
+ * Used by flows that MINT a new catalog product (e.g. accepting a sourcing quote)
+ * now that Stripe owns the catalog. Shares the same mapping as the bulk sync route.
+ */
+export async function upsertCatalogProduct(product: Product): Promise<CatalogProduct | null> {
+    if (!isStripeConfigured()) {
+        console.error('[catalog] upsertCatalogProduct: Stripe not configured');
+        return null;
+    }
+    try {
+        const stripe = getStripe();
+        const sp = toStripeProduct(product);
+
+        // Match an existing managed Stripe Product by shop_product_id.
+        const search = await stripe.products.search({
+            query: `metadata['shop_product_id']:'${product.id}' AND metadata['managed_by']:'${CATALOG_MANAGED_FLAG}'`,
+            limit: 1,
+        });
+        let stripeProduct = search.data[0];
+        if (stripeProduct) {
+            stripeProduct = await stripe.products.update(stripeProduct.id, {
+                name: sp.name, description: sp.description, images: sp.images, tax_code: sp.tax_code, metadata: sp.metadata, active: true,
+            });
+        } else {
+            stripeProduct = await stripe.products.create({
+                name: sp.name, description: sp.description, images: sp.images, tax_code: sp.tax_code, metadata: sp.metadata,
+            });
+        }
+
+        // Active Prices keyed by variant_id, so a re-run reuses unchanged ones.
+        const existing = new Map<string, string>(); // variant_id -> price id
+        const amounts = new Map<string, number>();   // price id -> unit_amount
+        for await (const price of stripe.prices.list({ product: stripeProduct.id, active: true, limit: 100 })) {
+            if (price.metadata?.variant_id) { existing.set(price.metadata.variant_id, price.id); amounts.set(price.id, price.unit_amount ?? 0); }
+        }
+        const kept = new Set<string>();
+        for (const variant of product.variants || []) {
+            const vid = variantKey(variant);
+            const desired = toStripePrice(variant);
+            const meta = { ...desired.metadata, is_cash_buyable: desired.isCashBuyable ? '1' : '0' };
+            const curId = existing.get(vid);
+            if (curId && amounts.get(curId) === desired.unitAmount) {
+                await stripe.prices.update(curId, { metadata: meta });
+                kept.add(curId);
+            } else {
+                const created = await stripe.prices.create({ product: stripeProduct.id, currency: 'usd', unit_amount: desired.unitAmount, tax_behavior: 'exclusive', metadata: meta });
+                kept.add(created.id);
+            }
+        }
+        for (const priceId of existing.values()) {
+            if (!kept.has(priceId)) await stripe.prices.update(priceId, { active: false });
+        }
+
+        await refreshProductCacheById(stripeProduct.id);
+        return getCatalogProduct(product.id);
+    } catch (err) {
+        console.error('[catalog] upsertCatalogProduct failed:', err instanceof Error ? err.message : err);
+        return null;
+    }
+}
+
+/** Reproject one Stripe product (by Stripe product id) into the cache. */
+async function refreshProductCacheById(stripeProductId: string): Promise<void> {
+    const stripe = getStripe();
+    const product = await stripe.products.retrieve(stripeProductId);
+    if (product.metadata?.managed_by !== CATALOG_MANAGED_FLAG) return;
+    const prices: Array<{ id: string; unit_amount: number | null; active: boolean; metadata: Record<string, string> }> = [];
+    for await (const price of stripe.prices.list({ product: stripeProductId, limit: 100 })) {
+        prices.push({ id: price.id, unit_amount: price.unit_amount, active: price.active, metadata: price.metadata || {} });
+    }
+    await putCatalogCache(
+        buildCatalogProduct(
+            { id: product.id, name: product.name, description: product.description, created: product.created, metadata: product.metadata || {} },
+            prices,
+        ),
+    );
 }

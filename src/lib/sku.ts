@@ -18,6 +18,7 @@
 
 import { Redis } from '@upstash/redis';
 import { Product, ProductVariant } from '../types/Admin';
+import { getCatalogVariant, updateVariantStripeMetadata } from './catalog';
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -130,20 +131,22 @@ export interface AssignSkuResult {
 
 /**
  * Assign a SKU to a variant: normalize, ensure store-wide uniqueness (numeric suffix
- * on collision), write it onto the product variant, and maintain the reverse index
- * (claim the new key, release the old one). Mutates and persists the passed `product`.
+ * on collision), write the sku/scanCode onto the variant's STRIPE PRICE metadata
+ * (Stripe owns the catalog), and maintain the Redis reverse indexes (`sku:{sku}`,
+ * `scancode:{code}` — operational lookups Stripe doesn't model, so they stay in Redis).
  *
- * Pass `desired` to set a specific SKU (admin edit); omit to auto-generate from the
- * product/variant fields. Throws only on a hard Redis failure on the write path —
- * index/uniqueness reads degrade safely.
+ * Resolves the variant from the catalog by `variantId` — callers no longer pass a
+ * Product. Pass `desired` to set a specific SKU (admin edit); omit to auto-generate.
+ * Throws on a variant that can't be found or a SKU that can't be derived; the write
+ * to Stripe is best-effort inside updateVariantStripeMetadata.
  */
 export async function assignSku(
-    product: Product,
     variantId: string,
     desired?: string,
 ): Promise<AssignSkuResult> {
-    const variant = (product.variants || []).find(v => variantKey(v) === String(variantId));
-    if (!variant) throw new Error('Variant not found');
+    const found = await getCatalogVariant(String(variantId));
+    if (!found) throw new Error('Variant not found');
+    const { product, variant } = found;
 
     const base = desired && desired.trim()
         ? normalizeSku(desired)
@@ -157,34 +160,32 @@ export async function assignSku(
             await redis.set(scanKey(variant.scanCode), variantId);
             return variant.scanCode;
         }
-        return mintScanCode(variantId);
+        return mintScanCode(String(variantId));
     };
 
     if (variant.sku && normalizeSku(variant.sku) === base) {
         // SKU unchanged, but make sure a scan code exists (older variants may lack one).
         if (!variant.scanCode) {
-            variant.scanCode = await ensureScanCode();
-            product.updatedAt = new Date();
-            await redis.set(`product:${product.id}`, product);
+            const scanCode = await ensureScanCode();
+            await updateVariantStripeMetadata(String(variantId), { scanCode });
+            return { sku: base, scanCode, changed: false };
         }
         return { sku: base, scanCode: variant.scanCode, changed: false };
     }
 
     // Find a free SKU: base, then base-2, base-3, … (cap the probe; collisions are rare).
     let sku = base;
-    for (let n = 2; n <= 50 && (await skuTaken(sku, variantId)); n++) {
+    for (let n = 2; n <= 50 && (await skuTaken(sku, String(variantId))); n++) {
         sku = `${base}-${n}`;
     }
 
     const prev = variant.sku ? normalizeSku(variant.sku) : null;
     const scanCode = await ensureScanCode();
 
-    // Persist onto the variant, then move the index. Order: write product first so the
-    // SKU is durable even if the index write hiccups; then claim new, release old.
-    variant.sku = sku;
-    variant.scanCode = scanCode;
-    product.updatedAt = new Date();
-    await redis.set(`product:${product.id}`, product);
+    // Persist onto the variant's Stripe Price, then move the Redis index. Write Stripe
+    // first so the SKU is durable even if the index write hiccups; then claim new,
+    // release old.
+    await updateVariantStripeMetadata(String(variantId), { sku, scanCode });
 
     await redis.set(skuKey(sku), variantId);
     if (prev && prev !== sku) {

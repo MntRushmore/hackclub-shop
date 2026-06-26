@@ -108,7 +108,7 @@ export default function CommandCenter() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Low stock / reorder */}
-                <Link href="/admin/inventory" className={cards.lowStock.count === 0 ? 'pointer-events-none' : ''}>
+                <Link href="https://dashboard.stripe.com/products" className={cards.lowStock.count === 0 ? 'pointer-events-none' : ''}>
                     <div className={`h-full bg-white rounded-2xl border-2 p-5 transition-all ${cards.lowStock.count > 0 ? 'border-hackclub-red/40 hover:shadow-lg' : 'border-hackclub-smoke opacity-70'}`}>
                         <div className="flex items-center justify-between mb-2">
                             <h3 className="font-black text-hackclub-dark">Reorder</h3>

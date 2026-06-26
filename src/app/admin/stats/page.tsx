@@ -167,7 +167,7 @@ export default function StatsAdmin() {
                                     <p className="text-3xl font-black text-hackclub-blue mt-2">{stats.pointsSpent.toLocaleString()}</p>
                                     <p className="text-xs text-hackclub-slate mt-1">{stats.studentOrderCount} points order{stats.studentOrderCount === 1 ? '' : 's'}</p>
                                 </div>
-                                <Link href="/admin/inventory">
+                                <Link href="https://dashboard.stripe.com/products">
                                     <div className={`bg-white rounded-2xl shadow-lg border-2 p-6 transition-colors ${stats.lowStockCount > 0 ? 'border-hackclub-orange/40 hover:border-hackclub-orange' : 'border-hackclub-smoke hover:border-hackclub-slate'}`}>
                                         <p className="text-hackclub-muted font-bold text-sm">Low Stock</p>
                                         <p className={`text-3xl font-black mt-2 ${stats.lowStockCount > 0 ? 'text-hackclub-orange' : 'text-hackclub-dark'}`}>{stats.lowStockCount}</p>

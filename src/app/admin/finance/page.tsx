@@ -106,7 +106,7 @@ export default function FinanceAdmin() {
                         </div>
                     </div>
                     <p className="text-lg text-hackclub-slate font-medium mb-6">
-                        On-hand value, cost of goods, margins, purchasing spend, and the weekly report. Cost basis is weighted-average per variant — see <Link href="/admin/inventory" className="text-hackclub-blue hover:underline font-bold">Inventory</Link> for units.
+                        On-hand value, cost of goods, margins, purchasing spend, and the weekly report. Cost basis is weighted-average per variant — see <Link href="https://dashboard.stripe.com/products" className="text-hackclub-blue hover:underline font-bold">Inventory</Link> for units.
                     </p>
 
                     <HcbConnectionCard />

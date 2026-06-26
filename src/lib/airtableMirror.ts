@@ -9,14 +9,14 @@
  * try/catch) — they must not depend on the result.
  *
  * Tables (create these in the configured base; field names are Title Case):
- *   Products  — keyed on "Product Id"
  *   Orders    — keyed on "Order Id"
  *   Users     — keyed on "User Id"
  *   Coupons   — keyed on "Coupon Id"
+ *
+ * (Products are NOT here — Stripe is the catalog source of truth; see lib/catalog.ts.)
  */
 
 import { Order } from '../types/Order';
-import { Product } from '../types/Admin';
 import { Vendor, Quote, PurchaseOrder, Asset } from '../types/Sourcing';
 import { formatAddress } from './address';
 
@@ -120,34 +120,9 @@ function safe(label: string, fn: () => Promise<void>): Promise<void> {
     });
 }
 
-// ── Products ────────────────────────────────────────────────────────────────
-
-export function mirrorProduct(product: Product): Promise<void> {
-    return safe(`product ${product.id}`, () =>
-        upsert(TABLES.products, 'Product Id', product.id, {
-            'Product Id': product.id,
-            Name: product.name,
-            Description: product.description || '',
-            Category: product.category || '',
-            'Image URL': product.image_url || '',
-            'Thumbnail URL': product.thumbnail_url || '',
-            'Variants JSON': JSON.stringify(product.variants || []),
-            'Shipping Options JSON': JSON.stringify(product.shippingOptions || []),
-            'Variant Count': (product.variants || []).length,
-            // Convenience roll-up so staff can scan stock without parsing the JSON.
-            // Per-variant stock lives inside Variants JSON (the sync reads it there).
-            'Total Stock': (product.variants || []).reduce(
-                (sum, v) => sum + (typeof v.stock === 'number' ? v.stock : 0),
-                0,
-            ),
-            'Updated At': new Date().toISOString(),
-        }),
-    );
-}
-
-export function unmirrorProduct(productId: string): Promise<void> {
-    return safe(`delete product ${productId}`, () => removeByKey(TABLES.products, 'Product Id', productId));
-}
+// Products are NOT mirrored to Airtable — Stripe is the catalog source of truth
+// (see lib/catalog.ts). The product mirror was removed in the Stripe-catalog
+// migration; this module now mirrors only orders, users, coupons, and sourcing.
 
 // ── Orders ───────────────────────────────────────────────────────────────────
 

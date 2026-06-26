@@ -9,21 +9,21 @@
  *   1. write an append-only `Receipt` (who/what/how many/at what cost/when),
  *   2. recompute the variant's WEIGHTED-AVERAGE unit cost from the prior on-hand
  *      units+cost and the newly-received units+cost, and store it back on the
- *      product variant (`variant.unitCost`),
- *   3. bump the unit stock through the same product record + inventory cache the
- *      admin quick-adjust uses, so the two layers never drift,
- *   4. record an audit entry and re-mirror the product to Airtable.
+ *      variant's STRIPE PRICE metadata (`unit_cost`) — Stripe owns the catalog,
+ *   3. bump the unit stock the same way (Stripe Price `stock` metadata) and keep
+ *      the inventory overlay cache in step via `setStock`, so the two layers never
+ *      drift,
+ *   4. record an audit entry. (No Airtable mirror — that store is retired.)
  *
- * Everything is fire-and-forget safe like inventory/email/airtableMirror: a Redis
- * or Airtable hiccup degrades gracefully and never throws into a caller. The one
- * guard that matters for correctness is idempotency — a double-submitted receipt
- * must not double-count stock or double-blend cost (see `receiveStock`).
+ * Everything is fire-and-forget safe like inventory/email: a Stripe or Redis
+ * hiccup degrades gracefully and never throws into a caller. The one guard that
+ * matters for correctness is idempotency — a double-submitted receipt must not
+ * double-count stock or double-blend cost (see `receiveStock`).
  */
 
 import { Redis } from '@upstash/redis';
-import { Product } from '../types/Admin';
 import { setStock } from './inventory';
-import { mirrorProduct } from './airtableMirror';
+import { getCatalogVariant, updateVariantStripeMetadata } from './catalog';
 import { recordAudit } from './auditLog';
 
 const redis = new Redis({
@@ -137,14 +137,11 @@ export async function receiveStock(input: ReceiveInput): Promise<ReceiveResult> 
         return { ok: false, error: 'Duplicate receipt' };
     }
 
-    const product = await redis.get<Product>(`product:${input.productId}`);
-    if (!product) return { ok: false, error: 'Product not found' };
-
-    const idx = (product.variants || []).findIndex(
-        (v) => String(v.variant_id || v.id) === String(input.variantId),
-    );
-    if (idx < 0) return { ok: false, error: 'Variant not found' };
-    const variant = product.variants[idx];
+    // Stripe is the source of truth for the catalog. Resolve the variant from the
+    // catalog projection (stock + unitCost live in its Stripe Price metadata).
+    const found = await getCatalogVariant(String(input.variantId));
+    if (!found) return { ok: false, error: 'Variant not found' };
+    const { product, variant } = found;
 
     // Prior on-hand units we blend against. A variant with no stock number is
     // "untracked/unlimited" — there's no unit base to weight by, so the received
@@ -159,22 +156,18 @@ export async function receiveStock(input: ReceiveInput): Promise<ReceiveResult> 
     const trackingStock = typeof variant.stock === 'number';
     const stockAfter = trackingStock ? priorStock + quantity : null;
 
-    product.variants[idx] = {
-        ...variant,
+    // Persist the new weighted-avg cost (and stock, if tracked) UP to the Stripe
+    // Price metadata — Stripe owns the catalog now. The cache is refreshed inside
+    // updateVariantStripeMetadata so subsequent reads see the new numbers.
+    const wrote = await updateVariantStripeMetadata(String(input.variantId), {
         unitCost: newAvg,
         ...(trackingStock ? { stock: stockAfter as number } : {}),
-    };
-    product.updatedAt = new Date();
+    });
+    if (!wrote) return { ok: false, error: 'Could not write cost/stock to Stripe' };
 
-    try {
-        await redis.set(`product:${input.productId}`, product);
-    } catch (err) {
-        console.error('[costing] product save failed:', err instanceof Error ? err.message : err);
-        return { ok: false, error: 'Could not save product' };
-    }
-
-    // Keep the inventory unit cache in step with the new base stock (only when tracked).
-    if (trackingStock) await setStock(input.variantId, stockAfter);
+    // Keep the inventory unit cache (the live sell-side overlay base) in step with
+    // the new base stock (only when tracked). This stays in Redis by design.
+    if (trackingStock) await setStock(String(input.variantId), stockAfter);
 
     const receipt: Receipt = {
         id: receiptId,
@@ -203,7 +196,6 @@ export async function receiveStock(input: ReceiveInput): Promise<ReceiveResult> 
         console.error('[costing] ledger write failed:', err instanceof Error ? err.message : err);
     }
 
-    void mirrorProduct(product);
     void recordAudit({
         action: 'inventory.receive',
         actorId: input.actorId,

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { Redis } from '@upstash/redis';
 import { authOptions } from '../../../../../../../lib/authOptions';
 import { requireAdminPermission } from '../../../../../../../lib/adminAuth';
 import {
@@ -8,16 +7,12 @@ import {
     updateQuote,
     listQuotesByProduct,
 } from '../../../../../../../lib/sourcing';
-import { mirrorQuote, mirrorProduct } from '../../../../../../../lib/airtableMirror';
+import { mirrorQuote } from '../../../../../../../lib/airtableMirror';
 import { recordAudit } from '../../../../../../../lib/auditLog';
 import { Product, ProductVariant } from '../../../../../../../types/Admin';
 import { landedUnitCost } from '../../../../../../../types/Sourcing';
 import { assignSku } from '../../../../../../../lib/sku';
-
-const redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL!,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-});
+import { getCatalogProduct, upsertCatalogProduct } from '../../../../../../../lib/catalog';
 
 /**
  * Accept a quote → draft a Product (unpublished, no prices) with one variant seeded
@@ -55,7 +50,7 @@ export async function POST(
         // Already linked to a product — return it (idempotent), and just ensure the
         // status reflects accepted.
         if (quote.productId) {
-            const existing = await redis.get<Product>(`product:${quote.productId}`);
+            const existing = await getCatalogProduct(quote.productId);
             if (existing) {
                 if (quote.status !== 'accepted') {
                     const q = await updateQuote(quote.id, { status: 'accepted' });
@@ -99,18 +94,25 @@ export async function POST(
             updatedAt: new Date(),
         };
 
-        await redis.set(`product:${product.id}`, product);
+        // Create the draft product in Stripe (Stripe owns the catalog). The variant
+        // has no cash/points price yet, so it imports as a $0 unbuyable Price; the
+        // draft flag (in Product config metadata) keeps it off the storefront until
+        // an admin publishes it. Fail the accept if Stripe creation fails — there's
+        // no Redis fallback to land in anymore.
+        const created = await upsertCatalogProduct(product);
+        if (!created) {
+            return NextResponse.json({ error: 'Could not create the product in Stripe' }, { status: 502 });
+        }
 
         // Auto-mint a SKU for the seeded variant so the drafted product is barcode-ready
         // the moment it exists — the sourcing→catalog→label chain stays connected.
-        // assignSku persists onto the product and maintains the sku:{sku} index; a
-        // failure here must not block the accept (SKU is optional, mintable later).
+        // assignSku writes the SKU to the Stripe Price + maintains the sku:{sku} index;
+        // a failure here must not block the accept (SKU is optional, mintable later).
         try {
-            await assignSku(product, variantId);
+            await assignSku(variantId);
         } catch (err) {
             console.error('[accept] SKU auto-assign failed:', err instanceof Error ? err.message : err);
         }
-        void mirrorProduct(product);
 
         // Link the quote → product and mark it accepted.
         const updatedQuote = await updateQuote(quote.id, {

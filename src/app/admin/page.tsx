@@ -135,32 +135,32 @@ export default function AdminDashboard() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.1 }}
                         >
-                            <Link href="/admin/products">
+                            <a href="https://dashboard.stripe.com/products" target="_blank" rel="noopener noreferrer">
                                 <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-6 hover:shadow-xl hover:border-hackclub-red transition-all cursor-pointer group">
                                     <div className="w-12 h-12 bg-hackclub-red/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-hackclub-red/20 transition-colors">
                                         <Icon glyph="bag" size={24} style={{ color: 'var(--hackclub-red, #EC3750)' }} />
                                     </div>
-                                    <h3 className="text-xl font-black text-hackclub-dark mb-2">Products</h3>
-                                    <p className="text-hackclub-slate text-sm">Create, edit, and manage your products</p>
+                                    <h3 className="text-xl font-black text-hackclub-dark mb-2">Products ↗</h3>
+                                    <p className="text-hackclub-slate text-sm">Create, edit, and price products in the Stripe Dashboard</p>
                                 </div>
-                            </Link>
+                            </a>
                         </motion.div>
 
-                        {/* Inventory */}
+                        {/* Inventory — stock now lives on Stripe; manage in the Dashboard */}
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.15 }}
                         >
-                            <Link href="/admin/inventory">
+                            <a href="https://dashboard.stripe.com/products" target="_blank" rel="noopener noreferrer">
                                 <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-6 hover:shadow-xl hover:border-hackclub-cyan transition-all cursor-pointer group">
                                     <div className="w-12 h-12 bg-hackclub-cyan/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-hackclub-cyan/20 transition-colors">
                                         <Icon glyph="package" size={24} style={{ color: 'var(--hackclub-cyan, #5bc0de)' }} />
                                     </div>
-                                    <h3 className="text-xl font-black text-hackclub-dark mb-2">Inventory</h3>
-                                    <p className="text-hackclub-slate text-sm">Track stock, sync from Airtable, fix oversells</p>
+                                    <h3 className="text-xl font-black text-hackclub-dark mb-2">Inventory ↗</h3>
+                                    <p className="text-hackclub-slate text-sm">Stock lives on Stripe — edit product stock in the Dashboard</p>
                                 </div>
-                            </Link>
+                            </a>
                         </motion.div>
 
                         {/* Labels */}
