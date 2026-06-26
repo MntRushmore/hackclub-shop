@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useContext } from "react";
 import { useParams } from "next/navigation";
+import Link from 'next/link';
 import { CartContext } from "../../../context/CartContext";
 import Image from 'next/image';
 import { ProductDetail, Variant } from '../../../types/Product';
@@ -67,6 +68,8 @@ const ProductPage = () => {
     };
 
     if (loading) {
+        // Skeleton mirrors the real two-column layout (image card + details card)
+        // so the page doesn't jump when the product loads.
         return (
             <div className="min-h-screen bg-white" style={{
                 backgroundImage: `
@@ -75,10 +78,17 @@ const ProductPage = () => {
                 `,
                 backgroundSize: '30px 30px',
             }}>
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-                    <div className="text-center">
-                        <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-4 border-hackclub-red"></div>
-                        <p className="mt-4 text-hackclub-muted font-bold">Loading product...</p>
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12" aria-busy="true" aria-label="Loading product">
+                    <div className="grid md:grid-cols-2 gap-12 items-start animate-pulse">
+                        <div className="bg-white rounded-2xl p-8 shadow-lg border-2 border-gray-200">
+                            <div className="w-full aspect-square rounded-xl bg-hackclub-smoke" />
+                        </div>
+                        <div className="bg-white rounded-2xl p-8 shadow-lg border-2 border-gray-200 space-y-6">
+                            <div className="h-10 w-3/4 rounded-lg bg-hackclub-smoke" />
+                            <div className="h-8 w-1/3 rounded-lg bg-hackclub-smoke" />
+                            <div className="h-12 w-full rounded-xl bg-hackclub-smoke" />
+                            <div className="h-12 w-full rounded-full bg-hackclub-smoke" />
+                        </div>
                     </div>
                 </div>
             </div>
@@ -95,7 +105,20 @@ const ProductPage = () => {
                 backgroundSize: '30px 30px',
             }}>
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-                    <p className="text-center text-hackclub-red text-xl font-bold">{error || 'Product not found'}</p>
+                    <div className="max-w-md mx-auto text-center space-y-4">
+                        <h1 className="text-3xl font-black text-hackclub-dark">
+                            {error ? "We couldn't load this product" : 'Product not found'}
+                        </h1>
+                        <p className="text-hackclub-muted font-medium">
+                            It may have sold out or moved. Try heading back to the shop.
+                        </p>
+                        <Link
+                            href="/shop"
+                            className="inline-block bg-hackclub-red hover:bg-hackclub-orange text-white font-black px-6 py-3 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hackclub-red/50"
+                        >
+                            Back to shop
+                        </Link>
+                    </div>
                 </div>
             </div>
         );
