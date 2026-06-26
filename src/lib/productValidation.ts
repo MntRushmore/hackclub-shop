@@ -47,7 +47,28 @@ export async function validateCartItems(items: CartItemForValidation[]): Promise
     let verifiedPointsTotal = 0;
     const verifiedItems: VerifiedCartItem[] = [];
 
+    // Quantity is client-controlled and MUST be a positive integer. Without this
+    // guard a shopper could send a negative or fractional quantity, or split one
+    // variant across duplicate lines (+1 and -1) so the per-item totals cancel to
+    // zero while inventory still reserves the positive line — i.e. free goods.
+    // Reject bad quantities, then coalesce duplicate (id+variant) lines into one
+    // so totals/stock/persistence see a single canonical quantity per variant.
+    const coalesced = new Map<string, CartItemForValidation>();
     for (const item of items) {
+        if (!Number.isSafeInteger(item.quantity) || item.quantity <= 0) {
+            return { valid: false, error: `Invalid quantity for ${item.name}.` };
+        }
+        const key = `${item.id}::${item.variant_id ?? ''}`;
+        const existing = coalesced.get(key);
+        if (existing) {
+            existing.quantity += item.quantity;
+        } else {
+            coalesced.set(key, { ...item });
+        }
+    }
+    const dedupedItems = Array.from(coalesced.values());
+
+    for (const item of dedupedItems) {
         const product = products.find(p => p.id === item.id);
 
         if (!product) {
