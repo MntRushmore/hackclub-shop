@@ -5,6 +5,9 @@ import { getGuestOrder, getGuestOrderBySession, updateGuestOrder } from '../../.
 import { mirrorOrder } from '../../../../lib/airtableMirror';
 import { sendEmail, buildOrderConfirmation, buildAdminNewOrder } from '../../../../lib/email';
 import { commitReserved, release, claimOrderSettlement } from '../../../../lib/inventory';
+import { getStripe as getStripeClient } from '../../../../lib/stripe';
+import { CATALOG_MANAGED_FLAG } from '../../../../lib/catalogMapping';
+import { buildCatalogProduct, putCatalogCache, dropCatalogCache } from '../../../../lib/catalog';
 
 /**
  * Stripe webhook — the ONLY trusted signal that a guest order was paid. The
@@ -124,6 +127,37 @@ export async function POST(request: Request) {
                 }
                 break;
             }
+            // ---- Catalog sync: Stripe is the source of truth for products/prices.
+            // Any edit in the Stripe Dashboard refreshes that product's cache entry
+            // so the storefront/checkout projection stays current.
+            case 'product.created':
+            case 'product.updated': {
+                const product = event.data.object as Stripe.Product;
+                if (product.metadata?.managed_by !== CATALOG_MANAGED_FLAG) break;
+                if (product.active === false || product.deleted) {
+                    await dropCatalogCache(product.metadata.shop_product_id || product.id);
+                    break;
+                }
+                await refreshProductCache(product.id);
+                break;
+            }
+            case 'product.deleted': {
+                const product = event.data.object as Stripe.Product;
+                if (product.metadata?.managed_by !== CATALOG_MANAGED_FLAG) break;
+                await dropCatalogCache(product.metadata.shop_product_id || product.id);
+                break;
+            }
+            case 'price.created':
+            case 'price.updated':
+            case 'price.deleted': {
+                // A price change can flip a variant's availability/amount. Reproject
+                // the owning product from Stripe so the variant list is rebuilt.
+                const price = event.data.object as Stripe.Price;
+                if (price.metadata?.managed_by !== CATALOG_MANAGED_FLAG) break;
+                const productId = typeof price.product === 'string' ? price.product : price.product?.id;
+                if (productId) await refreshProductCache(productId);
+                break;
+            }
             default:
                 // Ignore unrelated event types.
                 break;
@@ -133,5 +167,30 @@ export async function POST(request: Request) {
     } catch (error) {
         console.error('[Stripe webhook] Handler error:', error);
         return NextResponse.json({ error: 'Webhook handler failed' }, { status: 500 });
+    }
+}
+
+/**
+ * Reproject one managed Stripe Product (and its active Prices) into the catalog
+ * cache. Best-effort: a Stripe/Redis hiccup logs and leaves the prior cache entry
+ * in place rather than blanking the product. Called by the catalog webhook cases.
+ */
+async function refreshProductCache(stripeProductId: string): Promise<void> {
+    try {
+        const stripe = getStripeClient();
+        const product = await stripe.products.retrieve(stripeProductId);
+        if (product.metadata?.managed_by !== CATALOG_MANAGED_FLAG) return;
+
+        const prices: Array<{ id: string; unit_amount: number | null; active: boolean; metadata: Record<string, string> }> = [];
+        for await (const price of stripe.prices.list({ product: stripeProductId, limit: 100 })) {
+            prices.push({ id: price.id, unit_amount: price.unit_amount, active: price.active, metadata: price.metadata || {} });
+        }
+        const catalogProduct = buildCatalogProduct(
+            { id: product.id, name: product.name, description: product.description, created: product.created, metadata: product.metadata || {} },
+            prices,
+        );
+        await putCatalogCache(catalogProduct);
+    } catch (err) {
+        console.error('[Stripe webhook] catalog refresh failed for', stripeProductId, ':', err instanceof Error ? err.message : err);
     }
 }

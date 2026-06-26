@@ -3,8 +3,8 @@ import { Redis } from '@upstash/redis';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../../lib/authOptions';
 import { requireAdminPermission } from '../../../../lib/adminAuth';
-import { resolveDualPrice } from '../../../../lib/variantPricing';
 import { getVariantStocks } from '../../../../lib/inventory';
+import { getCatalogProduct } from '../../../../lib/catalog';
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -15,7 +15,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const productId = params.id;
 
     try {
-        const product = await redis.get<any>(`product:${productId}`);
+        // Stripe is the source of truth; read from the catalog projection.
+        const product = await getCatalogProduct(productId);
 
         // Draft products (created from an accepted sourcing quote) aren't public —
         // 404 them on the storefront just like a missing product, even by direct URL.
@@ -31,12 +32,14 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
                 shippingOptions: product.shippingOptions || [],
                 checkoutFields: product.checkoutFields || [],
             },
-            sync_variants: (product.variants || []).map((variant: any, idx: number) => ({
+            sync_variants: (product.variants || []).map((variant, idx) => ({
                 id: variant.id || `${product.id}_var_${idx}`,
                 variant_id: variant.variant_id || `${product.id}_var_${idx}`,
                 name: variant.name,
                 retail_price: (variant.price ?? 0).toString(),
-                ...resolveDualPrice(variant),
+                // Catalog variants already carry resolved dual pricing.
+                ...(variant.price_cash !== undefined ? { price_cash: variant.price_cash } : {}),
+                ...(variant.price_points !== undefined ? { price_points: variant.price_points } : {}),
                 size: variant.size || 'One Size',
                 color: variant.color || 'Default',
                 product: {

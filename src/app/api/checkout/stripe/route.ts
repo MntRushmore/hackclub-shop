@@ -175,12 +175,27 @@ export async function POST(request: Request) {
             url && /^https?:\/\//i.test(url) ? url : undefined;
 
         const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = validation.items!.map(item => {
+            // Stripe is the source of truth for the catalog: bill by the variant's
+            // Stripe Price id when we have one. The Price already carries the USD
+            // amount + tax_behavior, and its Product carries the tax_code, so Stripe
+            // Tax classifies the line correctly without per-line price_data.
+            //
+            // BUT only when the verified amount matches the imported Price — admins
+            // can pay a points-derived cash equivalent (itemCashCost differs from the
+            // variant's list price_cash). If they diverge, fall back to price_data so
+            // the customer is billed exactly the verified amount.
+            const verifiedCents = Math.round(itemCashCost(item) * 100);
+            const listCents = Math.round((item.priceCash ?? 0) * 100);
+            if (item.stripePriceId && verifiedCents === listCents) {
+                return { quantity: item.quantity, price: item.stripePriceId };
+            }
+
             const img = absoluteImage(item.thumbnail_url);
             return {
                 quantity: item.quantity,
                 price_data: {
                     currency: 'usd',
-                    unit_amount: Math.round(itemCashCost(item) * 100),
+                    unit_amount: verifiedCents,
                     // Stripe Tax: USD is tax-exclusive (US/B2B convention — tax is
                     // added on top of the price the shopper sees).
                     ...(taxEnabled ? { tax_behavior: 'exclusive' as const } : {}),

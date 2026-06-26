@@ -20,9 +20,9 @@
 
 import { Redis } from '@upstash/redis';
 import { Order } from '../types/Order';
-import { Product, ProductVariant } from '../types/Admin';
 import { getVariantStocks } from './inventory';
 import { readReceipts, Receipt } from './costing';
+import { getCatalogProducts, type CatalogProduct, type CatalogVariant } from './catalog';
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -55,23 +55,20 @@ export async function loadAllOrders(): Promise<Order[]> {
     return orders.filter((o) => !o.isTest);
 }
 
-export async function loadAllProducts(): Promise<Product[]> {
-    const products: Product[] = [];
+export async function loadAllProducts(): Promise<CatalogProduct[]> {
+    // Stripe is the source of truth for the catalog (incl. unitCost + stock, which
+    // ride in Stripe Price metadata). Read the same projection everything else does.
     try {
-        const keys = await redis.keys('product:*');
-        for (const key of keys) {
-            const p = await redis.get<Product>(key);
-            if (p) products.push(p);
-        }
+        return await getCatalogProducts();
     } catch (err) {
         console.error('[finance] loadAllProducts failed:', err instanceof Error ? err.message : err);
+        return [];
     }
-    return products;
 }
 
 /** variantId → variant, for cost fallback + naming. */
-function indexVariants(products: Product[]): Map<string, { variant: ProductVariant; product: Product }> {
-    const map = new Map<string, { variant: ProductVariant; product: Product }>();
+function indexVariants(products: CatalogProduct[]): Map<string, { variant: CatalogVariant; product: CatalogProduct }> {
+    const map = new Map<string, { variant: CatalogVariant; product: CatalogProduct }>();
     for (const p of products) {
         for (const v of p.variants || []) {
             map.set(String(v.variant_id || v.id), { variant: v, product: p });
@@ -199,7 +196,7 @@ export async function getInventoryValuation(): Promise<Valuation> {
 /** Resolve a sold line's per-unit cost: captured-at-sale first, else current variant cost. */
 function lineUnitCost(
     item: Order['items'][number],
-    variants: Map<string, { variant: ProductVariant; product: Product }>,
+    variants: Map<string, { variant: CatalogVariant; product: CatalogProduct }>,
 ): { cost: number; estimated: boolean } {
     if (typeof item.unitCost === 'number' && item.unitCost >= 0) {
         return { cost: item.unitCost, estimated: false };

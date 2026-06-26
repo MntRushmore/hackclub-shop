@@ -1,38 +1,28 @@
 import { NextResponse } from 'next/server';
-import { Redis } from '@upstash/redis';
-import { resolveDualPrice } from '../../../lib/variantPricing';
+import { getCatalogProducts } from '../../../lib/catalog';
 import { getVariantStocks } from '../../../lib/inventory';
-
-const redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL!,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-});
 
 export async function GET() {
   try {
-    const keys = await redis.keys('product:*');
-    const rawProducts: any[] = [];
-    for (const key of keys) {
-        const product = await redis.get<any>(key);
-        // Draft products (e.g. created from an accepted sourcing quote) are not yet
-        // for sale — never surface them on the storefront until published.
-        if (product && !product.draft) rawProducts.push(product);
-    }
+    // Stripe is the source of truth for the catalog; getCatalogProducts reads the
+    // Stripe-fed projection (cache, with a live-Stripe fallback). Draft products
+    // (e.g. created from an accepted sourcing quote) are never surfaced for sale.
+    const rawProducts = (await getCatalogProducts()).filter((p) => !p.draft);
 
     // Enrich variants with live availability in one batched stock read. `available`
     // is null for untracked variants (unlimited) and a number when stock is tracked.
-    const variantIds = rawProducts.flatMap((p: any) =>
-        (p.variants || []).map((v: any, idx: number) => v.variant_id || v.id || `${p.id}_var_${idx}`),
+    const variantIds = rawProducts.flatMap((p) =>
+        (p.variants || []).map((v, idx) => v.variant_id || v.id || `${p.id}_var_${idx}`),
     );
     const stocks = await getVariantStocks(variantIds);
 
-    const products = rawProducts.map((product: any) => ({
+    const products = rawProducts.map((product) => ({
         id: product.id,
         name: product.name,
         thumbnail_url: product.thumbnail_url,
         category: product.category || null,
         createdAt: product.createdAt || null,
-        sync_variants: (product.variants || []).map((variant: any, idx: number) => {
+        sync_variants: (product.variants || []).map((variant, idx) => {
             const variantId = variant.variant_id || variant.id || `${product.id}_var_${idx}`;
             const available = stocks[variantId]?.available ?? null;
             return {
@@ -40,7 +30,9 @@ export async function GET() {
                 variant_id: variantId,
                 name: variant.name,
                 retail_price: (variant.price ?? 0).toString(),
-                ...resolveDualPrice(variant),
+                // Catalog variants already carry resolved dual pricing.
+                ...(variant.price_cash !== undefined ? { price_cash: variant.price_cash } : {}),
+                ...(variant.price_points !== undefined ? { price_points: variant.price_points } : {}),
                 size: variant.size || 'One Size',
                 color: variant.color || 'Default',
                 available, // null = unlimited; number = units left

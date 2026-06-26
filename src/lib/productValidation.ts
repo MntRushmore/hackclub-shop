@@ -1,25 +1,4 @@
-import { Redis } from '@upstash/redis';
-import { resolveDualPrice } from './variantPricing';
-
-interface ProductVariant {
-    id: string;
-    variant_id: string;
-    name: string;
-    price: number;
-    price_cash?: number;
-    price_points?: number;
-    // legacy fields still present on older Redis records; resolveDualPrice folds them in.
-    payment_mode?: 'balance_only' | 'points_only' | 'mixed';
-    price_balance?: number;
-    price_balance_full?: number;
-    price_points_full?: number;
-    pointsPrice?: number;
-    size?: string;
-    color?: string;
-    image_url?: string;
-    stock?: number;
-    unitCost?: number; // finance: cost basis per unit (USD), captured onto sold lines
-}
+import { getCatalogProducts, getCatalogProduct, type CatalogProduct } from './catalog';
 
 interface CartItemForValidation {
     id: string;
@@ -29,37 +8,12 @@ interface CartItemForValidation {
     variant_id?: string;
 }
 
-interface AdminProduct {
-    id: string;
-    name: string;
-    thumbnail_url?: string;
-    image_url?: string;
-    category?: string;
-    variants: ProductVariant[];
-}
-
-const redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL!,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-});
-
-async function loadProducts(): Promise<AdminProduct[]> {
-    try {
-        const keys = await redis.keys('product:*');
-        const products: AdminProduct[] = [];
-
-        for (const key of keys) {
-            const product = await redis.get<AdminProduct>(key);
-            if (product) {
-                products.push(product);
-            }
-        }
-
-        return products;
-    } catch (error) {
-        console.error('Failed to load products from Redis:', error);
-        return [];
-    }
+// Stripe is the source of truth for the catalog; the validation layer reads the
+// same projection (`CatalogProduct`) the storefront does, so a verified price can
+// never drift from what the shopper saw. Catalog variants already carry resolved
+// dual pricing (price_cash / price_points) and the Stripe Price id for checkout.
+async function loadProducts(): Promise<CatalogProduct[]> {
+    return getCatalogProducts();
 }
 
 export interface VerifiedCartItem {
@@ -72,6 +26,7 @@ export interface VerifiedCartItem {
     thumbnail_url?: string;
     variantId: string;      // canonical variant id, for stock reservation
     unitCost?: number;      // finance: cost basis per unit (USD) at time of sale
+    stripePriceId?: string; // the Stripe Price to bill (lets checkout use price_id)
 }
 
 /**
@@ -118,7 +73,8 @@ export async function validateCartItems(items: CartItemForValidation[]): Promise
             return { valid: false, error: `Variant not found for ${item.name}` };
         }
 
-        const { price_cash, price_points } = resolveDualPrice(variant);
+        const price_cash = variant.price_cash;
+        const price_points = variant.price_points;
 
         // Cross-check the client-sent cash price against the resolved one. Cart carries
         // the USD price as `price` ("0" for points-only items), so the expected value is
@@ -146,6 +102,7 @@ export async function validateCartItems(items: CartItemForValidation[]): Promise
             thumbnail_url: variant.image_url || product.image_url || product.thumbnail_url,
             variantId: String(variant.variant_id || variant.id),
             unitCost: typeof variant.unitCost === 'number' && variant.unitCost >= 0 ? variant.unitCost : undefined,
+            stripePriceId: variant.stripePriceId,
         });
     }
 
@@ -157,7 +114,6 @@ export async function validateCartItems(items: CartItemForValidation[]): Promise
     };
 }
 
-export async function getProductById(productId: string): Promise<AdminProduct | null> {
-    const product = await redis.get<AdminProduct>(`product:${productId}`);
-    return product || null;
+export async function getProductById(productId: string): Promise<CatalogProduct | null> {
+    return getCatalogProduct(productId);
 }
