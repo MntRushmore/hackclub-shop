@@ -42,3 +42,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .gstack/
+
+# AI agent tooling / skills (local scaffolding, not app code)
+.agents/
+.claude/
+.pi/
+skills-lock.json
