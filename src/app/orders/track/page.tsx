@@ -196,6 +196,10 @@ const TrackInner = () => {
                         Signed in with Hack Club?{' '}
                         <Link href="/orders" className="text-hackclub-blue font-bold hover:underline">See all your orders</Link>
                     </p>
+                    <p className="text-center text-sm text-hackclub-muted mt-2">
+                        Questions about an order? Email{' '}
+                        <a href="mailto:shop@hackclub.com" className="text-hackclub-blue font-bold hover:underline">shop@hackclub.com</a>
+                    </p>
                 </motion.div>
             </div>
         </div>

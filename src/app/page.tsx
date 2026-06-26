@@ -224,6 +224,10 @@ const MainPage = () => {
               <a href="https://hackclub.com/hackathons/" className="underline hover:decoration-wavy text-hackclub-muted hover:text-white transition-colors" target="_blank" rel="noopener noreferrer">
                 hackathons
               </a>
+              <span className="text-hackclub-muted">|</span>
+              <a href="mailto:shop@hackclub.com" className="underline hover:decoration-wavy text-hackclub-muted hover:text-white transition-colors">
+                shop@hackclub.com
+              </a>
             </div>            <p className="text-hackclub-muted text-sm">
               © 2026 Hack Club · 501(c)(3) nonprofit (EIN: 81-2908499)
             </p>

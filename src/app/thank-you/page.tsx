@@ -87,7 +87,7 @@ const ThankYouInner = () => {
     status === 'paid'
       ? 'Your order has been successfully placed.'
       : status === 'notfound'
-        ? "We couldn't find that order. If you were charged, contact us and we'll sort it out."
+        ? "We couldn't find that order. If you were charged, get in touch and we'll sort it out."
         : status === 'slow'
           ? "Your payment is taking a little longer than usual to confirm. If you completed it, you're all set — we'll email your confirmation as soon as it lands."
           : 'Your payment is being confirmed. This usually takes a few seconds.';
@@ -101,6 +101,13 @@ const ThankYouInner = () => {
       )}
       {status === 'paid' && (
         <p className="text-hackclub-muted mb-8">A confirmation has been sent to your email.</p>
+      )}
+      {status === 'notfound' && (
+        <p className="text-hackclub-muted mb-8">
+          Email{' '}
+          <a href="mailto:shop@hackclub.com" className="text-hackclub-red font-bold hover:underline">shop@hackclub.com</a>
+          {' '}and we&apos;ll help.
+        </p>
       )}
       <div className="flex flex-wrap items-center justify-center gap-3 mt-2">
         <Link href="/shop" className="inline-block bg-hackclub-red hover:bg-hackclub-orange text-white font-bold px-8 py-3 rounded-full shadow-lg transition-colors">Continue Shopping</Link>
