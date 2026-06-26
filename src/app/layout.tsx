@@ -3,6 +3,7 @@ import { PointsProvider } from '../context/PointsContext';
 import AuthProvider from '../context/AuthProvider';
 import '../styles/globals.css';
 import Navigation from './components/Navigation';
+import MotionPreferences from './components/MotionPreferences';
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -22,8 +23,10 @@ export default function RootLayout({
         <AuthProvider>
           <PointsProvider>
             <CartProvider>
-              <Navigation />
-              {children}
+              <MotionPreferences>
+                <Navigation />
+                <main id="main-content">{children}</main>
+              </MotionPreferences>
             </CartProvider>
           </PointsProvider>
         </AuthProvider>

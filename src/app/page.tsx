@@ -13,6 +13,7 @@ interface DraggableSticker {
   initialX: number;
   initialY: number;
   rotation: number;
+  priority?: boolean;
 }
 
 const DraggableImage: React.FC<{ sticker: DraggableSticker }> = ({ sticker }) => {
@@ -107,6 +108,7 @@ const DraggableImage: React.FC<{ sticker: DraggableSticker }> = ({ sticker }) =>
         alt={sticker.alt}
         width={sticker.width}
         height={sticker.height}
+        priority={sticker.priority}
         style={{
           transform: `rotate(${sticker.rotation}deg) perspective(800px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) scale(${
             isDragging ? '0.95' : (tilt.x !== 0 || tilt.y !== 0 ? '1.1' : '1')
@@ -131,6 +133,7 @@ const MainPage = () => {
       initialX: 100,
       initialY: 200,
       rotation: 12,
+      priority: true, // flagged as LCP by Next.js — preload it
     },
     {
       id: '2',
