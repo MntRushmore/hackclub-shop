@@ -20,10 +20,11 @@ export async function GET() {
     }
 
     try {
-        const orderKeys = await redis.keys('user:*:orders');
         const orders: (Order & { userId: string })[] = [];
 
-        for (const key of orderKeys) {
+        // Student / points orders live in per-user arrays (`user:{id}:orders`).
+        const studentKeys = await redis.keys('user:*:orders');
+        for (const key of studentKeys) {
             const userId = key.split(':')[1];
             const userOrders = await redis.get<Order[]>(key);
             if (userOrders) {
@@ -31,6 +32,15 @@ export async function GET() {
                     orders.push({ ...o, userId });
                 }
             }
+        }
+
+        // Guest / Stripe orders live as single `order:{id}` keys (created unpaid,
+        // finalized by the Stripe webhook). These were previously NOT surfaced in
+        // the admin list, so paid guest orders looked like they "never came in".
+        const guestKeys = await redis.keys('order:*');
+        for (const key of guestKeys) {
+            const o = await redis.get<Order>(key);
+            if (o && o.id) orders.push({ ...o, userId: o.userId || '' });
         }
 
         orders.sort(
