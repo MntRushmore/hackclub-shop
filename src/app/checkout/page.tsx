@@ -35,6 +35,12 @@ const Checkout = () => {
     const [selectedRate, setSelectedRate] = useState<SelectedRate | null>(null);
     const [checkoutData, setCheckoutData] = useState<Record<string, CheckoutValue>>({});
     const [guestEmail, setGuestEmail] = useState('');
+    // Inline email validation: only surface the error once the parent has left
+    // the field (blur), so we don't nag mid-typing, but they learn it's wrong
+    // before they hit Pay instead of at the worst possible moment.
+    const [emailTouched, setEmailTouched] = useState(false);
+    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail);
+    const showEmailError = emailTouched && guestEmail.length > 0 && !emailValid;
 
     // Prefill the receipt email from the signed-in session, but only once and
     // only if the shopper hasn't typed their own. Signed-in parents now pay by
@@ -389,16 +395,23 @@ const Checkout = () => {
                             receipt + confirmation; not re-asked anywhere else on this page. */}
                         {!payWithPoints && cart.length > 0 && (
                             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-2xl bg-hackclub-smoke/30 border-2 border-hackclub-smoke space-y-2">
-                                <label className="block font-bold text-hackclub-dark">Email</label>
+                                <label htmlFor="guest-email" className="block font-bold text-hackclub-dark">Email</label>
                                 <input
+                                    id="guest-email"
                                     type="email"
                                     placeholder="you@example.com"
                                     autoComplete="email"
                                     value={guestEmail}
                                     onChange={(e) => setGuestEmail(e.target.value)}
-                                    className="w-full px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus-visible:border-hackclub-red focus-visible:ring-2 focus-visible:ring-hackclub-red/40 text-hackclub-dark font-medium"
+                                    onBlur={() => setEmailTouched(true)}
+                                    aria-invalid={showEmailError}
+                                    className={`w-full px-3 py-2 border-2 rounded-lg focus:outline-none focus-visible:ring-2 text-hackclub-dark font-medium transition-colors ${showEmailError ? 'border-hackclub-red focus-visible:border-hackclub-red focus-visible:ring-hackclub-red/40' : 'border-hackclub-smoke focus-visible:border-hackclub-red focus-visible:ring-hackclub-red/40'}`}
                                 />
-                                <p className="text-xs text-hackclub-muted">For your order confirmation &amp; tracking. You&apos;ll only enter your card on Stripe&apos;s secure page — your shipping address below is passed along, so you won&apos;t retype it.</p>
+                                {showEmailError ? (
+                                    <p className="text-xs text-hackclub-red font-bold">Please enter a valid email so we can send your confirmation.</p>
+                                ) : (
+                                    <p className="text-xs text-hackclub-muted">For your order confirmation &amp; tracking. You&apos;ll only enter your card on Stripe&apos;s secure page, so your shipping address below is passed along and you won&apos;t retype it.</p>
+                                )}
                             </motion.div>
                         )}
 
@@ -592,6 +605,15 @@ const Checkout = () => {
                                 )}
                             </AnimatePresence>
                         </motion.button>
+
+                        {/* Last thing a parent reads before committing: who they're
+                            supporting and that payment is secure. */}
+                        {!payWithPoints && (
+                            <p className="text-center text-xs text-hackclub-muted font-bold leading-relaxed">
+                                You&apos;re supporting Hack Club, a 501(c)(3) nonprofit. All proceeds
+                                fund teenagers who build and ship real things. Payment is secure.
+                            </p>
+                        )}
                     </div>
                 </div>
             </motion.div>

@@ -220,12 +220,25 @@ const Shop = () => {
             
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 <div className="mb-8">
-                    <h1 className="text-5xl sm:text-6xl font-black text-hackclub-dark mb-4">
-                        Browse Merch
+                    <h1 className="text-5xl sm:text-6xl font-black text-hackclub-dark mb-4" style={{ letterSpacing: "-0.02em" }}>
+                        Wear it proudly.
                     </h1>
-                    <p className="text-xl text-hackclub-slate font-bold">
-                        Stickers, shirts, and more cool stuff
+                    <p className="text-xl text-hackclub-slate font-bold max-w-2xl">
+                        Every piece supports the teenagers who build, ship, and dream at Hack Club.
                     </p>
+                    {/* Trust strip: carries the homepage's nonprofit framing into the
+                        buy flow so the reason-to-buy doesn't evaporate at the door. */}
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-5 text-sm font-bold text-hackclub-muted">
+                        <span className="inline-flex items-center gap-1.5">
+                            <span className="text-hackclub-red">●</span> 501(c)(3) nonprofit
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                            <span className="text-hackclub-red">●</span> All proceeds support teenagers
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                            <span className="text-hackclub-red">●</span> Ships to your door
+                        </span>
+                    </div>
                 </div>
 
                 {/* Search + sort */}
@@ -238,7 +251,7 @@ const Shop = () => {
                             type="search"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
-                            placeholder="Search merch…"
+                            placeholder="Search products…"
                             aria-label="Search products"
                             className="w-full pl-11 pr-4 py-3 rounded-full border-2 border-hackclub-smoke bg-white text-hackclub-dark font-medium focus:outline-none focus-visible:border-hackclub-red focus-visible:ring-2 focus-visible:ring-hackclub-red/40 transition-colors"
                         />
@@ -254,7 +267,7 @@ const Shop = () => {
                         <option value="price-asc">Price: low to high</option>
                         <option value="price-desc">Price: high to low</option>
                         <option value="newest">Newest</option>
-                        <option value="name">Name (A–Z)</option>
+                        <option value="name">Name (A to Z)</option>
                     </select>
                 </div>
 
@@ -283,7 +296,7 @@ const Shop = () => {
                             Admin: show all products
                         </span>
                         <span className="text-hackclub-muted text-xs">
-                            {isAdminMode ? 'Viewing every product — pick points or HCB at checkout.' : 'Currently shopping as a student.'}
+                            {isAdminMode ? 'Viewing every product. Pick points or Hack Club Bank at checkout.' : 'Currently shopping the public storefront.'}
                         </span>
                     </label>
                 )}
@@ -306,10 +319,10 @@ const Shop = () => {
                             </svg>
                         </div>
                         <p className="text-hackclub-dark font-black text-lg">
-                            {query || category !== 'all' ? 'No merch matches that' : 'No merch yet'}
+                            {query || category !== 'all' ? 'Nothing matches that' : 'New products coming soon'}
                         </p>
                         <p className="text-hackclub-slate font-medium mt-1">
-                            {query || category !== 'all' ? 'Try a different search or category.' : 'Check back soon!'}
+                            {query || category !== 'all' ? 'Try a different search or category.' : 'Check back soon for new ways to support Hack Club.'}
                         </p>
                         {(query || category !== 'all') && (
                             <button

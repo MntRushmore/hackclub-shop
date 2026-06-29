@@ -208,6 +208,10 @@ const CartModal: React.FC<CartModalProps> = ({ isOpen, onClose }) => {
                 >
                   Checkout →
                 </motion.button>
+                {/* Reinforce the cause at the moment of checkout. */}
+                <p className="text-center text-xs text-hackclub-muted font-bold">
+                  Supporting a 501(c)(3) nonprofit. Proceeds fund teenagers at Hack Club.
+                </p>
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}

@@ -181,7 +181,7 @@ const ProductPage = () => {
                         {variants.length > 0 && (
                             <div className="mb-8">
                                 <label htmlFor="variant" className="block text-lg font-bold text-hackclub-dark mb-3">
-                                    Select Variant:
+                                    Choose your size:
                                 </label>
                                 <select
                                     id="variant"
@@ -197,7 +197,11 @@ const ProductPage = () => {
                                     className="border-2 border-gray-300 rounded-xl p-3 w-full bg-white text-hackclub-dark font-bold focus:outline-none focus-visible:border-hackclub-red focus-visible:ring-2 focus-visible:ring-hackclub-red/40 transition-colors"
                                 >
                                     {variants.map((variant, idx) => (
-                                        <option key={`${variant.id || variant.variant_id}_${idx}`} value={variant.id || variant.variant_id}>
+                                        <option
+                                            key={`${variant.id || variant.variant_id}_${idx}`}
+                                            value={variant.id || variant.variant_id}
+                                            disabled={variant.available === 0}
+                                        >
                                             {variant.size || 'Default'} / {variant.color || 'Default'}
                                             {getDisplayPrice(variant, pathway) ? ` - ${getDisplayPrice(variant, pathway)}` : ''}
                                             {variant.available === 0 ? ' (sold out)' : ''}
@@ -231,6 +235,33 @@ const ProductPage = () => {
                                         Sign in with Hack Club to buy with points.
                                     </p>
                                 )}
+                            </div>
+                        )}
+
+                        {/* The closer: the product page is where the buy decision happens,
+                            so reinforce WHY (nonprofit, where the money goes) and remove
+                            the last unknowns (shipping, tracking). Parent-first framing. */}
+                        {anyVariantAvailable && (
+                            <div className="mt-7 pt-7 border-t border-gray-100 space-y-4">
+                                <p className="text-hackclub-slate leading-relaxed">
+                                    Every purchase supports the teenagers who build, ship, and
+                                    dream at Hack Club. You&apos;re not just buying a shirt.
+                                    You&apos;re backing a kid who makes.
+                                </p>
+                                <ul className="space-y-2.5 text-sm font-bold text-hackclub-dark">
+                                    <li className="flex items-start gap-2.5">
+                                        <span className="text-hackclub-red mt-0.5">♥</span>
+                                        <span>All proceeds support teenagers at Hack Club, a 501(c)(3) nonprofit (EIN 81-2908499).</span>
+                                    </li>
+                                    <li className="flex items-start gap-2.5">
+                                        <span className="text-hackclub-red mt-0.5">▸</span>
+                                        <span>Ships to your door with tracking. Shipping is calculated at checkout before you pay.</span>
+                                    </li>
+                                    <li className="flex items-start gap-2.5">
+                                        <span className="text-hackclub-red mt-0.5">⎙</span>
+                                        <span>Secure checkout. Your card is entered on Stripe&apos;s encrypted page, never stored here.</span>
+                                    </li>
+                                </ul>
                             </div>
                         )}
                     </div>
