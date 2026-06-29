@@ -32,6 +32,38 @@
   font-style: normal;
   font-display: swap;
 }
+/* Zarathustra — the serif display face hackclub.com uses for big headlines.
+   Self-hosted (pulled from hackclub/site) so the storefront doesn't depend on
+   their deploy at runtime. Headlines only; Phantom Sans stays the body font. */
+@font-face {
+  font-family: 'Zarathustra';
+  src: url('/fonts/hc/zarathustra-kerned.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Hero vertical photo marquee: two columns scroll opposite directions. Each
+   track holds the photo set twice, so translating by -50% loops seamlessly.
+   Pauses on hover; freezes under reduced-motion. */
+@keyframes hc-marquee-up {
+  from { transform: translateY(0); }
+  to { transform: translateY(-50%); }
+}
+@keyframes hc-marquee-down {
+  from { transform: translateY(-50%); }
+  to { transform: translateY(0); }
+}
+.hc-vtrack {
+  display: flex;
+  flex-direction: column;
+  height: max-content;
+  will-change: transform;
+}
+.hc-vmarquee:hover .hc-vtrack { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .hc-vtrack { animation: none !important; }
+}
 
 :root {
     --hackclub-red: #ec3750;

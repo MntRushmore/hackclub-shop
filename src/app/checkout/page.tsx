@@ -17,7 +17,7 @@ import LiveShippingRates, { SelectedRate } from './LiveShippingRates';
 type CheckoutValue = string | ShippingAddress;
 
 const Checkout = () => {
-    const { status } = useSession();
+    const { data: session, status } = useSession();
     const { isStudent: isStudentPathway, isAdminMode } = usePathway();
     // Admins (full-catalog mode) choose how to pay per order. Everyone else is
     // fixed: students pay points, guests pay by card via Stripe.
@@ -35,6 +35,16 @@ const Checkout = () => {
     const [selectedRate, setSelectedRate] = useState<SelectedRate | null>(null);
     const [checkoutData, setCheckoutData] = useState<Record<string, CheckoutValue>>({});
     const [guestEmail, setGuestEmail] = useState('');
+
+    // Prefill the receipt email from the signed-in session, but only once and
+    // only if the shopper hasn't typed their own. Signed-in parents now pay by
+    // card too, so this saves them retyping an address we already know.
+    const sessionEmail = session?.user?.email;
+    useEffect(() => {
+        if (sessionEmail) {
+            setGuestEmail((prev) => (prev ? prev : sessionEmail));
+        }
+    }, [sessionEmail]);
     const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
     const [checkoutFields, setCheckoutFields] = useState<CheckoutField[]>([]);
     const [loadingCheckoutInfo, setLoadingCheckoutInfo] = useState(true);

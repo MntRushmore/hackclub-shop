@@ -5,15 +5,19 @@ import { useState, useEffect, useCallback } from 'react';
 
 /**
  * The storefront pathways.
- * - 'student': signed in with Hack Club → pays with points.
- * - 'guest':   logged out → pays real money via an HCB donation.
+ * - 'guest':   the default for everyone (logged out OR a signed-in non-admin) →
+ *              pays real money by card via Stripe. The shop is now parent-facing
+ *              and everyone pays with dollars.
+ * - 'student': legacy points pathway. No longer reached through normal auth — a
+ *              signed-in non-admin now resolves to 'guest'. Kept in the type so
+ *              the points machinery (admin mode, server spend) still compiles.
  * - 'admin':   a signed-in admin who has flipped on "show all products". Sees
  *              the FULL catalog (both points- and cash-priced items) and picks
- *              points or HCB per order at checkout. Opt-in: an admin who hasn't
- *              toggled it behaves exactly like a normal 'student'.
+ *              points or card per order at checkout. Opt-in: an admin who hasn't
+ *              toggled it behaves like a normal cash shopper.
  *
- * Student/guest are derived purely from auth state. Admin mode is an explicit,
- * per-browser toggle (persisted in localStorage) available only to admins.
+ * Guest is the derived default. Admin mode is an explicit, per-browser toggle
+ * (persisted in localStorage) available only to admins.
  */
 export type Pathway = 'student' | 'guest' | 'admin';
 
@@ -84,13 +88,16 @@ export function usePathway(): PathwayState {
 
     // Admin mode only takes effect for a confirmed admin with the toggle on.
     const isAdminMode = isAdmin && adminMode;
-    const isStudent = isSignedIn && !isAdminMode;
-    const pathway: Pathway = !isSignedIn ? 'guest' : isAdminMode ? 'admin' : 'student';
+    // Everyone pays with dollars now. A signed-in non-admin resolves to the
+    // cash ('guest') pathway exactly like a logged-out shopper — only an admin
+    // who has opted into "show all products" gets the points-capable view.
+    const pathway: Pathway = isAdminMode ? 'admin' : 'guest';
+    const isStudent = false;
 
     return {
         pathway,
         isStudent,
-        isGuest: !isSignedIn,
+        isGuest: pathway === 'guest',
         isAdminMode,
         isAdmin,
         setAdminMode,

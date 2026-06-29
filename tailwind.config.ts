@@ -28,6 +28,12 @@ export default {
       },
       fontFamily: {
         sans: ['Phantom Sans', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        display: ['Zarathustra', 'Georgia', 'Times New Roman', 'serif'],
+      },
+      boxShadow: {
+        // The canonical Hack Club elevation pair: resting card → hover lift.
+        'hc-card': '0 4px 8px rgba(0,0,0,0.125)',
+        'hc-elevated': '0 1px 2px rgba(0,0,0,0.0625), 0 8px 12px rgba(0,0,0,0.125)',
       },
     },
   },

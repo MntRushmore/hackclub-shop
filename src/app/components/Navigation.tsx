@@ -171,10 +171,10 @@ const Navigation = () => {
                 Browse
               </Link>
 
-              {session && (
+              {session && isAdmin && (
                 <Link
                   href="/submit"
-                  className="text-hackclub-slate hover:text-hackclub-red font-bold text-xl transition-colors"
+                  className="text-hackclub-red hover:text-hackclub-orange font-bold text-xl transition-colors"
                 >
                   Submit
                 </Link>
