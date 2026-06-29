@@ -90,8 +90,8 @@ export default function HeroDoodleGlow({
       className={`pointer-events-none absolute inset-0 overflow-hidden ${className}`}
       style={{ maskImage: fade, WebkitMaskImage: fade }}
     >
-      {/* Base layer — always faintly visible across the whole hero. */}
-      <DoodleImg src={src} opacity={0.1} />
+      {/* Base layer — always visible across the whole hero. */}
+      <DoodleImg src={src} opacity={0.22} />
       {/* Bright layer — revealed only around the cursor. */}
       <div
         ref={glowRef}
@@ -102,7 +102,7 @@ export default function HeroDoodleGlow({
           WebkitMaskImage: revealMask,
         }}
       >
-        <DoodleImg src={src} opacity={0.5} />
+        <DoodleImg src={src} opacity={0.6} />
       </div>
     </div>
   );

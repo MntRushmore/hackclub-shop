@@ -2,6 +2,8 @@ import React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import HeroSplit from "./components/HeroSplit";
+import HCFooter from "./components/HCFooter";
+import WaveDivider from "./components/WaveDivider";
 
 /**
  * Parent-facing storefront landing, built in the Hack Club design language:
@@ -72,7 +74,7 @@ const MainPage = () => {
         </h2>
         <div className="space-y-6 text-xl text-hackclub-slate leading-relaxed">
           <p>
-            Somewhere right now, your kid is up too late, deep in a project
+            Somewhere right now, a kid is up too late, deep in a project
             nobody assigned them. A game. A website. A little robot. Something
             they decided the world should have, and then made.
           </p>
@@ -90,7 +92,10 @@ const MainPage = () => {
       </section>
 
       {/* ── WHERE THE MONEY GOES (dark, doodle-tinted) ───────────────────── */}
-      <section className="relative bg-hackclub-dark text-white py-20 sm:py-28 overflow-hidden">
+      {/* Clean straight top edge into the dark band; the scallop wave lives only
+          at the bottom of this section, where it flows into the calm FAQ band
+          (a scallop here competed with the heavy headline + doodle below it). */}
+      <section className="relative bg-hackclub-dark text-white pt-20 sm:pt-28 pb-20 sm:pb-28 overflow-hidden">
         <div aria-hidden="true" className="absolute inset-0 opacity-[0.12]">
           <Image src="/images/hc/doodle-bg.webp" alt="" fill className="object-cover object-center" />
         </div>
@@ -121,42 +126,62 @@ const MainPage = () => {
             ))}
           </div>
         </div>
+        {/* The smoke FAQ band rises into the dark section on the HC scallop wave. */}
+        <WaveDivider color="#f9fafc" />
       </section>
 
       {/* ── FAQ ──────────────────────────────────────────────────────────── */}
-      <section className="max-w-3xl mx-auto px-4 sm:px-6 py-20 sm:py-28">
-        <h2 className="font-sans font-black text-hackclub-dark mb-10 text-center leading-[1.05]"
-            style={{ fontSize: "clamp(32px, 5.5vw, 52px)", letterSpacing: "-0.02em" }}>
-          Questions parents ask
-        </h2>
-        <div className="space-y-4">
-          {FAQ.map((item) => (
-            <details key={item.q} className="group bg-white rounded-2xl shadow-hc-card overflow-hidden">
-              <summary className="flex items-center justify-between gap-4 cursor-pointer list-none px-6 py-5 font-bold text-lg text-hackclub-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hackclub-red/40 rounded-2xl">
-                {item.q}
-                <span className="text-hackclub-red text-2xl leading-none transition-transform group-open:rotate-45">+</span>
-              </summary>
-              <div className="px-6 pb-6 -mt-1 text-hackclub-slate text-lg leading-relaxed">{item.a}</div>
-            </details>
-          ))}
+      {/* Tinted background so the white cards actually read as cards (on a white
+          page they were invisible — only the faint shadow hinted at them). */}
+      <section className="bg-hackclub-smoke pt-16 sm:pt-20 pb-24">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6">
+          <h2 className="font-sans font-black text-hackclub-dark text-center leading-[1.05]"
+              style={{ fontSize: "clamp(32px, 5.5vw, 52px)", letterSpacing: "-0.02em" }}>
+            Questions parents ask
+          </h2>
+          <p className="text-lg text-hackclub-slate text-center mt-4 mb-12 max-w-xl mx-auto">
+            The honest answers, up front. Still unsure? We&apos;re a real team and
+            we read every email.
+          </p>
+          <div className="space-y-4">
+            {FAQ.map((item) => (
+              <details
+                key={item.q}
+                className="group bg-white rounded-2xl border border-black/[0.06] shadow-hc-card overflow-hidden transition-shadow duration-150 hover:shadow-hc-elevated"
+              >
+                <summary className="flex items-center justify-between gap-4 cursor-pointer list-none px-6 sm:px-7 py-5 font-bold text-lg text-hackclub-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hackclub-red/40 rounded-2xl">
+                  <span className="transition-colors group-hover:text-hackclub-red">{item.q}</span>
+                  <span aria-hidden="true" className="flex-none grid place-items-center w-7 h-7 rounded-full bg-hackclub-red/10 text-hackclub-red text-xl leading-none transition-transform duration-200 group-open:rotate-45">
+                    +
+                  </span>
+                </summary>
+                <div className="px-6 sm:px-7 pb-6 -mt-1 text-hackclub-slate text-lg leading-relaxed">{item.a}</div>
+              </details>
+            ))}
+          </div>
+          <p className="text-center text-hackclub-slate mt-10">
+            Still have a question?{" "}
+            <a href="mailto:shop@hackclub.com" className="font-bold text-hackclub-red hover:text-hackclub-orange underline decoration-2 underline-offset-2 transition-colors">
+              shop@hackclub.com
+            </a>
+          </p>
         </div>
-      </section>
 
-      {/* ── CLOSING CTA ──────────────────────────────────────────────────── */}
-      <section className="max-w-5xl mx-auto px-4 sm:px-6 pb-24">
-        <div
-          className="relative rounded-3xl px-8 py-16 sm:py-20 text-center overflow-hidden"
-          style={{ backgroundImage: "radial-gradient(ellipse farthest-corner at top left, #ff8c37, #ec3750)" }}
-        >
-          <h2 className="font-sans font-black text-white mb-4 leading-[1.05]" style={{ fontSize: "clamp(30px, 5vw, 48px)", letterSpacing: "-0.02em" }}>
+        {/* ── CLOSING CTA ──────────────────────────────────────────────── */}
+        {/* Light, on the smoke band (no heavy gradient box): bold-sans headline
+            in the page's voice, with the gradient living only in the button so
+            it echoes the hero's CTA pill. */}
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 mt-24 sm:mt-32 text-center">
+          <h2 className="font-sans font-black text-hackclub-dark mb-4 leading-[1.05]" style={{ fontSize: "clamp(30px, 5vw, 48px)", letterSpacing: "-0.02em" }}>
             Show the world you&apos;re proud.
           </h2>
-          <p className="text-xl text-white/90 max-w-xl mx-auto mb-8 leading-relaxed">
+          <p className="text-xl text-hackclub-slate max-w-xl mx-auto mb-9 leading-relaxed">
             Find something for the maker in your life, and back the next thing they build.
           </p>
           <Link
             href="/shop"
-            className="group inline-flex items-center gap-2 bg-white hover:bg-hackclub-smoke text-hackclub-red font-bold text-lg px-9 py-4 rounded-full shadow-hc-card transition-all duration-150 ease-in-out hover:scale-[1.0625] hover:shadow-hc-elevated"
+            className="group inline-flex items-center gap-2 font-bold text-lg text-white px-9 py-4 rounded-full shadow-hc-card transition-all duration-150 ease-in-out hover:scale-[1.0625] hover:shadow-hc-elevated"
+            style={{ backgroundImage: "radial-gradient(ellipse farthest-corner at top left, #ff8c37, #ec3750)" }}
           >
             <span>Shop the collection</span>
             <span className="transition-transform duration-150 group-hover:translate-x-1">→</span>
@@ -164,36 +189,8 @@ const MainPage = () => {
         </div>
       </section>
 
-      {/* ── FOOTER ───────────────────────────────────────────────────────── */}
-      <footer className="bg-black text-white py-12 relative"
-        style={{
-          backgroundImage: "linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px)",
-          backgroundSize: "50px 50px",
-        }}>
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="text-center space-y-3">
-            <p className="text-lg font-bold flex items-center justify-center gap-1">
-              made with{" "}
-              <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
-              </svg>
-              {" "}by teenagers
-            </p>
-            <div className="flex flex-wrap justify-center items-center gap-x-3 text-sm">
-              <a href="https://hackclub.com/" className="underline hover:decoration-wavy text-hackclub-muted hover:text-white transition-colors" target="_blank" rel="noopener noreferrer">hack club</a>
-              <span className="text-hackclub-muted">|</span>
-              <a href="https://hackclub.com/slack/" className="underline hover:decoration-wavy text-hackclub-muted hover:text-white transition-colors" target="_blank" rel="noopener noreferrer">slack</a>
-              <span className="text-hackclub-muted">|</span>
-              <a href="https://hackclub.com/clubs/" className="underline hover:decoration-wavy text-hackclub-muted hover:text-white transition-colors" target="_blank" rel="noopener noreferrer">clubs</a>
-              <span className="text-hackclub-muted">|</span>
-              <a href="https://hackclub.com/hackathons/" className="underline hover:decoration-wavy text-hackclub-muted hover:text-white transition-colors" target="_blank" rel="noopener noreferrer">hackathons</a>
-              <span className="text-hackclub-muted">|</span>
-              <a href="mailto:shop@hackclub.com" className="underline hover:decoration-wavy text-hackclub-muted hover:text-white transition-colors">shop@hackclub.com</a>
-            </div>
-            <p className="text-hackclub-muted text-sm">© 2026 Hack Club · 501(c)(3) nonprofit (EIN: 81-2908499)</p>
-          </div>
-        </div>
-      </footer>
+      {/* ── FOOTER (HC-style, shop content) ──────────────────────────────── */}
+      <HCFooter />
     </div>
   );
 };
