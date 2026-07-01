@@ -316,6 +316,23 @@ export default function AdminDashboard() {
                             </Link>
                         </motion.div>
 
+                        {/* Feedback calls */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.57 }}
+                        >
+                            <Link href="/admin/feedback">
+                                <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-6 hover:shadow-xl hover:border-hackclub-purple transition-all cursor-pointer group">
+                                    <div className="w-12 h-12 bg-hackclub-purple/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-hackclub-purple/20 transition-colors">
+                                        <Icon glyph="message" size={24} style={{ color: 'var(--hackclub-purple, #a633d6)' }} />
+                                    </div>
+                                    <h3 className="text-xl font-black text-hackclub-dark mb-2">Feedback calls</h3>
+                                    <p className="text-hackclub-slate text-sm">Run a parent feedback call — quick notes, emoji reactions, saved reports</p>
+                                </div>
+                            </Link>
+                        </motion.div>
+
                         {/* Admins */}
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}

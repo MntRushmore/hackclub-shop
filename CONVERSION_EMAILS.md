@@ -114,6 +114,46 @@ scarcity.
 
 ---
 
+## Pre-launch outreach email (to a handful of families first)
+
+Goal: before we release the shop to Hack Club parents wide, show it to a few
+families first and get their eyes on the merch. Sent personally by Rushil. Short
+and simple: a blurb about me, a blurb about the shop and our story, then the ask
+to set up a meeting. No pride-story cold open, no selling. Just an honest intro
+and an invitation.
+
+**Subject:** `A little something I'm building at Hack Club`
+**Preview:** `Would love to show you before anyone else sees it.`
+
+**Body:**
+
+> Hi, I'm Rushil, a philanthropy intern at Hack Club. I'm spending the summer at
+> our HQ, and my project is one I care a lot about.
+>
+> I'm building the Hack Club Shop: a small collection of merch that tells the
+> Hack Club story, so the families who love a builder have something they're
+> proud to wear, and so every dollar goes right back to teenagers. Hack Club is a
+> 501(c)(3) nonprofit, and the shop is one more way to support the kids in it.
+>
+> Before we open it up to Hack Club parents everywhere, I'd love to show it to a
+> few families first, and yours is one I really wanted to include.
+>
+> Could we set up a short meeting so I can walk you through it and hear what you
+> think? Whenever works for you.
+>
+> Thank you so much,
+> Rushil
+> Philanthropy Intern, Hack Club
+>
+> **[ Set up a time ]**  → (scheduling link)
+
+**Why:** three clean beats, who I am, what the shop is and our story, the ask, so
+it reads as a genuine note from a person, not a campaign. "Before anyone else sees
+it" makes the family feel chosen, which earns the meeting. The nonprofit line is
+one sentence of trust, not a pitch. CTA is a time to meet, not a purchase.
+
+---
+
 ## Forwardable text message (for the Zoom-call parents + word of mouth)
 
 Short enough to paste into iMessage/WhatsApp. The link preview does the visual
