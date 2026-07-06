@@ -55,11 +55,17 @@ const Checkout = () => {
     const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
     const [checkoutFields, setCheckoutFields] = useState<CheckoutField[]>([]);
     const [loadingCheckoutInfo, setLoadingCheckoutInfo] = useState(true);
-    // Donation pivot: which cart products are donation tiers (id → tier config),
-    // so the fund picker / dedication UI only appears on donation checkouts and
-    // the summary can show the tax-deductible estimate. Server re-derives all of
-    // this from the catalog — these values are display-only.
-    const [donationTiers, setDonationTiers] = useState<Record<string, { tier: string; fmvCents: number }>>({});
+    // Donation pivot: which cart products are donation tiers (id → tier config
+    // + gift options), so the fund picker / dedication / gift-choice UI only
+    // appears on donation checkouts and the summary can show the tax-deductible
+    // estimate. Server re-derives all pricing from the catalog — these values
+    // are display-only (the chosen variant_id is what gets submitted).
+    type TierInfo = {
+        tier: string;
+        fmvCents: number;
+        variants: { variant_id: string; name: string; available: number | null }[];
+    };
+    const [donationTiers, setDonationTiers] = useState<Record<string, TierInfo>>({});
     const [fundId, setFundId] = useState<string>(DEFAULT_FUND_ID);
     const [dedication, setDedication] = useState('');
     const [donorName, setDonorName] = useState('');
@@ -72,9 +78,18 @@ const Checkout = () => {
         fetch('/api/products')
             .then((r) => (r.ok ? r.json() : null))
             .then((data) => {
-                const map: Record<string, { tier: string; fmvCents: number }> = {};
+                const map: Record<string, TierInfo> = {};
                 for (const p of data?.result || []) {
-                    if (p.donation) map[String(p.id)] = { tier: p.donation.tier, fmvCents: p.donation.fmvCents || 0 };
+                    if (!p.donation) continue;
+                    map[String(p.id)] = {
+                        tier: p.donation.tier,
+                        fmvCents: p.donation.fmvCents || 0,
+                        variants: (p.sync_variants || []).map((v: any) => ({
+                            variant_id: String(v.variant_id),
+                            name: v.name,
+                            available: v.available ?? null,
+                        })),
+                    };
                 }
                 setDonationTiers(map);
             })
@@ -171,7 +186,7 @@ const Checkout = () => {
 
     if (!cartContext || cartContext.cart === null) return null;
 
-    const { cart, clearCart } = cartContext;
+    const { cart, clearCart, updateItemVariant } = cartContext;
 
     // Student (points) totals. For an admin paying points, a cash-only item
     // (no points price) is charged at 1 point = $1 — must mirror the server.
@@ -462,6 +477,36 @@ const Checkout = () => {
                             Fund choice + optional dedication and donor-wall name. */}
                         {!payWithPoints && cart.length > 0 && hasDonation && (
                             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-2xl bg-hackclub-smoke/30 border-2 border-hackclub-smoke space-y-3">
+                                {/* Gift choice: the tier page carts a placeholder gift; the
+                                    donor picks the real gift + size here. */}
+                                {cart.some((i) => (donationTiers[String(i.id)]?.variants.length || 0) > 1) && (
+                                    <div className="space-y-3 pb-1">
+                                        <p className="font-bold text-hackclub-dark">Your thank-you gift</p>
+                                        {cart.map((item) => {
+                                            const info = donationTiers[String(item.id)];
+                                            if (!info || info.variants.length <= 1) return null;
+                                            return (
+                                                <div key={String(item.id)}>
+                                                    <label htmlFor={`gift_${item.id}`} className="block text-sm font-bold text-hackclub-slate mb-1">
+                                                        {info.tier} tier{item.quantity > 1 ? ` (×${item.quantity})` : ''}
+                                                    </label>
+                                                    <select
+                                                        id={`gift_${item.id}`}
+                                                        value={String(item.variant_id ?? '')}
+                                                        onChange={(e) => updateItemVariant(item.id, e.target.value)}
+                                                        className="w-full px-3 py-2 border-2 border-hackclub-smoke rounded-lg bg-white focus:outline-none focus-visible:border-hackclub-red focus-visible:ring-2 focus-visible:ring-hackclub-red/40 text-hackclub-dark font-bold"
+                                                    >
+                                                        {info.variants.map((v) => (
+                                                            <option key={v.variant_id} value={v.variant_id} disabled={v.available === 0}>
+                                                                {v.name}{v.available === 0 ? ' (fully claimed)' : ''}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                                 <p className="font-bold text-hackclub-dark">What matters most to you?</p>
                                 <p className="text-xs text-hackclub-muted -mt-1">
                                     This tells us what you care about. Every dollar goes to Hack Club&apos;s

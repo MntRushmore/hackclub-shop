@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useContext } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from 'next/link';
 import { CartContext } from "../../../context/CartContext";
 import Image from 'next/image';
@@ -14,6 +14,7 @@ import { usePathway } from '../../../lib/usePathway';
 const ProductPage = () => {
     const params = useParams();
     const productId = params.id;
+    const router = useRouter();
 
     const { addToCart } = useContext(CartContext)!;
     const { pathway, isGuest } = usePathway();
@@ -65,6 +66,26 @@ const ProductPage = () => {
 
             addToCart(cartItem);
         }
+    };
+
+    // Donation tiers skip the variant picker entirely: the button carts the
+    // first in-stock gift as a placeholder (the donor picks their actual gift
+    // and size at checkout) and heads straight to checkout. The cart line is
+    // named after the tier, not the placeholder gift.
+    const handleDonate = () => {
+        if (!product) return;
+        const first = variants.find((v) => isAvailableOn(v, pathway) && isInStock(v));
+        if (!first) return;
+        addToCart({
+            id: product.id,
+            name: `${product.donation?.tier || product.name} donation`,
+            price: String(getCashPrice(first) || 0),
+            price_cash: getCashPrice(first) || undefined,
+            price_points: getPointsPrice(first) || undefined,
+            thumbnail_url: first.product.image,
+            variant_id: first.variant_id || first.id,
+        });
+        router.push('/checkout');
     };
 
     if (loading) {
@@ -136,6 +157,9 @@ const ProductPage = () => {
     const selectedInStock = isInStock(selectedVariant);
     const selectedAvailable = !!selectedVariant && isAvailableOn(selectedVariant, pathway) && selectedInStock;
     const anyVariantAvailable = variants.some((variant) => isAvailableOn(variant, pathway));
+    // Donation tiers: buyable while ANY gift option still has stock (the donor
+    // picks the exact gift/size at checkout).
+    const anyGiftInStock = variants.some((v) => isAvailableOn(v, pathway) && isInStock(v));
     const selectedStock = selectedVariant?.available;
     const selectedLow = typeof selectedStock === 'number' && selectedStock > 0 && selectedStock <= 5;
 
@@ -153,13 +177,25 @@ const ProductPage = () => {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 <div className="grid md:grid-cols-2 gap-12 items-start">
                     <div className="bg-white rounded-2xl p-8 shadow-lg border-2 border-gray-200">
-                        <Image
-                            src={selectedVariant?.product.image || product.thumbnail_url}
-                            alt={product.name}
-                            width={600}
-                            height={600}
-                            className="w-full h-auto object-contain"
-                        />
+                        {selectedVariant?.product.image || product.thumbnail_url ? (
+                            <Image
+                                src={selectedVariant?.product.image || product.thumbnail_url}
+                                alt={product.name}
+                                width={600}
+                                height={600}
+                                className="w-full h-auto object-contain"
+                            />
+                        ) : (
+                            /* No photography yet: a branded panel instead of a broken image. */
+                            <div className="aspect-square w-full rounded-xl bg-hackclub-dark flex flex-col items-center justify-center text-center p-8">
+                                <span className="text-xs font-black uppercase tracking-widest text-hackclub-red mb-3">
+                                    {product.donation ? `${product.donation.tier} tier` : 'Hack Club Shop'}
+                                </span>
+                                <span className="text-white font-black text-4xl" style={{ letterSpacing: '-0.02em' }}>
+                                    {product.name}
+                                </span>
+                            </div>
+                        )}
                     </div>
 
                     <div className="bg-white rounded-2xl p-8 shadow-lg border-2 border-gray-200">
@@ -206,10 +242,10 @@ const ProductPage = () => {
                             </div>
                         )}
 
-                        {variants.length > 0 && (
+                        {!donation && variants.length > 0 && (
                             <div className="mb-8">
                                 <label htmlFor="variant" className="block text-lg font-bold text-hackclub-dark mb-3">
-                                    {donation ? 'Choose your thank-you gift:' : 'Choose your size:'}
+                                    Choose your size:
                                 </label>
                                 <select
                                     id="variant"
@@ -241,21 +277,30 @@ const ProductPage = () => {
                         )}
 
                         {anyVariantAvailable ? (
-                            <motion.button
-                                whileHover={selectedAvailable ? { scale: 1.05 } : undefined}
-                                whileTap={selectedAvailable ? { scale: 0.95 } : undefined}
-                                disabled={!selectedAvailable}
-                                className={
-                                    selectedAvailable
-                                        ? "w-full bg-hackclub-red hover:bg-hackclub-orange text-white font-black text-lg py-4 rounded-full transition-all shadow-lg hover:shadow-xl"
-                                        : "w-full bg-gray-200 text-gray-400 font-black text-lg py-4 rounded-full cursor-not-allowed"
-                                }
-                                onClick={handleAddToCart}
-                            >
-                                {selectedAvailable
-                                    ? (donation ? `Donate ${dollars(donationAmount)} →` : 'Add to Cart')
-                                    : !selectedInStock ? (donation ? 'Fully claimed' : 'Sold out') : 'Not available'}
-                            </motion.button>
+                            <>
+                                <motion.button
+                                    whileHover={donation || selectedAvailable ? { scale: 1.05 } : undefined}
+                                    whileTap={donation || selectedAvailable ? { scale: 0.95 } : undefined}
+                                    disabled={donation ? !anyGiftInStock : !selectedAvailable}
+                                    className={
+                                        (donation ? anyGiftInStock : selectedAvailable)
+                                            ? "w-full bg-hackclub-red hover:bg-hackclub-orange text-white font-black text-lg py-4 rounded-full transition-all shadow-lg hover:shadow-xl"
+                                            : "w-full bg-gray-200 text-gray-400 font-black text-lg py-4 rounded-full cursor-not-allowed"
+                                    }
+                                    onClick={donation ? handleDonate : handleAddToCart}
+                                >
+                                    {donation
+                                        ? (anyGiftInStock ? `Donate ${dollars(donationAmount)} →` : 'Fully claimed')
+                                        : selectedAvailable ? 'Add to Cart' : !selectedInStock ? 'Sold out' : 'Not available'}
+                                </motion.button>
+                                {donation && (
+                                    <p className="mt-3 text-center text-sm font-bold text-hackclub-muted">
+                                        {variants.length > 1
+                                            ? "You'll pick your thank-you gift and size at checkout."
+                                            : `Your thank-you gift: ${variants[0]?.name || 'included'}.`}
+                                    </p>
+                                )}
+                            </>
                         ) : (
                             <div className="rounded-2xl border-2 border-gray-200 bg-hackclub-smoke p-5 text-center">
                                 <p className="text-hackclub-dark font-bold">

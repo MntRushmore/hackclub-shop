@@ -19,6 +19,9 @@ interface CartContextType {
     addToCart: (item: Omit<CartItem, 'quantity'>) => void;
     removeFromCart: (id: string | number) => void;
     updateQuantity: (id: string | number, quantity: number) => void;
+    // Swap which variant a cart line points at (donation tiers: the thank-you
+    // gift/size is chosen at checkout, after the tier is already in the cart).
+    updateItemVariant: (id: string | number, variant_id: string | number, patch?: { name?: string; thumbnail_url?: string }) => void;
     clearCart: () => void;
     totalPrice: number;
 }
@@ -146,6 +149,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
     };
 
+    const updateItemVariant = (id: string | number, variant_id: string | number, patch?: { name?: string; thumbnail_url?: string }) => {
+        setCart((prevCart) => {
+            if (!prevCart) return [];
+            return prevCart.map((item) =>
+                item.id === id ? { ...item, variant_id, ...(patch || {}) } : item,
+            );
+        });
+    };
+
     const clearCart = () => {
         setCart([]);
     };
@@ -157,7 +169,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     return (
-        <CartContext.Provider value={{ cart, addToCart, removeFromCart, updateQuantity, clearCart, totalPrice }}>
+        <CartContext.Provider value={{ cart, addToCart, removeFromCart, updateQuantity, updateItemVariant, clearCart, totalPrice }}>
             {children}
         </CartContext.Provider>
     );
