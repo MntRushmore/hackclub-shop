@@ -10,7 +10,7 @@ import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
 export const alt =
-  "Hack Club Shop. You raised a Hack Clubber. Every purchase supports teenagers at Hack Club.";
+  "Hack Club Shop. You raised a Hack Clubber. Back them with a donation, and wear the proof.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -83,8 +83,8 @@ export default function OgImage() {
               maxWidth: 900,
             }}
           >
-            Every purchase supports the teenagers who build, ship, and dream at
-            Hack Club.
+            Back them with a donation, and wear the proof. Every dollar funds
+            the teenagers who build at Hack Club.
           </div>
         </div>
 
