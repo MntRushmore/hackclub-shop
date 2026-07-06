@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 import { Order } from '../../../types/Order';
 import { ShippingRate } from '../../../lib/shipping';
 
@@ -148,7 +147,7 @@ export default function ShippingPanel({
                         type="button"
                         onClick={buyChosen}
                         disabled={buying === 'chosen'}
-                        className="px-4 py-2 rounded-xl text-sm font-bold text-white bg-hackclub-green hover:bg-green-600 transition-colors disabled:opacity-50"
+                        className="px-4 py-2 rounded-lg text-sm font-bold text-white bg-hackclub-green hover:bg-green-600 transition-colors disabled:opacity-50"
                         title={`Customer paid for ${chosen.carrier} ${chosen.service}`}
                     >
                         {buying === 'chosen' ? 'Buying…' : `Buy customer's label (${chosen.carrier} ${chosen.service})`}
@@ -157,7 +156,7 @@ export default function ShippingPanel({
                 <button
                     type="button"
                     onClick={fetchRates}
-                    className="px-4 py-2 rounded-xl text-sm font-bold text-white bg-hackclub-blue hover:bg-blue-600 transition-colors"
+                    className="px-4 py-2 rounded-lg text-sm font-bold text-white bg-hackclub-blue hover:bg-blue-600 transition-colors"
                 >
                     {chosen ? 'Other options' : 'Ship & fulfill'}
                 </button>
@@ -166,11 +165,9 @@ export default function ShippingPanel({
     }
 
     return (
-        <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
+        <div
             onClick={stop}
-            className="mt-4 w-full p-4 rounded-xl border-2 border-hackclub-smoke bg-hackclub-snow"
+            className="mt-4 w-full p-4 rounded-xl border border-gray-200 bg-gray-50"
         >
             <div className="flex items-center justify-between mb-3">
                 <p className="text-sm font-black text-hackclub-dark">Buy postage (Pirate Ship)</p>
@@ -183,14 +180,14 @@ export default function ShippingPanel({
                 <button
                     type="button"
                     onClick={(e) => { stop(e); setMode('rates'); }}
-                    className={`px-3 py-1.5 rounded-full text-xs font-bold border-2 ${mode === 'rates' ? 'bg-hackclub-dark text-white border-hackclub-dark' : 'bg-white text-hackclub-slate border-hackclub-smoke'}`}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold border ${mode === 'rates' ? 'bg-hackclub-dark text-white border-hackclub-dark' : 'bg-white text-hackclub-slate border-gray-300'}`}
                 >
                     Buy a label
                 </button>
                 <button
                     type="button"
                     onClick={(e) => { stop(e); setMode('manual'); }}
-                    className={`px-3 py-1.5 rounded-full text-xs font-bold border-2 ${mode === 'manual' ? 'bg-hackclub-dark text-white border-hackclub-dark' : 'bg-white text-hackclub-slate border-hackclub-smoke'}`}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold border ${mode === 'manual' ? 'bg-hackclub-dark text-white border-hackclub-dark' : 'bg-white text-hackclub-slate border-gray-300'}`}
                 >
                     Enter tracking manually
                 </button>
@@ -210,7 +207,7 @@ export default function ShippingPanel({
                     ) : (
                         <div className="space-y-2">
                             {rates.map((r) => (
-                                <div key={r.id} className="flex items-center justify-between bg-white rounded-lg border-2 border-hackclub-smoke px-3 py-2">
+                                <div key={r.id} className="flex items-center justify-between bg-white rounded-lg border border-gray-200 px-3 py-2">
                                     <div className="text-sm">
                                         <span className="font-bold text-hackclub-dark">{r.carrier} {r.service}</span>
                                         {r.estDeliveryDays != null && (
@@ -242,7 +239,7 @@ export default function ShippingPanel({
                             value={carrier}
                             onChange={(e) => setCarrier(e.target.value)}
                             onClick={stop}
-                            className="rounded-lg border-2 border-hackclub-smoke px-3 py-2 text-sm font-bold text-hackclub-dark"
+                            className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-hackclub-dark"
                         >
                             {['USPS', 'UPS', 'FedEx', 'DHL', 'Other'].map((c) => <option key={c}>{c}</option>)}
                         </select>
@@ -251,7 +248,7 @@ export default function ShippingPanel({
                             onChange={(e) => setService(e.target.value)}
                             onClick={stop}
                             placeholder="Service (optional)"
-                            className="flex-1 rounded-lg border-2 border-hackclub-smoke px-3 py-2 text-sm"
+                            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
                         />
                     </div>
                     <div className="flex gap-2">
@@ -260,7 +257,7 @@ export default function ShippingPanel({
                             onChange={(e) => setTrackingNumber(e.target.value)}
                             onClick={stop}
                             placeholder="Tracking number"
-                            className="flex-1 rounded-lg border-2 border-hackclub-smoke px-3 py-2 text-sm font-mono"
+                            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono"
                         />
                         <button
                             type="button"
@@ -274,6 +271,6 @@ export default function ShippingPanel({
                     <p className="text-xs text-hackclub-muted">The customer gets an email with this tracking link.</p>
                 </div>
             )}
-        </motion.div>
+        </div>
     );
 }

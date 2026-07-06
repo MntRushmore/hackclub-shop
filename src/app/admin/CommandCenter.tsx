@@ -12,8 +12,6 @@ import Link from 'next/link';
 
 interface Overview {
     canFinance: boolean;
-    canSourcing: boolean;
-    canProducts?: boolean;
     cards: {
         lowStock: {
             count: number;
@@ -24,14 +22,10 @@ interface Overview {
                 variantName: string;
                 available: number;
                 reorderPoint: number;
-                cheapestVendorId?: string;
             }>;
         };
         orders: { unfulfilled: number; oldestDays: number };
-        expiringQuotes: { count: number; items: Array<{ id: string; itemName: string; daysLeft: number }> };
-        overduePOs: { count: number; openCount: number; items: Array<{ id: string; status: string }> };
         finance: { uncostedVariants: number };
-        labels?: { unlabeledVariants: number };
         recentActivity: Array<{ action: string; summary: string; actorEmail?: string; timestamp: string }>;
     };
 }
@@ -115,21 +109,17 @@ export default function CommandCenter() {
     if (!data) return null;
 
     const { cards } = data;
-    const unlabeled = cards.labels?.unlabeledVariants ?? 0;
     const nothing =
         cards.lowStock.count === 0 &&
         cards.orders.unfulfilled === 0 &&
-        cards.expiringQuotes.count === 0 &&
-        cards.overduePOs.count === 0 &&
-        (!data.canFinance || cards.finance.uncostedVariants === 0) &&
-        (!data.canProducts || unlabeled === 0);
+        (!data.canFinance || cards.finance.uncostedVariants === 0);
 
     return (
         <div>
             {nothing && (
                 <div className="mb-4 rounded-xl border border-hackclub-green/30 bg-hackclub-green/5 p-5 text-center">
                     <p className="font-black text-hackclub-green">All clear 🎉</p>
-                    <p className="text-sm text-hackclub-slate">No low stock, unfulfilled orders, expiring quotes, or overdue POs.</p>
+                    <p className="text-sm text-hackclub-slate">No low stock, unfulfilled orders, or uncosted stock.</p>
                 </div>
             )}
 
@@ -146,11 +136,6 @@ export default function CommandCenter() {
                                 <span className="truncate text-hackclub-dark">{it.productName} · {it.variantName}</span>
                                 <span className="whitespace-nowrap text-hackclub-slate">
                                     {it.available} ≤ {it.reorderPoint}
-                                    {it.cheapestVendorId && data.canSourcing && (
-                                        <Link href={`/admin/sourcing/quotes?vendorId=${it.cheapestVendorId}`} className="ml-2 font-bold text-hackclub-blue hover:underline">
-                                            start PO
-                                        </Link>
-                                    )}
                                 </span>
                             </div>
                         ))}
@@ -171,48 +156,6 @@ export default function CommandCenter() {
                     </p>
                 </FeedCard>
 
-                {data.canSourcing && (
-                    <FeedCard
-                        href="/admin/sourcing/quotes"
-                        title="Quotes expiring"
-                        active={cards.expiringQuotes.count > 0}
-                        stat={<Stat value={cards.expiringQuotes.count} label="within 14 days" tone="text-hackclub-dark" />}
-                    >
-                        <div className="space-y-1">
-                            {cards.expiringQuotes.items.map((q) => (
-                                <div key={q.id} className="flex justify-between gap-2 text-sm">
-                                    <span className="truncate text-hackclub-dark">{q.itemName}</span>
-                                    <span className="whitespace-nowrap text-hackclub-slate">{q.daysLeft <= 0 ? 'expired' : `${q.daysLeft}d`}</span>
-                                </div>
-                            ))}
-                            {cards.expiringQuotes.count === 0 && <p className="text-sm text-hackclub-slate">None expiring.</p>}
-                        </div>
-                    </FeedCard>
-                )}
-
-                {data.canSourcing && (
-                    <FeedCard
-                        href="/admin/sourcing/pos"
-                        title="Purchase orders"
-                        active={cards.overduePOs.openCount > 0}
-                        stat={
-                            <Stat
-                                value={cards.overduePOs.count}
-                                label={`overdue · ${cards.overduePOs.openCount} open`}
-                                tone={cards.overduePOs.count > 0 ? 'text-hackclub-red' : 'text-hackclub-dark'}
-                            />
-                        }
-                    >
-                        <p className="text-sm text-hackclub-slate">
-                            {cards.overduePOs.count > 0
-                                ? `${cards.overduePOs.count} past expected date.`
-                                : cards.overduePOs.openCount > 0
-                                    ? 'All open POs on schedule.'
-                                    : 'No open POs.'}
-                        </p>
-                    </FeedCard>
-                )}
-
                 {data.canFinance && (
                     <FeedCard
                         href="/admin/finance"
@@ -222,19 +165,6 @@ export default function CommandCenter() {
                     >
                         <p className="text-sm text-hackclub-slate">
                             {cards.finance.uncostedVariants > 0 ? 'Set unit costs so valuation + margins are right.' : 'Everything costed.'}
-                        </p>
-                    </FeedCard>
-                )}
-
-                {data.canProducts && (
-                    <FeedCard
-                        href="/admin/labels"
-                        title="Unlabeled stock"
-                        active={unlabeled > 0}
-                        stat={<Stat value={unlabeled} label="variants, no barcode" tone="text-hackclub-purple" />}
-                    >
-                        <p className="text-sm text-hackclub-slate">
-                            {unlabeled > 0 ? 'Generate SKUs + print labels so they can be scanned to receive.' : 'Everything labeled.'}
                         </p>
                     </FeedCard>
                 )}

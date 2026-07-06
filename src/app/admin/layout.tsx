@@ -27,18 +27,10 @@ const NAV: Array<{ group: string; items: NavItem[] }> = [
         items: [
             { href: '/admin', label: 'Overview' },
             { href: '/admin/orders', label: 'Orders' },
+            { href: 'https://dashboard.stripe.com/products', label: 'Products', external: true },
             { href: '/admin/coupons', label: 'Coupons', permission: 'canManageCoupons' },
             { href: '/admin/projects', label: 'Projects' },
             { href: '/admin/feedback', label: 'Feedback calls' },
-        ],
-    },
-    {
-        group: 'Inventory',
-        items: [
-            { href: 'https://dashboard.stripe.com/products', label: 'Products', external: true },
-            { href: '/admin/receiving', label: 'Receiving' },
-            { href: '/admin/labels', label: 'Labels', permission: 'canManageProducts' },
-            { href: '/admin/sourcing', label: 'Sourcing', permission: 'canManageSourcing' },
         ],
     },
     {
@@ -56,12 +48,6 @@ const NAV: Array<{ group: string; items: NavItem[] }> = [
             { href: '/admin/audit', label: 'Audit log' },
         ],
     },
-];
-
-const SOURCING_SUBNAV: NavItem[] = [
-    { href: '/admin/sourcing/vendors', label: 'Vendors' },
-    { href: '/admin/sourcing/quotes', label: 'Quotes' },
-    { href: '/admin/sourcing/pos', label: 'Purchase orders' },
 ];
 
 function isActive(pathname: string, href: string) {
@@ -146,7 +132,6 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         ...g,
         items: g.items.filter((it) => !it.permission || admin.permissions[it.permission]),
     })).filter((g) => g.items.length > 0);
-    const inSourcing = pathname.startsWith('/admin/sourcing');
     const flat = groups.flatMap((g) => g.items);
 
     return (
@@ -167,16 +152,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                                 <p className="mb-1 px-3 text-[11px] font-black uppercase tracking-wider text-gray-400">{g.group}</p>
                                 <div className="space-y-0.5">
                                     {g.items.map((it) => (
-                                        <div key={it.href}>
-                                            <NavLink item={it} pathname={pathname} />
-                                            {it.href === '/admin/sourcing' && inSourcing && (
-                                                <div className="ml-3 mt-0.5 space-y-0.5 border-l border-gray-200 pl-2">
-                                                    {SOURCING_SUBNAV.map((sub) => (
-                                                        <NavLink key={sub.href} item={sub} pathname={pathname} />
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
+                                        <NavLink key={it.href} item={it} pathname={pathname} />
                                     ))}
                                 </div>
                             </div>

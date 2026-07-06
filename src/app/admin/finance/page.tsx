@@ -1,10 +1,8 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useSession, signIn } from 'next-auth/react';
-import Link from 'next/link';
-import { motion } from 'framer-motion';
 import HcbConnectionCard from './HcbConnectionCard';
+import { PageHeader, Card, ErrorBanner, LoadingScreen } from '../ui';
 
 // ── Types mirrored from src/lib/finance.ts (kept loose; this is a display layer) ──
 type Period = 'week' | 'month' | 'year' | 'all';
@@ -46,15 +44,10 @@ const PERIODS: { id: Period; label: string }[] = [
 ];
 
 export default function FinanceAdmin() {
-    const { data: session, status } = useSession();
     const [period, setPeriod] = useState<Period>('month');
     const [data, setData] = useState<Overview | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-
-    useEffect(() => {
-        if (status === 'unauthenticated') signIn('hackclub', { callbackUrl: '/admin/finance' });
-    }, [status]);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -73,63 +66,42 @@ export default function FinanceAdmin() {
         }
     }, [period]);
 
-    useEffect(() => { if (session) load(); }, [session, load]);
-
-    if (status === 'loading' || (session && loading && !data)) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-hackclub-smoke">
-                <div className="text-hackclub-dark font-bold">Loading…</div>
-            </div>
-        );
-    }
-    if (!session) return null;
+    useEffect(() => { load(); }, [load]);
 
     return (
-        <div className="min-h-screen bg-white text-hackclub-dark"
-            style={{
-                backgroundImage: 'linear-gradient(to right, #e0f2fe 1px, transparent 1px), linear-gradient(to bottom, #e0f2fe 1px, transparent 1px)',
-                backgroundSize: '30px 30px',
-            }}
-        >
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-                    <Link href="/admin" className="text-hackclub-slate hover:text-hackclub-dark mb-2 inline-block font-medium">← Back to Dashboard</Link>
-                    <div className="flex flex-wrap items-end justify-between gap-4 mb-2">
-                        <h1 className="text-5xl sm:text-6xl font-black text-hackclub-dark">Finance</h1>
-                        <div className="flex gap-2">
-                            {PERIODS.map((p) => (
-                                <button key={p.id} type="button" onClick={() => setPeriod(p.id)}
-                                    className={`px-4 py-2 rounded-full text-sm font-bold border-2 transition-colors ${period === p.id ? 'bg-hackclub-blue text-white border-hackclub-blue' : 'bg-white text-hackclub-slate border-hackclub-smoke hover:border-hackclub-slate'}`}>
-                                    {p.label}
-                                </button>
-                            ))}
-                        </div>
+        <>
+            <PageHeader
+                title="Finance"
+                subtitle="On-hand value, cost of goods, margins, purchasing spend, and the weekly report. Cost basis is weighted-average per variant."
+                actions={
+                    <div className="flex gap-2">
+                        {PERIODS.map((p) => (
+                            <button key={p.id} type="button" onClick={() => setPeriod(p.id)}
+                                className={`px-3 py-1.5 rounded-full text-sm font-bold border transition-colors ${period === p.id ? 'bg-hackclub-blue text-white border-hackclub-blue' : 'bg-white text-hackclub-slate border-gray-200 hover:border-hackclub-slate'}`}>
+                                {p.label}
+                            </button>
+                        ))}
                     </div>
-                    <p className="text-lg text-hackclub-slate font-medium mb-6">
-                        On-hand value, cost of goods, margins, purchasing spend, and the weekly report. Cost basis is weighted-average per variant — see <Link href="https://dashboard.stripe.com/products" className="text-hackclub-blue hover:underline font-bold">Inventory</Link> for units.
-                    </p>
+                }
+            />
 
-                    <HcbConnectionCard />
+            <HcbConnectionCard />
 
-                    {error && (
-                        <div className="mb-4 p-4 bg-hackclub-red/10 border-2 border-hackclub-red rounded-xl">
-                            <p className="text-hackclub-red font-bold">{error}</p>
-                        </div>
-                    )}
+            {error && <ErrorBanner message={error} />}
 
-                    {data && (
-                        <>
-                            <KpiGrid data={data} />
-                            <ChartsRow data={data} />
-                            <ValuationPanel valuation={data.valuation} />
-                            <MarginPanel margin={data.margin} />
-                            <WeeklyPanel onReceived={load} />
-                            <ReceivingPanel rows={data.valuation.rows} onReceived={load} />
-                        </>
-                    )}
-                </motion.div>
-            </div>
-        </div>
+            {loading && !data && <LoadingScreen />}
+
+            {data && (
+                <>
+                    <KpiGrid data={data} />
+                    <ChartsRow data={data} />
+                    <ValuationPanel valuation={data.valuation} />
+                    <MarginPanel margin={data.margin} />
+                    <WeeklyPanel onReceived={load} />
+                    <ReceivingPanel rows={data.valuation.rows} onReceived={load} />
+                </>
+            )}
+        </>
     );
 }
 
@@ -139,11 +111,11 @@ function Kpi({ label, value, sub, tone = 'dark' }: { label: string; value: strin
         dark: 'text-hackclub-dark', green: 'text-hackclub-green', red: 'text-hackclub-red', blue: 'text-hackclub-blue', orange: 'text-hackclub-orange',
     }[tone];
     return (
-        <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-5">
+        <Card>
             <div className="text-xs font-black uppercase text-hackclub-muted tracking-wide">{label}</div>
             <div className={`text-3xl font-black mt-1 ${toneClass}`}>{value}</div>
             {sub && <div className="text-sm text-hackclub-slate font-medium mt-1">{sub}</div>}
-        </div>
+        </Card>
     );
 }
 
@@ -152,11 +124,11 @@ function KpiGrid({ data }: { data: Overview }) {
     const marginTone = margin.cashMargin >= 0 ? 'green' : 'red';
     return (
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
-            <Kpi label="Inventory value" value={usd(valuation.totalValue)} sub={`${valuation.totalUnits.toLocaleString()} units on hand`} tone="blue" />
+            <Kpi label="Inventory value" value={usd(valuation.totalValue)} sub={`${valuation.totalUnits.toLocaleString()} units on hand`} />
             <Kpi label="Cash revenue" value={usd(margin.cashRevenue)} sub={`${margin.ordersCounted} orders`} />
-            <Kpi label="Cost of goods" value={usd(margin.cashCogs)} sub={margin.pointsCogs > 0 ? `+ ${usd(margin.pointsCogs)} points fulfilment` : 'cash pathway'} tone="orange" />
+            <Kpi label="Cost of goods" value={usd(margin.cashCogs)} sub={margin.pointsCogs > 0 ? `+ ${usd(margin.pointsCogs)} points fulfilment` : 'cash pathway'} />
             <Kpi label="Gross margin" value={usd(margin.cashMargin)} sub={margin.cashMarginPct === null ? 'no cash sales' : `${margin.cashMarginPct.toFixed(1)}% of revenue`} tone={marginTone} />
-            <Kpi label="Purchasing spend" value={usd(spend.totalSpend)} sub={`${spend.unitsReceived.toLocaleString()} units received`} tone="red" />
+            <Kpi label="Purchasing spend" value={usd(spend.totalSpend)} sub={`${spend.unitsReceived.toLocaleString()} units received`} />
             <Kpi label="Cost coverage" value={`${valuation.trackedVariants ? Math.round((valuation.costedVariants / valuation.trackedVariants) * 100) : 0}%`} sub={valuation.uncostedVariants > 0 ? `${valuation.uncostedVariants} variants uncosted` : 'all stock costed'} tone={valuation.uncostedVariants > 0 ? 'orange' : 'green'} />
         </div>
     );
@@ -167,29 +139,29 @@ function ChartsRow({ data }: { data: Overview }) {
     const series = data.weeklySeries;
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <Card title="Weekly gross margin (cash)" subtitle="Revenue − COGS, last 12 weeks">
+            <ChartCard title="Weekly gross margin (cash)" subtitle="Revenue − COGS, last 12 weeks">
                 <WeeklyMarginChart series={series} />
-            </Card>
-            <Card title="Spend vs cash revenue" subtitle="Purchasing outflow against sales inflow, last 12 weeks">
+            </ChartCard>
+            <ChartCard title="Spend vs cash revenue" subtitle="Purchasing outflow against sales inflow, last 12 weeks">
                 <SpendVsRevenueChart series={series} />
-            </Card>
-            <Card title="Top products by margin" subtitle={`${PERIODS.find((p) => p.id === data.period)?.label}`}>
+            </ChartCard>
+            <ChartCard title="Top products by margin" subtitle={`${PERIODS.find((p) => p.id === data.period)?.label}`}>
                 <MarginBars rows={data.margin.topByMargin} />
-            </Card>
-            <Card title="Inventory value by category" subtitle="Current on-hand valuation">
+            </ChartCard>
+            <ChartCard title="Inventory value by category" subtitle="Current on-hand valuation">
                 <CategoryBars cats={data.valuation.byCategory} />
-            </Card>
+            </ChartCard>
         </div>
     );
 }
 
-function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+function ChartCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
     return (
-        <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-5">
+        <Card>
             <h3 className="text-lg font-black text-hackclub-dark">{title}</h3>
             {subtitle && <p className="text-xs text-hackclub-muted font-bold uppercase tracking-wide mb-3">{subtitle}</p>}
             {children}
-        </div>
+        </Card>
     );
 }
 
@@ -296,8 +268,8 @@ function ValuationPanel({ valuation }: { valuation: Valuation }) {
     }, [valuation.rows, showAll, uncostedOnly]);
 
     return (
-        <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke overflow-hidden mb-6">
-            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b-2 border-hackclub-smoke">
+        <Card padded={false} className="overflow-hidden mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-gray-200">
                 <div>
                     <h3 className="text-lg font-black text-hackclub-dark">Inventory valuation</h3>
                     <p className="text-xs text-hackclub-muted font-bold uppercase tracking-wide">On-hand units × weighted-avg cost</p>
@@ -351,14 +323,14 @@ function ValuationPanel({ valuation }: { valuation: Valuation }) {
                     </button>
                 </div>
             )}
-        </div>
+        </Card>
     );
 }
 
 // ── Margin breakdown (top + bottom) ──────────────────────────────────────────────
 function MarginPanel({ margin }: { margin: CogsAndMargin }) {
     return (
-        <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-5 mb-6">
+        <Card className="mb-6">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                 <h3 className="text-lg font-black text-hackclub-dark">Margin by product</h3>
                 {margin.estimatedLineShare > 0 && (
@@ -371,7 +343,7 @@ function MarginPanel({ margin }: { margin: CogsAndMargin }) {
                 <MarginList title="Best margin" rows={margin.topByMargin} />
                 <MarginList title="Worst margin" rows={margin.bottomByMargin} />
             </div>
-        </div>
+        </Card>
     );
 }
 
@@ -428,7 +400,7 @@ function WeeklyPanel({ onReceived }: { onReceived: () => void }) {
     };
 
     return (
-        <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-5 mb-6">
+        <Card className="mb-6">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div>
                     <h3 className="text-lg font-black text-hackclub-dark">Weekly report</h3>
@@ -475,7 +447,7 @@ function WeeklyPanel({ onReceived }: { onReceived: () => void }) {
                     </div>
                 </>
             )}
-        </div>
+        </Card>
     );
 }
 
@@ -558,7 +530,7 @@ function ReceivingPanel({ rows, onReceived }: { rows: ValuationRow[]; onReceived
     };
 
     return (
-        <div className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-5 mb-6">
+        <Card className="mb-6">
             <h3 className="text-lg font-black text-hackclub-dark">Receive stock</h3>
             <p className="text-xs text-hackclub-muted font-bold uppercase tracking-wide mb-4">Records a purchase, blends weighted-avg cost, and adds units to stock</p>
 
@@ -632,6 +604,6 @@ function ReceivingPanel({ rows, onReceived }: { rows: ValuationRow[]; onReceived
                     </div>
                 </div>
             )}
-        </div>
+        </Card>
     );
 }

@@ -1,10 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useSession, signIn } from 'next-auth/react';
-import Link from 'next/link';
-import { motion } from 'framer-motion';
 import Icon from 'supercons';
+import { PageHeader, EmptyState, LoadingScreen } from '../ui';
 import {
     QUESTIONS,
     ITEMS,
@@ -123,40 +121,11 @@ function ReactionRow({
 // ---------------------------------------------------------------------------
 
 export default function FeedbackTool() {
-    const { data: session, status } = useSession();
-    const [isAdmin, setIsAdmin] = useState(false);
-    const [loading, setLoading] = useState(true);
-
     const [tab, setTab] = useState<'call' | 'reports'>('call');
     const [draft, setDraft] = useState<Draft>(emptyDraft);
     const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
     const [reports, setReports] = useState<FeedbackReport[]>([]);
     const [reportsLoading, setReportsLoading] = useState(false);
-
-    // --- auth gate (same pattern as admin/page.tsx) ---
-    useEffect(() => {
-        if (status === 'unauthenticated') {
-            signIn('hackclub', { callbackUrl: '/admin/feedback' });
-        }
-    }, [status]);
-
-    useEffect(() => {
-        const check = async () => {
-            if (!session?.user?.id) {
-                setLoading(false);
-                return;
-            }
-            try {
-                const res = await fetch('/api/admin/stats');
-                setIsAdmin(res.ok);
-            } catch {
-                setIsAdmin(false);
-            } finally {
-                setLoading(false);
-            }
-        };
-        if (session) check();
-    }, [session]);
 
     // --- restore draft on mount ---
     useEffect(() => {
@@ -292,36 +261,8 @@ export default function FeedbackTool() {
     };
 
     useEffect(() => {
-        if (tab === 'reports' && isAdmin) loadReports();
-    }, [tab, isAdmin, loadReports]);
-
-    // --- gates ---
-    if (status === 'loading' || loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-hackclub-smoke">
-                <div className="text-hackclub-dark font-bold">Loading...</div>
-            </div>
-        );
-    }
-    if (!session) return null;
-    if (!isAdmin) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-white">
-                <div className="bg-white rounded-2xl shadow-xl border-2 border-gray-200 p-8 max-w-md w-full mx-4 text-center">
-                    <h2 className="text-2xl font-black text-hackclub-dark mb-2">Access Denied</h2>
-                    <p className="text-hackclub-slate mb-6">
-                        You don&apos;t have permission to access this tool.
-                    </p>
-                    <Link
-                        href="/admin"
-                        className="inline-block w-full bg-hackclub-red hover:bg-hackclub-orange text-white font-black py-3 px-6 rounded-full transition-colors"
-                    >
-                        Back to Admin
-                    </Link>
-                </div>
-            </div>
-        );
-    }
+        if (tab === 'reports') loadReports();
+    }, [tab, loadReports]);
 
     const hasContent =
         draft.parentName.trim() !== '' ||
@@ -330,44 +271,30 @@ export default function FeedbackTool() {
         Object.keys(draft.items).length > 0;
 
     return (
-        <div className="min-h-screen bg-[#f7f8fa] text-hackclub-dark pb-28">
-            <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
-                {/* Header */}
-                <Link
-                    href="/admin"
-                    className="text-sm font-semibold text-hackclub-muted hover:text-hackclub-red transition-colors"
-                >
-                    ← Admin
-                </Link>
-                <div className="flex items-center gap-3 mt-2 mb-1">
-                    <div className="w-12 h-12 shrink-0 bg-hackclub-purple/10 rounded-xl flex items-center justify-center">
-                        <Icon glyph="message" size={26} style={{ color: 'var(--hackclub-purple, #a633d6)' }} />
+        <>
+            <PageHeader
+                title="Feedback calls"
+                subtitle="Talk to a parent, tap through the script, save the report."
+                actions={
+                    <div className="inline-flex gap-1 rounded-full bg-gray-100 p-1">
+                        {(['call', 'reports'] as const).map((t) => (
+                            <button
+                                key={t}
+                                onClick={() => setTab(t)}
+                                className={`px-4 py-1.5 rounded-full font-bold text-sm transition-colors ${
+                                    tab === t
+                                        ? 'bg-white text-hackclub-dark shadow-sm'
+                                        : 'text-hackclub-muted hover:text-hackclub-slate'
+                                }`}
+                            >
+                                {t === 'call' ? 'Run a call' : 'Past reports'}
+                            </button>
+                        ))}
                     </div>
-                    <h1 className="text-4xl font-black text-hackclub-dark tracking-tight">
-                        Feedback calls
-                    </h1>
-                </div>
-                <p className="text-lg text-hackclub-slate mb-6">
-                    Talk to a parent, tap through the script, save the report.
-                </p>
+                }
+            />
 
-                {/* Tabs */}
-                <div className="inline-flex gap-1 p-1 rounded-full bg-gray-100 mb-6">
-                    {(['call', 'reports'] as const).map((t) => (
-                        <button
-                            key={t}
-                            onClick={() => setTab(t)}
-                            className={`px-5 py-2 rounded-full font-bold text-[15px] transition-colors ${
-                                tab === t
-                                    ? 'bg-white text-hackclub-dark shadow-sm'
-                                    : 'text-hackclub-muted hover:text-hackclub-slate'
-                            }`}
-                        >
-                            {t === 'call' ? 'Run a call' : 'Past reports'}
-                        </button>
-                    ))}
-                </div>
-
+            <div className="max-w-3xl pb-28">
                 {tab === 'call' ? (
                     <CallForm
                         draft={draft}
@@ -397,11 +324,11 @@ export default function FeedbackTool() {
                                 <span className="text-hackclub-green font-bold">✓ Saved to reports</span>
                             )}
                             {saveState === 'error' && (
-                                <span className="text-hackclub-red font-bold">Save failed — try again</span>
+                                <span className="text-hackclub-red font-bold">Save failed, try again</span>
                             )}
                             {saveState === 'idle' && (
                                 <span className="text-hackclub-muted">
-                                    {hasContent ? 'Draft saved on this device' : 'Start typing — nothing is required'}
+                                    {hasContent ? 'Draft saved on this device' : 'Start typing, nothing is required'}
                                 </span>
                             )}
                         </div>
@@ -423,7 +350,7 @@ export default function FeedbackTool() {
                     </div>
                 </div>
             )}
-        </div>
+        </>
     );
 }
 
@@ -456,14 +383,9 @@ function CallForm({
     let step = 0;
 
     return (
-        <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25 }}
-            className="space-y-5"
-        >
+        <div className="space-y-5">
             {/* Who + legend */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-6">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
                 <div className="grid sm:grid-cols-2 gap-5">
                     <div>
                         <label className="block text-sm font-bold uppercase tracking-wide text-hackclub-muted mb-2">
@@ -510,7 +432,7 @@ function CallForm({
             </div>
 
             {/* Questions — one flat card, hairline-divided rows */}
-            <div className="bg-white rounded-2xl border border-gray-200 divide-y divide-gray-100 overflow-hidden">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm divide-y divide-gray-100 overflow-hidden">
                 {beforeItems.map((q) => (
                     <QuestionRow
                         key={q.id}
@@ -581,7 +503,7 @@ function CallForm({
                     />
                 ))}
             </div>
-        </motion.div>
+        </div>
     );
 }
 
@@ -676,23 +598,17 @@ function ReportsList({
     onDelete: (id: string) => void;
 }) {
     if (loading) {
-        return <div className="text-hackclub-slate font-medium py-12 text-center">Loading reports…</div>;
+        return <LoadingScreen />;
     }
     if (reports.length === 0) {
-        return (
-            <div className="bg-white rounded-2xl border-2 border-dashed border-hackclub-smoke p-10 text-center">
-                <p className="text-hackclub-slate font-medium">
-                    No reports yet. Run a call and hit Save.
-                </p>
-            </div>
-        );
+        return <EmptyState message="No reports yet. Run a call and hit Save." />;
     }
     return (
         <div className="space-y-3">
             {reports.map((r) => (
                 <div
                     key={r.id}
-                    className="bg-white rounded-xl border border-gray-200 p-5 hover:border-hackclub-purple transition-colors"
+                    className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:border-gray-300 transition-colors"
                 >
                     <div className="flex items-start justify-between gap-4">
                         <button onClick={() => onOpen(r)} className="text-left flex-1 min-w-0">

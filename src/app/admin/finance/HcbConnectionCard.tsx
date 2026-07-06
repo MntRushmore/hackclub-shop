@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { Card } from '../ui';
 
 /**
  * Admin card for the HCB Donations connection. Guest checkout is paid by a
@@ -56,7 +57,7 @@ export default function HcbConnectionCard() {
     const label = status.connected ? 'Connected' : status.configured ? 'Not connected' : 'Not configured';
 
     return (
-        <div className="mb-6 p-5 rounded-2xl bg-white border-2 border-hackclub-smoke flex flex-wrap items-center justify-between gap-4">
+        <Card className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-start gap-3">
                 <span className={`mt-1.5 inline-block w-2.5 h-2.5 rounded-full ${dot}`} aria-hidden="true" />
                 <div>
@@ -104,6 +105,6 @@ export default function HcbConnectionCard() {
                     )}
                 </div>
             )}
-        </div>
+        </Card>
     );
 }

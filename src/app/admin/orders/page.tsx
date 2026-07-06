@@ -1,10 +1,8 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useSession, signIn } from 'next-auth/react';
-import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Order } from '../../../types/Order';
+import { PageHeader, EmptyState, ErrorBanner, LoadingScreen } from '../ui';
 import ShippingPanel from './ShippingPanel';
 
 const PAGE_SIZE = 25;
@@ -12,7 +10,6 @@ type StatusFilter = 'all' | Order['status'];
 type PathwayFilter = 'all' | 'student' | 'guest';
 
 export default function OrdersAdmin() {
-    const { data: session, status } = useSession();
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -26,15 +23,7 @@ export default function OrdersAdmin() {
     const [page, setPage] = useState(1);
 
     useEffect(() => {
-        if (status === 'unauthenticated') {
-            signIn('hackclub', { callbackUrl: '/admin/orders' });
-        }
-    }, [status]);
-
-    useEffect(() => {
         const fetchOrders = async () => {
-            if (!session) return;
-
             try {
                 const res = await fetch('/api/admin/stats?period=all');
                 if (!res.ok) {
@@ -50,10 +39,8 @@ export default function OrdersAdmin() {
             }
         };
 
-        if (session) {
-            fetchOrders();
-        }
-    }, [session]);
+        fetchOrders();
+    }, []);
 
     const getStatusColor = (status: Order['status']) => {
         switch (status) {
@@ -145,11 +132,12 @@ export default function OrdersAdmin() {
         });
     }, [orders, showTest, statusFilter, pathwayFilter, query]);
 
-    if (status === 'loading' || (session && loading)) {
+    if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-hackclub-smoke">
-                <div className="text-hackclub-dark font-bold">Loading...</div>
-            </div>
+            <>
+                <PageHeader title="Orders" subtitle="View and manage all orders" />
+                <LoadingScreen />
+            </>
         );
     }
 
@@ -193,51 +181,17 @@ export default function OrdersAdmin() {
     };
 
     return (
-        <div className="min-h-screen bg-white text-hackclub-dark"
-            style={{
-                backgroundImage: `
-                  linear-gradient(to right, #e0f2fe 1px, transparent 1px),
-                  linear-gradient(to bottom, #e0f2fe 1px, transparent 1px)
-                `,
-                backgroundSize: '30px 30px',
-            }}
-        >
-            <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4 }}
-                >
-                    <Link href="/admin" className="text-hackclub-slate hover:text-hackclub-dark mb-2 inline-block font-medium">
-                        ← Back to Dashboard
-                    </Link>
-                    <h1 className="text-5xl sm:text-6xl font-black text-hackclub-dark mb-2">
-                        Orders
-                    </h1>
-                    <p className="text-lg text-hackclub-slate font-medium mb-6">
-                        View and manage all orders
-                    </p>
-
-                    {/* Search + filters + export */}
-                    <div className="flex flex-col lg:flex-row gap-3 mb-4">
-                        <div className="relative flex-1">
-                            <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-hackclub-muted pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                            </svg>
-                            <input
-                                type="search"
-                                value={query}
-                                onChange={(e) => { setQuery(e.target.value); setPage(1); }}
-                                placeholder="Search by order #, email, user, item, tracking…"
-                                aria-label="Search orders"
-                                className="w-full pl-11 pr-4 py-2.5 rounded-full border-2 border-hackclub-smoke bg-white text-hackclub-dark font-medium focus:outline-none focus:border-hackclub-red transition-colors"
-                            />
-                        </div>
+        <>
+            <PageHeader
+                title="Orders"
+                subtitle="View and manage all orders"
+                actions={
+                    <>
                         <select
                             value={statusFilter}
                             onChange={(e) => { setStatusFilter(e.target.value as StatusFilter); setPage(1); }}
                             aria-label="Filter by status"
-                            className="px-4 py-2.5 rounded-full border-2 border-hackclub-smoke bg-white text-hackclub-dark font-bold focus:outline-none focus:border-hackclub-red"
+                            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-bold text-hackclub-dark focus:border-hackclub-red focus:outline-none"
                         >
                             <option value="all">All statuses</option>
                             <option value="received">Order received</option>
@@ -249,7 +203,7 @@ export default function OrdersAdmin() {
                             value={pathwayFilter}
                             onChange={(e) => { setPathwayFilter(e.target.value as PathwayFilter); setPage(1); }}
                             aria-label="Filter by pathway"
-                            className="px-4 py-2.5 rounded-full border-2 border-hackclub-smoke bg-white text-hackclub-dark font-bold focus:outline-none focus:border-hackclub-red"
+                            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-bold text-hackclub-dark focus:border-hackclub-red focus:outline-none"
                         >
                             <option value="all">All pathways</option>
                             <option value="student">Points</option>
@@ -259,251 +213,243 @@ export default function OrdersAdmin() {
                             type="button"
                             onClick={exportCsv}
                             disabled={filteredOrders.length === 0}
-                            className="px-5 py-2.5 rounded-full text-sm font-bold bg-hackclub-blue hover:bg-blue-600 text-white transition-colors disabled:opacity-40"
+                            className="rounded-lg bg-hackclub-blue px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-600 disabled:opacity-40"
                         >
                             Export CSV
                         </button>
-                    </div>
+                    </>
+                }
+            />
 
-                    <div className="flex items-center justify-between mb-8">
-                        <button
-                            type="button"
-                            onClick={() => { setShowTest((prev) => !prev); setPage(1); }}
-                            className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold border-2 transition-colors ${showTest ? 'bg-hackclub-dark text-white border-hackclub-dark' : 'bg-white text-hackclub-slate border-hackclub-smoke hover:border-hackclub-slate'}`}
-                            aria-pressed={showTest}
-                        >
-                            <span className={`w-2 h-2 rounded-full ${showTest ? 'bg-hackclub-green' : 'bg-hackclub-muted'}`} />
-                            Show test orders
-                        </button>
-                        <p className="text-sm text-hackclub-muted font-bold">
-                            {filteredOrders.length} order{filteredOrders.length === 1 ? '' : 's'}
-                        </p>
-                    </div>
-
-                    {error && (
-                        <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="mb-6 p-4 bg-hackclub-red/10 border-2 border-hackclub-red rounded-xl"
-                        >
-                            <p className="text-hackclub-red font-bold">{error}</p>
-                        </motion.div>
-                    )}
-
-                    <div className="space-y-4">
-                        <AnimatePresence initial={false} mode="popLayout">
-                            {visibleOrders.length === 0 ? (
-                                <motion.div
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    className="text-center py-12 bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke"
-                                >
-                                    <p className="text-hackclub-muted font-bold">No orders yet</p>
-                                </motion.div>
-                            ) : (
-                                visibleOrders.map((order, index) => (
-                                    <motion.div
-                                        key={order.id}
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: index * 0.05 }}
-                                        onClick={() => setSelectedOrder(selectedOrder?.id === order.id ? null : order)}
-                                        className="bg-white rounded-2xl shadow-lg border-2 border-hackclub-smoke p-6 cursor-pointer hover:shadow-xl transition-shadow"
-                                    >
-                                        <div className="flex items-center justify-between mb-4">
-                                            <div>
-                                                <p className="text-sm text-hackclub-muted font-bold">Order #{order.id.slice(-8)}</p>
-                                                <p className="text-xs text-hackclub-slate">{order.pathway === 'guest' ? `Guest: ${order.guestEmail || '—'}` : `User: ${order.userId}`}</p>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                {order.isTest && (
-                                                    <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-600">
-                                                        TEST
-                                                    </span>
-                                                )}
-                                                {order.pathway && (
-                                                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${order.pathway === 'guest' ? 'bg-purple-100 text-purple-800' : 'bg-cyan-100 text-cyan-800'}`}>
-                                                        {order.pathway === 'guest' ? 'Card' : 'Points'}
-                                                    </span>
-                                                )}
-                                                {order.paymentStatus && order.pathway === 'guest' && (
-                                                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${order.paymentStatus === 'paid' ? 'bg-green-100 text-green-800' : order.paymentStatus === 'refunded' ? 'bg-orange-100 text-orange-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                                                        {order.paymentStatus}
-                                                    </span>
-                                                )}
-                                                <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${getStatusColor(order.status)}`}>
-                                                    {statusLabel(order.status)}
-                                                </span>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2 mb-4">
-                                            {order.items.map((item) => (
-                                                <div key={item.id} className="flex justify-between text-sm">
-                                                    <span className="text-hackclub-dark font-bold">{item.name} x{item.quantity}</span>
-                                                    <span className="text-hackclub-slate">{order.pathway === 'guest' ? `$${(parseFloat(item.price) * item.quantity).toFixed(2)}` : ''}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-
-                                        <div className="pt-4 border-t-2 border-hackclub-smoke flex justify-between items-center">
-                                            <span className="text-hackclub-slate font-bold">Total</span>
-                                            <span className="text-lg font-black text-hackclub-dark">
-                                                {order.pathway === 'guest' ? `$${order.totalAmount.toFixed(2)}` : `${order.pointsSpent} pts`}
-                                            </span>
-                                        </div>
-
-                                        {(() => {
-                                            const isActing = actingOrderId === order.id;
-                                            const btnBase = 'px-4 py-2 rounded-xl text-sm font-bold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
-                                            const refundLabel = order.pathway === 'guest' ? 'Refund (card)' : 'Refund (points)';
-                                            const actions: { action: 'refund' | 'mark-delivered'; label: string; className: string }[] = [];
-
-                                            // Lifecycle: received → (ship via panel below) fulfilled →
-                                            // (carrier scan / manual) delivered. No approve/deny gate —
-                                            // paid orders are real on arrival. Refund is always available
-                                            // on a live order until it's already refunded.
-                                            if (order.status === 'fulfilled') {
-                                                actions.push({ action: 'mark-delivered', label: 'Mark delivered', className: 'bg-hackclub-green hover:bg-green-600' });
-                                            }
-                                            if (order.status !== 'refunded') {
-                                                actions.push({ action: 'refund', label: refundLabel, className: 'bg-hackclub-red hover:bg-red-600' });
-                                            }
-
-                                            const testAction: 'mark-test' | 'unmark-test' = order.isTest ? 'unmark-test' : 'mark-test';
-                                            const testLabel = order.isTest ? 'Untest' : 'Mark test';
-                                            const applyUpdate = (updated: Order) => {
-                                                setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
-                                                setSelectedOrder((prev) => (prev && prev.id === updated.id ? updated : prev));
-                                            };
-
-                                            return (
-                                                <div className="mt-4 flex flex-wrap gap-2">
-                                                    {order.status === 'received' && (
-                                                        <ShippingPanel order={order} onShipped={applyUpdate} onError={setError} />
-                                                    )}
-                                                    {actions.map(({ action, label, className }) => (
-                                                        <button
-                                                            key={action}
-                                                            type="button"
-                                                            onClick={(e) => handleAction(e, order, action)}
-                                                            disabled={isActing}
-                                                            className={`${btnBase} ${className}`}
-                                                        >
-                                                            {isActing ? 'Working…' : label}
-                                                        </button>
-                                                    ))}
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => handleAction(e, order, testAction)}
-                                                        disabled={isActing}
-                                                        className="px-4 py-2 rounded-xl text-sm font-bold bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                                    >
-                                                        {isActing ? 'Working…' : testLabel}
-                                                    </button>
-                                                </div>
-                                            );
-                                        })()}
-
-                                        {/* Shipping LEVEL the customer paid for, shown as soon as the
-                                            order exists (before a label is bought) so staff know exactly
-                                            what postage to purchase. Once a label is bought + tracking
-                                            recorded, the block below replaces this with tracking info. */}
-                                        {order.shipment && !order.shipment.trackingNumber && (order.shipment.carrier || order.shipment.service) && (
-                                            <div className="mt-4 pt-4 border-t-2 border-hackclub-smoke flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                                                <span className="font-bold text-hackclub-dark">📦 Customer paid for:</span>
-                                                <span className="font-bold text-hackclub-blue">
-                                                    {`${order.shipment.carrier || ''} ${order.shipment.service || ''}`.trim()}
-                                                </span>
-                                                {typeof order.shipment.cost === 'number' && (
-                                                    <span className="text-hackclub-slate">(${order.shipment.cost.toFixed(2)})</span>
-                                                )}
-                                                <span className="text-xs text-hackclub-muted">— buy this shipping level</span>
-                                            </div>
-                                        )}
-
-                                        {order.shipment?.trackingNumber && (
-                                            <div className="mt-4 pt-4 border-t-2 border-hackclub-smoke flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                                                <span className="font-bold text-hackclub-dark">
-                                                    📦 {order.shipment.carrier || 'Shipped'}{order.shipment.service ? ` ${order.shipment.service}` : ''}
-                                                </span>
-                                                {order.shipment.trackingUrl ? (
-                                                    <a
-                                                        href={order.shipment.trackingUrl}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        className="font-mono text-hackclub-blue hover:underline"
-                                                    >
-                                                        {order.shipment.trackingNumber}
-                                                    </a>
-                                                ) : (
-                                                    <span className="font-mono text-hackclub-slate">{order.shipment.trackingNumber}</span>
-                                                )}
-                                                {order.shipment.labelUrl && (
-                                                    <a
-                                                        href={order.shipment.labelUrl}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        className="text-hackclub-slate hover:text-hackclub-dark font-bold underline"
-                                                    >
-                                                        Label PDF
-                                                    </a>
-                                                )}
-                                            </div>
-                                        )}
-
-                                        {selectedOrder?.id === order.id && order.statusHistory && order.statusHistory.length > 0 && (
-                                            <motion.div
-                                                initial={{ opacity: 0, height: 0 }}
-                                                animate={{ opacity: 1, height: 'auto' }}
-                                                exit={{ opacity: 0, height: 0 }}
-                                                className="mt-4 pt-4 border-t-2 border-hackclub-smoke space-y-2"
-                                            >
-                                                <p className="text-xs font-bold text-hackclub-muted uppercase">Status History</p>
-                                                {order.statusHistory.map((update, idx) => (
-                                                    <div key={idx} className="text-xs">
-                                                        <p className="font-bold text-hackclub-dark capitalize">{update.status}</p>
-                                                        <p className="text-hackclub-muted">{new Date(update.timestamp).toLocaleString()}</p>
-                                                        {update.message && (
-                                                            <p className="text-hackclub-slate italic mt-1">{update.message}</p>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </motion.div>
-                                        )}
-                                    </motion.div>
-                                ))
-                            )}
-                        </AnimatePresence>
-                    </div>
-
-                    {totalPages > 1 && (
-                        <div className="flex items-center justify-center gap-4 mt-8">
-                            <button
-                                type="button"
-                                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                disabled={clampedPage <= 1}
-                                className="px-4 py-2 rounded-full text-sm font-bold border-2 border-hackclub-smoke text-hackclub-slate hover:border-hackclub-slate disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                            >
-                                ← Prev
-                            </button>
-                            <span className="text-sm font-bold text-hackclub-muted">
-                                Page {clampedPage} of {totalPages}
-                            </span>
-                            <button
-                                type="button"
-                                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                                disabled={clampedPage >= totalPages}
-                                className="px-4 py-2 rounded-full text-sm font-bold border-2 border-hackclub-smoke text-hackclub-slate hover:border-hackclub-slate disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                            >
-                                Next →
-                            </button>
-                        </div>
-                    )}
-                </motion.div>
+            {/* Search + test toggle */}
+            <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
+                <div className="relative flex-1">
+                    <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-hackclub-muted pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <input
+                        type="search"
+                        value={query}
+                        onChange={(e) => { setQuery(e.target.value); setPage(1); }}
+                        placeholder="Search by order #, email, user, item, tracking…"
+                        aria-label="Search orders"
+                        className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-11 pr-4 text-sm font-medium text-hackclub-dark transition-colors focus:border-hackclub-red focus:outline-none"
+                    />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                    <button
+                        type="button"
+                        onClick={() => { setShowTest((prev) => !prev); setPage(1); }}
+                        className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold transition-colors ${showTest ? 'border-hackclub-dark bg-hackclub-dark text-white' : 'border-gray-300 bg-white text-hackclub-slate hover:border-gray-400'}`}
+                        aria-pressed={showTest}
+                    >
+                        <span className={`w-2 h-2 rounded-full ${showTest ? 'bg-hackclub-green' : 'bg-hackclub-muted'}`} />
+                        Show test orders
+                    </button>
+                    <p className="text-sm text-hackclub-muted font-bold">
+                        {filteredOrders.length} order{filteredOrders.length === 1 ? '' : 's'}
+                    </p>
+                </div>
             </div>
-        </div>
+
+            {error && <ErrorBanner message={error} />}
+
+            <div className="space-y-4">
+                {visibleOrders.length === 0 ? (
+                    <EmptyState message="No orders yet" />
+                ) : (
+                    visibleOrders.map((order) => (
+                        <div
+                            key={order.id}
+                            onClick={() => setSelectedOrder(selectedOrder?.id === order.id ? null : order)}
+                            className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 cursor-pointer hover:shadow-md transition-shadow"
+                        >
+                            <div className="flex items-center justify-between mb-4">
+                                <div>
+                                    <p className="text-sm text-hackclub-muted font-bold">Order #{order.id.slice(-8)}</p>
+                                    <p className="text-xs text-hackclub-slate">{order.pathway === 'guest' ? `Guest: ${order.guestEmail || '—'}` : `User: ${order.userId}`}</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {order.isTest && (
+                                        <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-600">
+                                            TEST
+                                        </span>
+                                    )}
+                                    {order.pathway && (
+                                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${order.pathway === 'guest' ? 'bg-purple-100 text-purple-800' : 'bg-cyan-100 text-cyan-800'}`}>
+                                            {order.pathway === 'guest' ? 'Card' : 'Points'}
+                                        </span>
+                                    )}
+                                    {order.paymentStatus && order.pathway === 'guest' && (
+                                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${order.paymentStatus === 'paid' ? 'bg-green-100 text-green-800' : order.paymentStatus === 'refunded' ? 'bg-orange-100 text-orange-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                            {order.paymentStatus}
+                                        </span>
+                                    )}
+                                    <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${getStatusColor(order.status)}`}>
+                                        {statusLabel(order.status)}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2 mb-4">
+                                {order.items.map((item) => (
+                                    <div key={item.id} className="flex justify-between text-sm">
+                                        <span className="text-hackclub-dark font-bold">{item.name} x{item.quantity}</span>
+                                        <span className="text-hackclub-slate">{order.pathway === 'guest' ? `$${(parseFloat(item.price) * item.quantity).toFixed(2)}` : ''}</span>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="pt-4 border-t border-gray-200 flex justify-between items-center">
+                                <span className="text-hackclub-slate font-bold">Total</span>
+                                <span className="text-lg font-black text-hackclub-dark">
+                                    {order.pathway === 'guest' ? `$${order.totalAmount.toFixed(2)}` : `${order.pointsSpent} pts`}
+                                </span>
+                            </div>
+
+                            {(() => {
+                                const isActing = actingOrderId === order.id;
+                                const btnBase = 'px-4 py-2 rounded-lg text-sm font-bold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+                                const refundLabel = order.pathway === 'guest' ? 'Refund (card)' : 'Refund (points)';
+                                const actions: { action: 'refund' | 'mark-delivered'; label: string; className: string }[] = [];
+
+                                // Lifecycle: received → (ship via panel below) fulfilled →
+                                // (carrier scan / manual) delivered. No approve/deny gate —
+                                // paid orders are real on arrival. Refund is always available
+                                // on a live order until it's already refunded.
+                                if (order.status === 'fulfilled') {
+                                    actions.push({ action: 'mark-delivered', label: 'Mark delivered', className: 'bg-hackclub-green hover:bg-green-600' });
+                                }
+                                if (order.status !== 'refunded') {
+                                    actions.push({ action: 'refund', label: refundLabel, className: 'bg-hackclub-red hover:bg-red-600' });
+                                }
+
+                                const testAction: 'mark-test' | 'unmark-test' = order.isTest ? 'unmark-test' : 'mark-test';
+                                const testLabel = order.isTest ? 'Untest' : 'Mark test';
+                                const applyUpdate = (updated: Order) => {
+                                    setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+                                    setSelectedOrder((prev) => (prev && prev.id === updated.id ? updated : prev));
+                                };
+
+                                return (
+                                    <div className="mt-4 flex flex-wrap gap-2">
+                                        {order.status === 'received' && (
+                                            <ShippingPanel order={order} onShipped={applyUpdate} onError={setError} />
+                                        )}
+                                        {actions.map(({ action, label, className }) => (
+                                            <button
+                                                key={action}
+                                                type="button"
+                                                onClick={(e) => handleAction(e, order, action)}
+                                                disabled={isActing}
+                                                className={`${btnBase} ${className}`}
+                                            >
+                                                {isActing ? 'Working…' : label}
+                                            </button>
+                                        ))}
+                                        <button
+                                            type="button"
+                                            onClick={(e) => handleAction(e, order, testAction)}
+                                            disabled={isActing}
+                                            className="px-4 py-2 rounded-lg text-sm font-bold bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {isActing ? 'Working…' : testLabel}
+                                        </button>
+                                    </div>
+                                );
+                            })()}
+
+                            {/* Shipping LEVEL the customer paid for, shown as soon as the
+                                order exists (before a label is bought) so staff know exactly
+                                what postage to purchase. Once a label is bought + tracking
+                                recorded, the block below replaces this with tracking info. */}
+                            {order.shipment && !order.shipment.trackingNumber && (order.shipment.carrier || order.shipment.service) && (
+                                <div className="mt-4 pt-4 border-t border-gray-200 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                                    <span className="font-bold text-hackclub-dark">📦 Customer paid for:</span>
+                                    <span className="font-bold text-hackclub-blue">
+                                        {`${order.shipment.carrier || ''} ${order.shipment.service || ''}`.trim()}
+                                    </span>
+                                    {typeof order.shipment.cost === 'number' && (
+                                        <span className="text-hackclub-slate">(${order.shipment.cost.toFixed(2)})</span>
+                                    )}
+                                    <span className="text-xs text-hackclub-muted">— buy this shipping level</span>
+                                </div>
+                            )}
+
+                            {order.shipment?.trackingNumber && (
+                                <div className="mt-4 pt-4 border-t border-gray-200 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                                    <span className="font-bold text-hackclub-dark">
+                                        📦 {order.shipment.carrier || 'Shipped'}{order.shipment.service ? ` ${order.shipment.service}` : ''}
+                                    </span>
+                                    {order.shipment.trackingUrl ? (
+                                        <a
+                                            href={order.shipment.trackingUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="font-mono text-hackclub-blue hover:underline"
+                                        >
+                                            {order.shipment.trackingNumber}
+                                        </a>
+                                    ) : (
+                                        <span className="font-mono text-hackclub-slate">{order.shipment.trackingNumber}</span>
+                                    )}
+                                    {order.shipment.labelUrl && (
+                                        <a
+                                            href={order.shipment.labelUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="text-hackclub-slate hover:text-hackclub-dark font-bold underline"
+                                        >
+                                            Label PDF
+                                        </a>
+                                    )}
+                                </div>
+                            )}
+
+                            {selectedOrder?.id === order.id && order.statusHistory && order.statusHistory.length > 0 && (
+                                <div className="mt-4 pt-4 border-t border-gray-200 space-y-2">
+                                    <p className="text-xs font-bold text-hackclub-muted uppercase">Status History</p>
+                                    {order.statusHistory.map((update, idx) => (
+                                        <div key={idx} className="text-xs">
+                                            <p className="font-bold text-hackclub-dark capitalize">{update.status}</p>
+                                            <p className="text-hackclub-muted">{new Date(update.timestamp).toLocaleString()}</p>
+                                            {update.message && (
+                                                <p className="text-hackclub-slate italic mt-1">{update.message}</p>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ))
+                )}
+            </div>
+
+            {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-4 mt-8">
+                    <button
+                        type="button"
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        disabled={clampedPage <= 1}
+                        className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-bold text-hackclub-slate transition-colors hover:border-gray-400 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                        ← Prev
+                    </button>
+                    <span className="text-sm font-bold text-hackclub-muted">
+                        Page {clampedPage} of {totalPages}
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={clampedPage >= totalPages}
+                        className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-bold text-hackclub-slate transition-colors hover:border-gray-400 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                        Next →
+                    </button>
+                </div>
+            )}
+        </>
     );
 }
