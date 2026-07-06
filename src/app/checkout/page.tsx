@@ -70,6 +70,10 @@ const Checkout = () => {
     const [dedication, setDedication] = useState('');
     const [donorName, setDonorName] = useState('');
     const [donorAnonymous, setDonorAnonymous] = useState(false);
+    // Optional custom amount on top of the tier (how a donor gives any total,
+    // e.g. Founder's Circle + extra for $1,000+). Dollar string from the input;
+    // the server re-validates and caps it.
+    const [extraDonation, setExtraDonation] = useState('');
     const router = useRouter();
 
     useEffect(() => {
@@ -213,11 +217,15 @@ const Checkout = () => {
     // Donation-tier presence + the display-only deductible estimate (donation
     // minus each gift's fair market value; the server computes the real number).
     const hasDonation = cart.some((item) => donationTiers[String(item.id)]);
+    const extraUsd = (() => {
+        const n = parseFloat(extraDonation);
+        return hasDonation && Number.isFinite(n) && n > 0 ? Math.min(n, 100000) : 0;
+    })();
     const deductibleEstimate = cart.reduce((total, item) => {
         const tier = donationTiers[String(item.id)];
         if (!tier || !item.price_cash) return total;
         return total + Math.max(0, item.price_cash - tier.fmvCents / 100) * (item.quantity || 1);
-    }, 0);
+    }, 0) + extraUsd;
 
     const pointsBalance = pointsContext?.balance || 0;
     const hasEnoughPoints = pointsBalance >= requiredPoints;
@@ -365,7 +373,15 @@ const Checkout = () => {
                     // Donor fields — the server ignores these unless the verified
                     // cart actually contains donation tiers.
                     ...(hasDonation
-                        ? { donation: { fundId, dedication, displayName: donorName, anonymous: donorAnonymous } }
+                        ? {
+                              donation: {
+                                  fundId,
+                                  dedication,
+                                  displayName: donorName,
+                                  anonymous: donorAnonymous,
+                                  ...(extraUsd > 0 ? { extraCents: Math.round(extraUsd * 100) } : {}),
+                              },
+                          }
                         : {}),
                 }),
             });
@@ -538,6 +554,43 @@ const Checkout = () => {
                                     ))}
                                 </div>
                                 <div>
+                                    <label htmlFor="donation-extra" className="block text-sm font-bold text-hackclub-slate mb-1">Add an extra donation (optional)</label>
+                                    <div className="flex items-center gap-2">
+                                        <div className="relative flex-1">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-hackclub-muted">$</span>
+                                            <input
+                                                id="donation-extra"
+                                                type="number"
+                                                min={0}
+                                                max={100000}
+                                                step={1}
+                                                inputMode="numeric"
+                                                placeholder="0"
+                                                value={extraDonation}
+                                                onChange={(e) => setExtraDonation(e.target.value)}
+                                                className="w-full pl-7 pr-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus-visible:border-hackclub-red focus-visible:ring-2 focus-visible:ring-hackclub-red/40 text-hackclub-dark font-bold"
+                                            />
+                                        </div>
+                                        {[100, 500, 1000].map((amt) => (
+                                            <button
+                                                key={amt}
+                                                type="button"
+                                                onClick={() => setExtraDonation(String(amt))}
+                                                className={`px-3 py-2 rounded-full text-sm font-bold border-2 transition-colors ${
+                                                    extraUsd === amt
+                                                        ? 'bg-hackclub-red border-hackclub-red text-white'
+                                                        : 'bg-white border-hackclub-smoke text-hackclub-slate hover:border-hackclub-red hover:text-hackclub-red'
+                                                }`}
+                                            >
+                                                +${amt.toLocaleString()}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <p className="mt-1 text-xs text-hackclub-muted">
+                                        Goes on top of your tier and is fully tax-deductible. Giving more than $100,000? Email shop@hackclub.com.
+                                    </p>
+                                </div>
+                                <div>
                                     <label htmlFor="donation-dedication" className="block text-sm font-bold text-hackclub-slate mb-1">Dedication (optional)</label>
                                     <input
                                         id="donation-dedication"
@@ -695,6 +748,12 @@ const Checkout = () => {
                                     <span>{shippingPointsCost > 0 ? formatPoints(shippingPointsCost) : 'Free'}</span>
                                 </div>
                             )}
+                            {!payWithPoints && extraUsd > 0 && (
+                                <div className="flex justify-between items-center text-hackclub-slate">
+                                    <span>Extra donation:</span>
+                                    <span>{formatCash(extraUsd)}</span>
+                                </div>
+                            )}
                             {!payWithPoints && selectedRate && (
                                 <div className="flex justify-between items-center text-hackclub-slate">
                                     <span>Shipping ({selectedRate.label}):</span>
@@ -703,7 +762,7 @@ const Checkout = () => {
                             )}
                             <div className="flex justify-between items-center text-xl font-black pt-2 border-t border-hackclub-smoke">
                                 <span>{payWithPoints ? 'Points Required:' : 'Subtotal:'}</span>
-                                <span className="text-hackclub-dark">{payWithPoints ? formatPoints(requiredPoints) : formatCash(cashTotal)}</span>
+                                <span className="text-hackclub-dark">{payWithPoints ? formatPoints(requiredPoints) : formatCash(cashTotal + extraUsd)}</span>
                             </div>
                             {!payWithPoints && hasDonation && deductibleEstimate > 0 && (
                                 <div className="flex justify-between items-center text-sm font-bold text-hackclub-slate">

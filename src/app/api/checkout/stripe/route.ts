@@ -197,6 +197,16 @@ export async function POST(request: Request) {
         const giftFmvCents = (item: { donation?: { fmvCents: number } }, verifiedCents: number): number =>
             Math.min(Math.max(0, Math.round(item.donation?.fmvCents ?? 0)), verifiedCents);
 
+        // Donor input is honored only when the verified cart contains donation
+        // tiers. The optional extra amount (custom giving above the tier price,
+        // e.g. Founder's Circle + extra = any total over $1,000) is sanitized to
+        // an integer cent amount within the cap — it's client-chosen money, but
+        // a donor overpaying on purpose is the point; the floor is 0.
+        const donationItems = validation.items!.filter(i => i.donation);
+        const donor = donationItems.length > 0 ? sanitizeDonationInput(donation) : null;
+        const extraCents = donor?.extraCents ?? 0;
+        const extraUsd = extraCents / 100;
+
         const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = validation.items!.flatMap(item => {
             // A donation-tier line is always billed via price_data, split in two:
             // the gift's FMV as a taxable goods line, and everything above it as a
@@ -243,6 +253,23 @@ export async function POST(request: Request) {
             return [buildRetailLineItem(item)];
         });
 
+        // The donor's extra donation rides as its own pure-donation line: no
+        // gift attached, so it's fully deductible and nontaxable.
+        if (extraCents > 0) {
+            lineItems.push({
+                quantity: 1,
+                price_data: {
+                    currency: 'usd',
+                    unit_amount: extraCents,
+                    ...(taxEnabled ? { tax_behavior: 'exclusive' as const } : {}),
+                    product_data: {
+                        name: 'Additional donation to Hack Club',
+                        ...(taxEnabled ? { tax_code: NONTAXABLE_TAX_CODE } : {}),
+                    },
+                },
+            });
+        }
+
         function buildRetailLineItem(item: NonNullable<typeof validation.items>[number]): Stripe.Checkout.SessionCreateParams.LineItem {
             // Stripe is the source of truth for the catalog: bill by the variant's
             // Stripe Price id when we have one. The Price already carries the USD
@@ -280,13 +307,11 @@ export async function POST(request: Request) {
         }
 
         // Donation summary for the order: totals across donation-tier lines plus
-        // the donor's sanitized fund/dedication/wall-name input. The receipt email
-        // renders this as the IRS quid-pro-quo acknowledgment.
-        const donationItems = validation.items!.filter(i => i.donation);
+        // the extra amount plus the donor's sanitized fund/dedication/wall-name
+        // input. The receipt email renders this as the IRS acknowledgment.
         let orderDonation: Order['donation'];
-        if (donationItems.length > 0) {
-            const donor = sanitizeDonationInput(donation);
-            let amountCents = 0;
+        if (donationItems.length > 0 && donor) {
+            let amountCents = extraCents;
             let fmvTotalCents = 0;
             for (const i of donationItems) {
                 const verifiedCents = Math.round(itemCashCost(i) * 100);
@@ -412,13 +437,14 @@ export async function POST(request: Request) {
                 variantId: i.variantId,
                 unitCost: i.unitCost,
             })),
-            subtotal: itemsCashTotal,
+            // Includes any extra donation, which bills as its own Stripe line.
+            subtotal: itemsCashTotal + extraUsd,
             pointsRequired: 0,
             pointsSpent: 0,
             shippingCost,
-            // The item + shipping subtotal we know now. Stripe adds tax on top at
-            // payment; the webhook writes back the final amount_total it charged.
-            totalAmount: itemsCashTotal + shippingCost,
+            // The item + extra + shipping subtotal we know now. Stripe adds tax on
+            // top at payment; the webhook writes back the final amount_total.
+            totalAmount: itemsCashTotal + extraUsd + shippingCost,
             creditsPaid: 0,
             ...(orderDonation ? { donation: orderDonation } : {}),
             stripeSessionId: session.id,

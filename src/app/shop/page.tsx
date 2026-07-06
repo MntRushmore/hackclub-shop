@@ -266,6 +266,10 @@ const Shop = () => {
                             ))}
                             <SustainerCard />
                         </div>
+                        <p className="mt-6 text-center text-hackclub-slate font-bold">
+                            Want to give more than $1,000? Pick any tier and add an extra
+                            donation at checkout, for any amount you like.
+                        </p>
                     </div>
                 )}
 

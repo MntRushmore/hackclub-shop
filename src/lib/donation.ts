@@ -79,7 +79,14 @@ export interface DonationCheckoutInput {
     dedication?: string;   // "in honor of Maya"
     displayName?: string;  // how the donor wants to appear on the donor wall
     anonymous?: boolean;
+    // Optional extra donation on top of the tier amount, integer cents. This is
+    // how a donor gives a custom amount (e.g. Founder's Circle + extra = any
+    // total over $1,000). Pure donation: no gift, fully deductible, nontaxable.
+    extraCents?: number;
 }
+
+/** Ceiling for the extra-donation field: $100,000. Above this, talk to us. */
+export const EXTRA_DONATION_MAX_CENTS = 100_000_00;
 
 /**
  * Sanitized donor fields, ready to store on the order. Free-text fields are
@@ -91,17 +98,25 @@ export function sanitizeDonationInput(input: DonationCheckoutInput | undefined):
     dedication?: string;
     displayName?: string;
     isAnonymous: boolean;
+    extraCents: number;
 } {
     const clip = (s: unknown, max: number): string | undefined => {
         if (typeof s !== 'string') return undefined;
         const trimmed = s.trim().slice(0, max);
         return trimmed.length > 0 ? trimmed : undefined;
     };
+    // Client-controlled money: only a positive integer number of cents within
+    // the cap survives; anything else (floats, negatives, NaN, huge) becomes 0.
+    const rawExtra = Number(input?.extraCents);
+    const extraCents = Number.isSafeInteger(rawExtra) && rawExtra > 0
+        ? Math.min(rawExtra, EXTRA_DONATION_MAX_CENTS)
+        : 0;
     return {
         fundId: getDonationFund(input?.fundId).id,
         dedication: clip(input?.dedication, 140),
         displayName: clip(input?.displayName, 60),
         isAnonymous: Boolean(input?.anonymous),
+        extraCents,
     };
 }
 
