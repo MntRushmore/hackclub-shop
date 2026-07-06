@@ -28,9 +28,9 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
     q: "Where does my money go?",
     a: (
       <>
-        Straight to teenagers at Hack Club. That looks like laptops for teens
-        coding on school Chromebooks, travel to a first hackathon, or a gap
-        year spent building something real. At checkout you can tell us what
+        Straight to teenagers at Hack Club. That looks like a laptop for a
+        kid who needs one, travel to a first hackathon, or a gap year spent
+        building something real. At checkout you can tell us what
         matters most to you, and we&apos;ll put every dollar where it helps
         teens most. You&apos;re not buying a mug; you&apos;re backing a kid who
         makes.
@@ -148,7 +148,7 @@ const MainPage = async () => {
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-left">
             {[
-              { title: "Laptops", body: "Refurbished laptops for teens coding on school Chromebooks. $500 is enough to put one in a teenager's hands.", photo: "/images/hc/photo2.webp", meter: meterFor("laptop") },
+              { title: "Laptops", body: "A kid can't build much without a computer of their own. $500 is enough to put a laptop in a teenager's hands.", photo: "/images/hc/photo2.webp", meter: meterFor("laptop") },
               { title: "First hackathons", body: "Travel help so a teen can meet their community in person. $100 is enough to get one teen to their first hackathon.", photo: "/images/hc/photo4.webp", meter: meterFor("first-hackathon") },
               { title: "Gap years & big projects", body: "Backing teenagers who take time to build something real, with tools, hardware, and grants.", photo: "/images/hc/photo7.webp", meter: meterFor("gap-year") },
             ].map((c) => (

@@ -96,8 +96,8 @@ const TIERS = [
         tier: 'Philanthropist',
         amount: 500,
         fmvCents: 10000,
-        impact: 'A real laptop for a kid coding on a school Chromebook.',
-        description: "Some of our best builders don't own the computer they code on. $500 changes that for one of them. Your vest comes numbered, and only 100 will ever exist.",
+        impact: 'A laptop for a kid who needs one to build.',
+        description: "Some of our best builders don't have a computer of their own. $500 puts a real laptop in a kid's hands. Your vest comes numbered, and only 100 will ever exist.",
         variants: APPAREL_SIZES.map(size => ({ key: `vest-${size.toLowerCase()}`, name: `Numbered Vest · ${size}`, size, unitCost: 55.6 })),
     },
     {
