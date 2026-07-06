@@ -1,7 +1,13 @@
-// Set per-variant stock on the seeded donation tiers (Price metadata `stock`).
+// Set per-variant stock on the seeded donation tiers, in BOTH places stock
+// lives: the Stripe Price metadata `stock` (catalog display) AND the inventory
+// Redis cache `inventory:{variantId}` that reserve()/checkout actually enforce
+// (see src/lib/inventory.ts — that cache is normally seeded by the admin
+// receiving flow, which these tiers never went through). Without the Redis
+// write the tiers sell as UNLIMITED and the 100-vest cap is not enforced.
+//
 // Companion to seed-donation-tiers.mjs. Idempotent: sets stock to exactly the
-// numbers below, so re-running overwrites (it does NOT add). Only the `stock`
-// metadata key is touched; everything else on the Price is preserved.
+// numbers below, so re-running overwrites (it does NOT add) — do not re-run
+// after sales start without accounting for units already sold.
 //
 // THE SPLIT (edit before running if your size curve differs):
 //   Physical inventory from the wholesale order: 100 of each garment, 250
@@ -14,6 +20,7 @@
 //   node scripts/set-tier-stock.mjs             # write stock to Stripe
 
 import Stripe from 'stripe';
+import { Redis } from '@upstash/redis';
 import { readFileSync } from 'node:fs';
 
 if (!process.env.STRIPE_SECRET_KEY) {
@@ -74,15 +81,27 @@ async function main() {
         if (vid && vid.startsWith('donation-tier-')) prices.set(vid, price);
     }
 
+    if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+        console.error('UPSTASH_REDIS_REST_URL / _TOKEN not set — cannot write the inventory cache checkout enforces.');
+        process.exit(1);
+    }
+    const redis = new Redis({
+        url: process.env.UPSTASH_REDIS_REST_URL,
+        token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    });
+
     let updated = 0;
     const missing = [];
     for (const [vid, stock] of Object.entries(STOCK)) {
         const price = prices.get(vid);
         if (!price) { missing.push(vid); continue; }
         const current = price.metadata?.stock ?? '(unset)';
-        console.log(`${DRY_RUN ? '[dry-run] ' : ''}${vid}: stock ${current} -> ${stock}`);
+        const inv = await redis.get(`inventory:${vid}`);
+        console.log(`${DRY_RUN ? '[dry-run] ' : ''}${vid}: stripe ${current} -> ${stock}, inventory ${inv ? JSON.stringify(inv.stock ?? inv) : '(unset)'} -> ${stock}`);
         if (!DRY_RUN) {
             await stripe.prices.update(price.id, { metadata: { stock: String(stock) } });
+            // Same shape setStock() in src/lib/inventory.ts writes.
+            await redis.set(`inventory:${vid}`, { stock, syncedAt: new Date().toISOString() });
             updated++;
         }
     }
