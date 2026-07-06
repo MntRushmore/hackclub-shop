@@ -18,10 +18,13 @@ status anywhere (some states exempt nonprofit sales entirely)?
   If tax should apply to the full amount → drop the split, bill one goods line.
   If exempt-seller everywhere → tax code on the FMV line can go nontaxable too,
   or turn `STRIPE_TAX_ENABLED` off for donation-only carts.
-  Also covers the **Sustainer** $25/mo subscription (`/api/checkout/sustain`):
-  currently treated as a pure donation (nontaxable, no automatic tax) since no
-  gift ships monthly — but the annual thank-you gift has FMV; confirm whether it
-  needs a yearly FMV disclosure on the anniversary receipt.
+  Also covers recurring giving: the **Sustainer** ($500/mo,
+  `/api/checkout/sustain`) and MONTHLY TIER donations (any tier can now bill
+  monthly). Monthly tiers bill the full amount as a nontaxable donation each
+  month; the thank-you gift ships once and its FMV is disclosed against the
+  FIRST payment only (receipt says later months are fully deductible). Confirm
+  that treatment, plus whether the Sustainer's annual gift needs a yearly FMV
+  disclosure.
 
 ### 2. FMV values per tier
 We disclose FMV = suggested retail: sticker $5, mug/tote $30, tee/cap $35,

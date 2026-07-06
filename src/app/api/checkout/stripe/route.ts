@@ -207,14 +207,44 @@ export async function POST(request: Request) {
         const extraCents = donor?.extraCents ?? 0;
         const extraUsd = extraCents / 100;
 
+        // Monthly giving: the tier bills as a subscription. The thank-you gift
+        // still ships once (stock is held exactly like a one-time order), the
+        // FMV disclosure applies to the first payment, and renewals bump the
+        // impact meters via the invoice.paid webhook. Mixing a subscription
+        // with ordinary shop items in one Stripe session isn't supported.
+        const wantsRecurring = Boolean(donor?.recurring);
+        if (wantsRecurring && donationItems.length !== validation.items!.length) {
+            await release(holdLines);
+            return NextResponse.json(
+                { error: 'Monthly donations can’t be combined with other shop items in one checkout.' },
+                { status: 400 },
+            );
+        }
+
         const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = validation.items!.flatMap(item => {
-            // A donation-tier line is always billed via price_data, split in two:
-            // the gift's FMV as a taxable goods line, and everything above it as a
-            // nontaxable donation. Billing by the Stripe Price id would classify
-            // the whole amount as goods (the Product carries the goods tax_code)
-            // and charge the donor sales tax on their donation.
+            // A one-time donation-tier line is billed via price_data, split in
+            // two: the gift's FMV as a taxable goods line, and everything above
+            // it as a nontaxable donation. (Billing by the Stripe Price id would
+            // classify the whole amount as goods and tax the donation.)
+            // A MONTHLY donation-tier line is a single recurring nontaxable
+            // line for the full amount; FMV is disclosed on the receipt.
             if (item.donation) {
                 const verifiedCents = Math.round(itemCashCost(item) * 100);
+                if (wantsRecurring) {
+                    return [{
+                        quantity: item.quantity,
+                        price_data: {
+                            currency: 'usd',
+                            unit_amount: verifiedCents,
+                            recurring: { interval: 'month' as const },
+                            ...(taxEnabled ? { tax_behavior: 'exclusive' as const } : {}),
+                            product_data: {
+                                name: `${item.donation.tier} monthly donation to Hack Club`,
+                                ...(taxEnabled ? { tax_code: NONTAXABLE_TAX_CODE } : {}),
+                            },
+                        },
+                    }];
+                }
                 const fmvCents = giftFmvCents(item, verifiedCents);
                 const donationCents = verifiedCents - fmvCents;
                 const img = absoluteImage(item.thumbnail_url);
@@ -329,6 +359,7 @@ export async function POST(request: Request) {
                 ...(donor.dedication ? { dedication: donor.dedication } : {}),
                 ...(donor.displayName ? { displayName: donor.displayName } : {}),
                 isAnonymous: donor.isAnonymous,
+                ...(wantsRecurring ? { recurring: true } : {}),
             };
         }
 
@@ -374,11 +405,31 @@ export async function POST(request: Request) {
         }
         const prefilled = Boolean(customerId);
 
+        const shippingName = validatedRate
+            ? `Shipping (${validatedRate.carrier} ${validatedRate.service})`.trim()
+            : (country ? `Shipping (${country})` : 'Shipping');
+        // Subscription mode doesn't support shipping_options, so a monthly
+        // donation's one-time gift shipping bills as a plain first-invoice line.
+        if (wantsRecurring && shippingCost > 0) {
+            lineItems.push({
+                quantity: 1,
+                price_data: {
+                    currency: 'usd',
+                    unit_amount: Math.round(shippingCost * 100),
+                    ...(taxEnabled ? { tax_behavior: 'exclusive' as const } : {}),
+                    product_data: {
+                        name: shippingName,
+                        ...(taxEnabled ? { tax_code: SHIPPING_TAX_CODE } : {}),
+                    },
+                },
+            });
+        }
+
         const session = await stripe.checkout.sessions.create({
-            mode: 'payment',
+            mode: wantsRecurring ? 'subscription' : 'payment',
             line_items: lineItems,
             ...(customerId ? { customer: customerId } : (email ? { customer_email: email } : {})),
-            ...(shippingCost > 0
+            ...(!wantsRecurring && shippingCost > 0
                 ? {
                     shipping_options: [{
                         shipping_rate_data: {
@@ -386,9 +437,7 @@ export async function POST(request: Request) {
                             // Carrier + service so the shopper, the Stripe receipt, and
                             // the accountants all see exactly which shipping level was
                             // sold (e.g. "USPS Priority") — a separate line from the merch.
-                            display_name: validatedRate
-                                ? `Shipping — ${validatedRate.carrier} ${validatedRate.service}`.trim()
-                                : (country ? `Shipping (${country})` : 'Shipping'),
+                            display_name: shippingName,
                             fixed_amount: { amount: Math.round(shippingCost * 100), currency: 'usd' },
                             ...(taxEnabled
                                 ? { tax_behavior: 'exclusive' as const, tax_code: SHIPPING_TAX_CODE }
@@ -396,6 +445,11 @@ export async function POST(request: Request) {
                         },
                     }],
                 }
+                : {}),
+            // Renewal invoices carry this metadata so the invoice.paid webhook
+            // can bump the impact meters without another Stripe read.
+            ...(wantsRecurring && donor
+                ? { subscription_data: { metadata: { donation: '1', fund: donor.fundId, orderId } } }
                 : {}),
             // Stripe Tax needs an address for the jurisdiction. When we pre-filled a
             // Customer with the shipping address, Stripe already has it — so we do NOT

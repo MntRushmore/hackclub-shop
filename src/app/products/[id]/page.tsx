@@ -20,6 +20,9 @@ const ProductPage = () => {
     const { pathway, isGuest } = usePathway();
 
     const [product, setProduct] = useState<ProductDetail | null>(null);
+    // Donation frequency. Monthly is the default for every tier except the
+    // open-ended top tier (donation.plus), which starts as a one-time gift.
+    const [monthly, setMonthly] = useState(true);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedVariant, setSelectedVariant] = useState<Variant | null>(null);
@@ -35,6 +38,7 @@ const ProductPage = () => {
                 const data = await response.json();
                 setProduct(data.result.sync_product);
                 setVariants(data.result.sync_variants);
+                if (data.result.sync_product?.donation?.plus) setMonthly(false);
 
                 if (data.result.sync_variants && data.result.sync_variants.length > 0) {
                     setSelectedVariant(data.result.sync_variants[0]);
@@ -84,6 +88,7 @@ const ProductPage = () => {
             price_points: getPointsPrice(first) || undefined,
             thumbnail_url: first.product.image,
             variant_id: first.variant_id || first.id,
+            recurring: monthly,
         });
         router.push('/checkout');
     };
@@ -219,7 +224,7 @@ const ProductPage = () => {
                                 {donation ? (
                                     <>
                                         <p className="text-3xl font-black text-hackclub-red">
-                                            {dollars(donationAmount)}{donation.plus ? '+' : ''} donation
+                                            {dollars(donationAmount)}{donation.plus ? '+' : ''}{monthly ? <span className="text-xl text-hackclub-muted">/month</span> : ''} donation
                                         </p>
                                         {donationDeductible > 0 && (
                                             <p className="mt-1 text-sm font-bold text-hackclub-muted">
@@ -278,6 +283,31 @@ const ProductPage = () => {
 
                         {anyVariantAvailable ? (
                             <>
+                                {donation && (
+                                    <div className="mb-4">
+                                        <div className="flex gap-2">
+                                            {([true, false] as const).map((m) => (
+                                                <button
+                                                    key={String(m)}
+                                                    type="button"
+                                                    onClick={() => setMonthly(m)}
+                                                    className={`flex-1 px-4 py-2 rounded-full font-bold text-sm transition-colors border-2 ${
+                                                        monthly === m
+                                                            ? 'bg-hackclub-red border-hackclub-red text-white'
+                                                            : 'bg-white border-hackclub-smoke text-hackclub-slate hover:border-hackclub-slate'
+                                                    }`}
+                                                >
+                                                    {m ? 'Monthly' : 'One-time'}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <p className="mt-2 text-xs font-bold text-hackclub-muted">
+                                            {monthly
+                                                ? 'Monthly keeps a teenager backed all year. Cancel anytime.'
+                                                : 'A single donation. You can always switch to monthly.'}
+                                        </p>
+                                    </div>
+                                )}
                                 <motion.button
                                     whileHover={donation || selectedAvailable ? { scale: 1.05 } : undefined}
                                     whileTap={donation || selectedAvailable ? { scale: 0.95 } : undefined}
@@ -290,7 +320,7 @@ const ProductPage = () => {
                                     onClick={donation ? handleDonate : handleAddToCart}
                                 >
                                     {donation
-                                        ? (anyGiftInStock ? `Donate ${dollars(donationAmount)}${donation.plus ? '+' : ''} →` : 'Fully claimed')
+                                        ? (anyGiftInStock ? `Donate ${dollars(donationAmount)}${donation.plus ? '+' : ''}${monthly ? '/month' : ''} →` : 'Fully claimed')
                                         : selectedAvailable ? 'Add to Cart' : !selectedInStock ? 'Sold out' : 'Not available'}
                                 </motion.button>
                                 {donation && (

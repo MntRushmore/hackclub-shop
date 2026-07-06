@@ -12,6 +12,10 @@ interface CartItem {
     thumbnail_url: string;
     variant_id?: string | number | null;
     quantity: number;
+    // Donation tiers: true = the donor chose monthly giving (checkout builds a
+    // subscription instead of a one-time payment). Set on the tier page,
+    // adjustable at checkout.
+    recurring?: boolean;
 }
 
 interface CartContextType {

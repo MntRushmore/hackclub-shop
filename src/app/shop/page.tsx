@@ -544,7 +544,7 @@ function TierCard({ product }: { product: Product }) {
                     {product.donation?.tier}
                 </p>
                 <p className="text-4xl font-black text-hackclub-dark" style={{ letterSpacing: '-0.02em' }}>
-                    {dollars(amount)}{product.donation?.plus ? '+' : ''}
+                    {dollars(amount)}{product.donation?.plus ? '+' : <span className="text-xl text-hackclub-muted">/mo</span>}
                 </p>
                 {product.donation?.impact && (
                     <p className="text-hackclub-dark font-bold leading-snug">{product.donation.impact}</p>
@@ -565,7 +565,7 @@ function TierCard({ product }: { product: Product }) {
                             ? 'bg-gray-200 text-gray-400'
                             : 'bg-hackclub-red text-white group-hover:bg-hackclub-orange'
                     }`}>
-                        {soldOut ? 'Fully claimed' : `Donate ${dollars(amount)}${product.donation?.plus ? '+' : ''}`}
+                        {soldOut ? 'Fully claimed' : `Donate ${dollars(amount)}${product.donation?.plus ? '+' : '/mo'}`}
                         {!soldOut && (
                             <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -610,12 +610,13 @@ function SustainerCard() {
             <div className="flex flex-col gap-2 p-6 flex-1">
                 <p className="text-xs font-black uppercase tracking-widest text-hackclub-red">Sustainer</p>
                 <p className="text-4xl font-black" style={{ letterSpacing: '-0.02em' }}>
-                    $25<span className="text-xl text-white/60">/month</span>
+                    $500<span className="text-xl text-white/60">/month</span>
                 </p>
-                <p className="font-bold leading-snug">Stays behind a teenager all year long.</p>
+                <p className="font-bold leading-snug">A laptop in a kid&apos;s hands, every single month.</p>
                 <p className="text-sm text-white/70 font-medium leading-relaxed">
-                    A monthly donation with a permanent spot on the donor wall and a
-                    members-only thank-you gift each year. Cancel anytime.
+                    Our biggest commitment: a monthly donation with a permanent spot on
+                    the donor wall and a members-only thank-you gift each year. Cancel
+                    anytime.
                 </p>
                 {failed && (
                     <p className="text-sm font-bold text-hackclub-red">Couldn&apos;t start checkout. Please try again.</p>

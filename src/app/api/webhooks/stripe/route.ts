@@ -150,7 +150,7 @@ export async function POST(request: Request) {
                 break;
             }
             case 'invoice.paid': {
-                // Sustainer monthly renewal: bump the impact counters (no new
+                // Monthly renewal (Sustainer OR a monthly donation tier): bump
                 // wall entry — the donor is already on the wall). The first
                 // invoice (billing_reason=subscription_create) is counted by
                 // checkout.session.completed above, so only cycles count here.
@@ -159,7 +159,7 @@ export async function POST(request: Request) {
                 // Subscription metadata is snapshotted onto the invoice's parent
                 // details, so no extra Stripe read is needed to identify ours.
                 const subMeta = invoice.parent?.subscription_details?.metadata;
-                if (subMeta?.sustainer !== '1') break;
+                if (subMeta?.sustainer !== '1' && subMeta?.donation !== '1') break;
                 if (!(await claimOrderSettlement(`invoice:${invoice.id}`))) break;
                 await bumpImpact(subMeta.fund || 'general', invoice.amount_paid / 100);
                 break;

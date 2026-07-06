@@ -100,6 +100,9 @@ export interface OrderDonation {
     // Numbered-vest number (1–100), minted at payment settlement for tiers whose
     // gift includes the numbered vest. Printed on the packing slip + receipt.
     vestNumber?: number;
+    // True when the donation is a monthly subscription (first payment recorded
+    // here; renewals bump the impact counters via the invoice.paid webhook).
+    recurring?: boolean;
     // ISO timestamp when the employer-match follow-up email went out (set by the
     // match-followup cron; absent = not yet sent).
     matchEmailSentAt?: string;

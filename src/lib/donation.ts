@@ -86,9 +86,12 @@ export interface DonationCheckoutInput {
     displayName?: string;  // how the donor wants to appear on the donor wall
     anonymous?: boolean;
     // Optional extra donation on top of the tier amount, integer cents. This is
-    // how a donor gives a custom amount (e.g. Founder's Circle + extra = any
-    // total over $1,000). Pure donation: no gift, fully deductible, nontaxable.
+    // how a donor gives a custom amount (e.g. the top tier + extra = any total
+    // over $1,000). Pure donation: no gift, fully deductible, nontaxable.
+    // One-time even on a monthly donation.
     extraCents?: number;
+    // True = bill the tier amount monthly (Stripe subscription) instead of once.
+    recurring?: boolean;
 }
 
 /** Ceiling for the extra-donation field: $100,000. Above this, talk to us. */
@@ -105,6 +108,7 @@ export function sanitizeDonationInput(input: DonationCheckoutInput | undefined):
     displayName?: string;
     isAnonymous: boolean;
     extraCents: number;
+    recurring: boolean;
 } {
     const clip = (s: unknown, max: number): string | undefined => {
         if (typeof s !== 'string') return undefined;
@@ -123,6 +127,7 @@ export function sanitizeDonationInput(input: DonationCheckoutInput | undefined):
         displayName: clip(input?.displayName, 60),
         isAnonymous: Boolean(input?.anonymous),
         extraCents,
+        recurring: Boolean(input?.recurring),
     };
 }
 

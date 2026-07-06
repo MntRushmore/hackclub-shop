@@ -17,7 +17,7 @@ import { rateLimit, rateLimitResponse } from '../../../../lib/rateLimit';
  */
 
 const SUSTAINER_LOOKUP_KEY = 'sustainer_monthly';
-const SUSTAINER_AMOUNT_CENTS = 2500; // $25/mo
+const SUSTAINER_AMOUNT_CENTS = 50000; // $500/mo
 
 export async function POST(request: Request) {
     if (!isStripeConfigured()) {
@@ -34,23 +34,30 @@ export async function POST(request: Request) {
 
         // Find-or-create the recurring price by lookup_key, so re-deploys and
         // concurrent requests converge on one price instead of duplicating.
+        // Prices are immutable: when the configured amount changes, mint a new
+        // Price and move the lookup_key onto it (existing subscribers keep
+        // billing on their old price; only new signups get the new amount).
         let priceId: string | undefined;
         const existing = await stripe.prices.list({ lookup_keys: [SUSTAINER_LOOKUP_KEY], limit: 1 });
-        if (existing.data[0]) {
-            priceId = existing.data[0].id;
+        const current = existing.data[0];
+        if (current && current.unit_amount === SUSTAINER_AMOUNT_CENTS) {
+            priceId = current.id;
         } else {
-            const product = await stripe.products.create({
-                name: 'Hack Club Sustainer',
-                description: 'A monthly donation backing teenagers at Hack Club, with a members-only annual thank-you gift.',
-                tax_code: NONTAXABLE_TAX_CODE,
-                metadata: { sustainer: '1' },
-            });
+            const productId = current
+                ? (typeof current.product === 'string' ? current.product : current.product.id)
+                : (await stripe.products.create({
+                      name: 'Hack Club Sustainer',
+                      description: 'A monthly donation backing teenagers at Hack Club, with a members-only annual thank-you gift.',
+                      tax_code: NONTAXABLE_TAX_CODE,
+                      metadata: { sustainer: '1' },
+                  })).id;
             const price = await stripe.prices.create({
-                product: product.id,
+                product: productId,
                 currency: 'usd',
                 unit_amount: SUSTAINER_AMOUNT_CENTS,
                 recurring: { interval: 'month' },
                 lookup_key: SUSTAINER_LOOKUP_KEY,
+                transfer_lookup_key: true,
                 metadata: { sustainer: '1' },
             });
             priceId = price.id;

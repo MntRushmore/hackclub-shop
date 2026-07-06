@@ -71,9 +71,13 @@ const Checkout = () => {
     const [donorName, setDonorName] = useState('');
     const [donorAnonymous, setDonorAnonymous] = useState(false);
     // Optional custom amount on top of the tier (how a donor gives any total,
-    // e.g. Founder's Circle + extra for $1,000+). Dollar string from the input;
-    // the server re-validates and caps it.
+    // e.g. the top tier + extra for $1,000+). Dollar string from the input;
+    // the server re-validates and caps it. Always a one-time charge.
     const [extraDonation, setExtraDonation] = useState('');
+    // Monthly vs one-time. The tier page sets the default on the cart item
+    // (monthly everywhere except the open-ended top tier); the toggle here
+    // overrides it for the whole donation.
+    const [monthlyOverride, setMonthlyOverride] = useState<boolean | null>(null);
     const router = useRouter();
 
     useEffect(() => {
@@ -217,6 +221,7 @@ const Checkout = () => {
     // Donation-tier presence + the display-only deductible estimate (donation
     // minus each gift's fair market value; the server computes the real number).
     const hasDonation = cart.some((item) => donationTiers[String(item.id)]);
+    const monthly = hasDonation && (monthlyOverride ?? cart.some((item) => donationTiers[String(item.id)] && item.recurring));
     const extraUsd = (() => {
         const n = parseFloat(extraDonation);
         return hasDonation && Number.isFinite(n) && n > 0 ? Math.min(n, 100000) : 0;
@@ -379,6 +384,7 @@ const Checkout = () => {
                                   dedication,
                                   displayName: donorName,
                                   anonymous: donorAnonymous,
+                                  recurring: monthly,
                                   ...(extraUsd > 0 ? { extraCents: Math.round(extraUsd * 100) } : {}),
                               },
                           }
@@ -493,6 +499,32 @@ const Checkout = () => {
                             Fund choice + optional dedication and donor-wall name. */}
                         {!payWithPoints && cart.length > 0 && hasDonation && (
                             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-2xl bg-hackclub-smoke/30 border-2 border-hackclub-smoke space-y-3">
+                                {/* Frequency first: monthly is the default for every tier
+                                    except the open-ended top tier. */}
+                                <div>
+                                    <p className="font-bold text-hackclub-dark mb-2">How often?</p>
+                                    <div className="flex gap-2">
+                                        {([true, false] as const).map((m) => (
+                                            <button
+                                                key={String(m)}
+                                                type="button"
+                                                onClick={() => setMonthlyOverride(m)}
+                                                className={`flex-1 px-4 py-2 rounded-full font-bold text-sm transition-colors border-2 ${
+                                                    monthly === m
+                                                        ? 'bg-hackclub-red border-hackclub-red text-white'
+                                                        : 'bg-white border-hackclub-smoke text-hackclub-slate hover:border-hackclub-slate'
+                                                }`}
+                                            >
+                                                {m ? 'Monthly' : 'One-time'}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <p className="mt-1 text-xs text-hackclub-muted">
+                                        {monthly
+                                            ? 'Billed monthly, cancel anytime. Shipping and any extra donation are charged once, with your first payment.'
+                                            : 'A single donation.'}
+                                    </p>
+                                </div>
                                 {/* Gift choice: the tier page carts a placeholder gift; the
                                     donor picks the real gift + size here. */}
                                 {cart.some((i) => (donationTiers[String(i.id)]?.variants.length || 0) > 1) && (
@@ -729,7 +761,7 @@ const Checkout = () => {
                                             <div className="font-black text-hackclub-red text-lg">
                                                 {payWithPoints
                                                     ? formatPoints((item.price_points || 0) * (item.quantity || 1))
-                                                    : formatCash((item.price_cash || 0) * (item.quantity || 1))}
+                                                    : <>{formatCash((item.price_cash || 0) * (item.quantity || 1))}{monthly && donationTiers[String(item.id)] ? <span className="text-sm text-hackclub-muted">/mo</span> : null}</>}
                                             </div>
                                         </motion.div>
                                     ))}
@@ -762,7 +794,7 @@ const Checkout = () => {
                             )}
                             <div className="flex justify-between items-center text-xl font-black pt-2 border-t border-hackclub-smoke">
                                 <span>{payWithPoints ? 'Points Required:' : 'Subtotal:'}</span>
-                                <span className="text-hackclub-dark">{payWithPoints ? formatPoints(requiredPoints) : formatCash(cashTotal + extraUsd)}</span>
+                                <span className="text-hackclub-dark">{payWithPoints ? formatPoints(requiredPoints) : <>{formatCash(cashTotal + extraUsd)}{monthly ? <span className="text-sm text-hackclub-muted"> first month</span> : null}</>}</span>
                             </div>
                             {!payWithPoints && hasDonation && deductibleEstimate > 0 && (
                                 <div className="flex justify-between items-center text-sm font-bold text-hackclub-slate">
@@ -773,7 +805,9 @@ const Checkout = () => {
                             {!payWithPoints && (
                                 <p className="text-xs text-hackclub-muted text-right">
                                     {hasDonation
-                                        ? 'Sales tax applies only to the gift’s value, not your donation. Your receipt doubles as your tax acknowledgment.'
+                                        ? monthly
+                                            ? 'Your tier amount repeats monthly; shipping and any extra donation bill once. Your receipt doubles as your tax acknowledgment.'
+                                            : 'Sales tax applies only to the gift’s value, not your donation. Your receipt doubles as your tax acknowledgment.'
                                         : 'Any applicable sales tax is calculated at checkout.'}
                                 </p>
                             )}
@@ -818,7 +852,7 @@ const Checkout = () => {
                                     </motion.span>
                                 ) : canCheckout ? (
                                     <motion.span key="checkout" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                                        {payWithPoints ? 'Checkout →' : hasDonation ? 'Complete donation →' : 'Pay with card →'}
+                                        {payWithPoints ? 'Checkout →' : hasDonation ? (monthly ? 'Start monthly donation →' : 'Complete donation →') : 'Pay with card →'}
                                     </motion.span>
                                 ) : (
                                     <motion.span key="insufficient" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>

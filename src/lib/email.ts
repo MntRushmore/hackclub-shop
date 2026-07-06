@@ -218,9 +218,9 @@ function donationText(order: Order): string {
     return `\n\nYour donation
 Hack Club is a registered 501(c)(3) nonprofit (EIN 81-2908499).${vestLine}
 What you told us matters to you: ${getDonationFund(d.fundId).name}${dedication}
-Donation received: ${usd(d.amount)}
+Donation received: ${usd(d.amount)}${d.recurring ? ' (repeats monthly)' : ''}
 Estimated fair market value of the thank-you gift(s) you received: ${usd(d.fmvAmount)}
-Tax-deductible portion (donation minus gift value): ${usd(d.deductibleAmount)}
+Tax-deductible portion (donation minus gift value): ${usd(d.deductibleAmount)}${d.recurring ? '\nThis receipt covers your first payment. The gift value applies once, so future monthly payments are fully tax-deductible.' : ''}
 No other goods or services were provided in exchange for this contribution. Please keep this email for your tax records, and consult your tax advisor.
 
 One more thing: many employers match charitable donations. Search your company's matching portal for "Hack Club" or "The Hack Foundation" and your donation could go twice as far.`;
@@ -244,11 +244,11 @@ function donationHtml(order: Order): string {
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                 ${row('What matters to you', getDonationFund(d.fundId).name)}
                 ${d.dedication ? row('Dedicated', d.dedication) : ''}
-                ${row('Donation received', usd(d.amount))}
+                ${row('Donation received', d.recurring ? `${usd(d.amount)} monthly` : usd(d.amount))}
                 ${row('Fair market value of thank-you gift(s)', usd(d.fmvAmount))}
                 ${row('Tax-deductible portion', usd(d.deductibleAmount), true)}
             </table>
-            <p style="margin:12px 0 0;color:${MUTED};font-size:12px;line-height:1.6">Hack Club is a registered 501(c)(3) nonprofit (EIN 81-2908499). No other goods or services were provided in exchange for this contribution. Keep this email for your tax records; consult your tax advisor.</p>
+            <p style="margin:12px 0 0;color:${MUTED};font-size:12px;line-height:1.6">${d.recurring ? 'This receipt covers your first payment. The gift value applies once, so future monthly payments are fully tax-deductible. ' : ''}Hack Club is a registered 501(c)(3) nonprofit (EIN 81-2908499). No other goods or services were provided in exchange for this contribution. Keep this email for your tax records; consult your tax advisor.</p>
         `)}
         <p style="margin:16px 0 0;padding:12px 16px;background:#faf8f4;border-left:3px solid ${RED};color:${INK};font-size:14px;line-height:1.55">One more thing: many employers match charitable donations. Search your company's matching portal for &ldquo;Hack Club&rdquo; or &ldquo;The Hack Foundation&rdquo; and your donation could go twice as far.</p>`;
 }
@@ -351,7 +351,7 @@ export function buildOrderConfirmation(order: Order, to: string): EmailMessage {
     const isDonation = Boolean(order.donation);
     const title = isDonation ? 'Thank you for backing a teenager!' : 'Thanks for your order!';
     const intro = isDonation
-        ? `Your <strong style="color:${RED}">${escapeHtml(order.donation!.tier)}</strong> donation is in (order <strong style="color:${RED}">#${ref}</strong>). Your thank-you gift ships soon, and your tax receipt is below.`
+        ? `Your <strong style="color:${RED}">${escapeHtml(order.donation!.tier)}</strong> ${order.donation!.recurring ? 'monthly donation is live' : 'donation is in'} (order <strong style="color:${RED}">#${ref}</strong>). Your thank-you gift ships soon, and your tax receipt is below.`
         : `Your order <strong style="color:${RED}">#${ref}</strong> is confirmed. We're on it, and you'll get another email the moment it ships.`;
 
     const text = `${title}\n\nOrder #${ref}\n\nItems:\n${itemsText(order)}\n\n${priceLine(order)}\nShipping to: ${shippingLine(order)}${donationText(order)}\n\nWe'll let you know when it ships.${trackText}`;
