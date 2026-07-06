@@ -25,10 +25,14 @@ export interface Product {
 export interface ProductDetail {
     id: number;
     name: string;
+    description?: string;
     thumbnail_url: string;
     sync_variants?: Variant[];
     external_id?: string;
     variants?: number;
     synced?: number;
     is_ignored?: boolean;
+    // Donation tier marker (see src/lib/donation.ts): the cash price is the
+    // donation amount; the merch is the thank-you gift.
+    donation?: { tier: string; fmvCents: number; impact?: string } | null;
 }

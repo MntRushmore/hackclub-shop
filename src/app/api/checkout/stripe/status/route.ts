@@ -25,5 +25,10 @@ export async function GET(request: Request) {
         paymentStatus: order.paymentStatus,
         totalAmount: order.totalAmount,
         items: order.items.map(i => ({ name: i.name, quantity: i.quantity })),
+        // Donation-tier extras for the thank-you page's share card. Share-safe
+        // fields only (no amounts, no donor identity).
+        ...(order.donation
+            ? { donation: { tier: order.donation.tier, vestNumber: order.donation.vestNumber } }
+            : {}),
     });
 }

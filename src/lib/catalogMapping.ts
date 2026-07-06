@@ -19,6 +19,7 @@
  */
 
 import type { Product, ProductVariant, ShippingOption, CheckoutField } from '../types/Admin';
+import type { DonationTierConfig } from './donation';
 import { resolveDualPrice } from './variantPricing';
 import { GENERAL_GOODS_TAX_CODE } from './stripe';
 
@@ -60,6 +61,9 @@ export interface StripeProductConfig {
     draft?: boolean;
     shippingOptions?: ShippingOption[];
     checkoutFields?: CheckoutField[];
+    // Present iff the product is a donation tier (the cash price is the donation
+    // amount; the merch is the thank-you gift). See src/lib/donation.ts.
+    donation?: DonationTierConfig;
 }
 
 /** Build the Stripe Product create/update payload for a shop product. */
@@ -77,6 +81,7 @@ export function toStripeProduct(product: Product): {
         draft: product.draft,
         shippingOptions: product.shippingOptions,
         checkoutFields: product.checkoutFields,
+        donation: product.donation,
     };
     // Stripe only accepts absolute http(s) image URLs; a relative path (e.g.
     // "/images/x.png") makes Product create/update fail with url_invalid. Drop any
@@ -174,6 +179,8 @@ export interface CatalogProduct {
     shippingOptions: ShippingOption[];
     checkoutFields: CheckoutField[];
     draft?: boolean;
+    // Present iff this product is a donation tier (see src/lib/donation.ts).
+    donation?: DonationTierConfig;
     createdAt?: string; // ISO, from the Stripe Product's `created` — for "newest" sorting
     stripeProductId: string;
 }

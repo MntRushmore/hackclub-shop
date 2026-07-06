@@ -3,8 +3,10 @@ import { useEffect, useState, useContext, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { CartContext } from '../../context/CartContext';
+import { shareText } from '../../lib/shareCard';
 
 type GuestStatus = 'loading' | 'processing' | 'paid' | 'notfound' | 'slow';
+type DonationShare = { tier: string; vestNumber?: number };
 
 /**
  * Order success page, both pathways:
@@ -18,8 +20,13 @@ type GuestStatus = 'loading' | 'processing' | 'paid' | 'notfound' | 'slow';
 const ThankYouInner = () => {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id');
-  const isGuest = Boolean(sessionId);
+  // Sustainer subscription success: no shop order exists to poll, and Stripe
+  // only redirects here after the subscription's first payment succeeds.
+  const isSustainer = searchParams.get('sustain') === '1';
+  const isGuest = Boolean(sessionId) && !isSustainer;
   const [status, setStatus] = useState<GuestStatus>(isGuest ? 'loading' : 'paid');
+  const [donation, setDonation] = useState<DonationShare | null>(isSustainer ? { tier: 'Sustainer' } : null);
+  const [copied, setCopied] = useState(false);
   const cartContext = useContext(CartContext);
 
   // Student order: cart already cleared at checkout; clear again here (idempotent)
@@ -50,6 +57,7 @@ const ThankYouInner = () => {
           if (data.paymentStatus === 'paid') {
             // Confirmed paid — now it's safe to clear the cart.
             cartContext?.clearCart();
+            if (data.donation?.tier) setDonation(data.donation);
             setStatus('paid');
             return;
           }
@@ -79,18 +87,31 @@ const ThankYouInner = () => {
   }, [isGuest, sessionId, cartContext]);
 
   const heading =
-    status === 'paid' ? 'Thank You!'
+    status === 'paid' ? (donation ? 'You just backed a teenager.' : 'Thank You!')
       : status === 'notfound' ? 'Order not found'
         : status === 'slow' ? 'Almost there…'
           : 'Almost there…';
   const sub =
     status === 'paid'
-      ? 'Your order has been successfully placed.'
+      ? (isSustainer
+          ? "You're a Hack Club Sustainer now. Your monthly donation is live, and your name is headed for the donor wall."
+          : donation
+            ? 'Your donation is in. Your thank-you gift ships soon, and your tax receipt is in your inbox.'
+            : 'Your order has been successfully placed.')
       : status === 'notfound'
         ? "We couldn't find that order. If you were charged, get in touch and we'll sort it out."
         : status === 'slow'
-          ? "Your payment is taking a little longer than usual to confirm. If you completed it, you're all set — we'll email your confirmation as soon as it lands."
+          ? "Your payment is taking a little longer than usual to confirm. If you completed it, you're all set. We'll email your confirmation as soon as it lands."
           : 'Your payment is being confirmed. This usually takes a few seconds.';
+
+  // Share card: /backed renders the OG image a post unfurls into.
+  const shareUrl = donation
+    ? `https://shop.hackclub.com/backed?${new URLSearchParams({
+        t: donation.tier,
+        ...(donation.vestNumber ? { n: String(donation.vestNumber) } : {}),
+      }).toString()}`
+    : '';
+  const postText = donation ? shareText(donation.tier, donation.vestNumber ?? null, shareUrl) : '';
 
   return (
     <div className="bg-white min-h-screen flex flex-col items-center justify-center text-hackclub-dark text-center px-4">
@@ -101,6 +122,43 @@ const ThankYouInner = () => {
       )}
       {status === 'paid' && (
         <p className="text-hackclub-muted mb-8">A confirmation has been sent to your email.</p>
+      )}
+      {status === 'paid' && donation && (
+        <div className="w-full max-w-lg mb-8 p-6 rounded-2xl border-2 border-hackclub-smoke bg-hackclub-smoke/30 text-left">
+          <p className="font-black text-hackclub-dark mb-1">
+            {donation.vestNumber
+              ? `Your vest is #${String(donation.vestNumber).padStart(3, '0')} of 100.`
+              : 'Tell the world.'}
+          </p>
+          <p className="text-hackclub-slate text-sm font-medium mb-4">
+            Sharing it is the easiest way to get one more teenager backed.
+          </p>
+          <p className="text-hackclub-dark text-sm font-medium bg-white border border-hackclub-smoke rounded-xl p-3 mb-4">
+            {postText}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(postText)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-hackclub-dark hover:bg-black text-white font-bold text-sm px-5 py-2 rounded-full transition-colors"
+            >
+              Share on X
+            </a>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard?.writeText(postText).then(() => {
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }).catch(() => {});
+              }}
+              className="border-2 border-hackclub-smoke hover:border-hackclub-slate text-hackclub-slate font-bold text-sm px-5 py-2 rounded-full transition-colors"
+            >
+              {copied ? 'Copied!' : 'Copy text'}
+            </button>
+          </div>
+        </div>
       )}
       {status === 'notfound' && (
         <p className="text-hackclub-muted mb-8">

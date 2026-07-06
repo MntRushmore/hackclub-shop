@@ -12,6 +12,7 @@
 
 import { Order } from '../types/Order';
 import { formatAddress } from './address';
+import { getDonationFund } from './donation';
 import { unsubscribeUrl } from './emailSuppression';
 
 const FROM = process.env.EMAIL_FROM || 'Hack Club Shop <shop@hackclub.com>';
@@ -199,6 +200,59 @@ function shippingLine(order: Order): string {
     return order.shippingAddress ? formatAddress(order.shippingAddress) : (order.shippingCountry || '');
 }
 
+// ── Donation acknowledgment ───────────────────────────────────────────────────
+// For donation-tier orders the confirmation email doubles as the written IRS
+// acknowledgment: contributions over $75 with goods given in return (the
+// thank-you merch) legally require a good-faith FMV disclosure. Wording here is
+// the donor-facing receipt of record — change it only with finance sign-off.
+
+const usd = (n: number) => `$${n.toFixed(2)}`;
+
+function donationText(order: Order): string {
+    const d = order.donation;
+    if (!d) return '';
+    const dedication = d.dedication ? `\nDedicated: ${d.dedication}` : '';
+    const vestLine = d.vestNumber !== undefined
+        ? `\nYour vest is #${String(d.vestNumber).padStart(3, '0')} of 100.`
+        : '';
+    return `\n\nYour donation
+Hack Club is a registered 501(c)(3) nonprofit (EIN 81-2908499).${vestLine}
+What you told us matters to you: ${getDonationFund(d.fundId).name}${dedication}
+Donation received: ${usd(d.amount)}
+Estimated fair market value of the thank-you gift(s) you received: ${usd(d.fmvAmount)}
+Tax-deductible portion (donation minus gift value): ${usd(d.deductibleAmount)}
+No other goods or services were provided in exchange for this contribution. Please keep this email for your tax records, and consult your tax advisor.
+
+One more thing: many employers match charitable donations. Search your company's matching portal for "Hack Club" or "The Hack Foundation" and your donation could go twice as far.`;
+}
+
+function donationHtml(order: Order): string {
+    const d = order.donation;
+    if (!d) return '';
+    const row = (label: string, value: string, strong = false) =>
+        `<tr>
+            <td style="padding:5px 0;font-size:14px;color:${MUTED}">${escapeHtml(label)}</td>
+            <td align="right" style="padding:5px 0;font-size:14px;font-weight:${strong ? 700 : 400};color:${INK}">${escapeHtml(value)}</td>
+        </tr>`;
+    const vestBadge = d.vestNumber !== undefined
+        ? `<p style="margin:0 0 16px;padding:14px 18px;background:${INK};color:#fff;font-size:16px;font-weight:700">Your vest is <span style="color:${RED}">#${String(d.vestNumber).padStart(3, '0')}</span> of 100.</p>`
+        : '';
+    return `
+        ${vestBadge}
+        ${summaryBox(`
+            <p style="margin:0 0 10px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:${MUTED};font-weight:700">Your donation · tax receipt</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                ${row('What matters to you', getDonationFund(d.fundId).name)}
+                ${d.dedication ? row('Dedicated', d.dedication) : ''}
+                ${row('Donation received', usd(d.amount))}
+                ${row('Fair market value of thank-you gift(s)', usd(d.fmvAmount))}
+                ${row('Tax-deductible portion', usd(d.deductibleAmount), true)}
+            </table>
+            <p style="margin:12px 0 0;color:${MUTED};font-size:12px;line-height:1.6">Hack Club is a registered 501(c)(3) nonprofit (EIN 81-2908499). No other goods or services were provided in exchange for this contribution. Keep this email for your tax records; consult your tax advisor.</p>
+        `)}
+        <p style="margin:16px 0 0;padding:12px 16px;background:#faf8f4;border-left:3px solid ${RED};color:${INK};font-size:14px;line-height:1.55">One more thing: many employers match charitable donations. Search your company's matching portal for &ldquo;Hack Club&rdquo; or &ldquo;The Hack Foundation&rdquo; and your donation could go twice as far.</p>`;
+}
+
 interface ShellOpts {
     /** Small eyebrow label above the title, e.g. "Order confirmed". */
     eyebrow?: string;
@@ -294,9 +348,15 @@ export function buildOrderConfirmation(order: Order, to: string): EmailMessage {
             : `${BASE_URL}/orders`;
     const trackText = `\n\nTrack your order: ${trackUrl}`;
 
-    const text = `Thanks for your order!\n\nOrder #${ref}\n\nItems:\n${itemsText(order)}\n\n${priceLine(order)}\nShipping to: ${shippingLine(order)}\n\nWe'll let you know when it ships.${trackText}`;
-    const html = shell('Thanks for your order!', `
-        <p style="margin:0 0 4px;font-size:15px;line-height:1.6;color:${INK}">Your order <strong style="color:${RED}">#${ref}</strong> is confirmed. We're on it — you'll get another email the moment it ships.</p>
+    const isDonation = Boolean(order.donation);
+    const title = isDonation ? 'Thank you for backing a teenager!' : 'Thanks for your order!';
+    const intro = isDonation
+        ? `Your <strong style="color:${RED}">${escapeHtml(order.donation!.tier)}</strong> donation is in (order <strong style="color:${RED}">#${ref}</strong>). Your thank-you gift ships soon, and your tax receipt is below.`
+        : `Your order <strong style="color:${RED}">#${ref}</strong> is confirmed. We're on it, and you'll get another email the moment it ships.`;
+
+    const text = `${title}\n\nOrder #${ref}\n\nItems:\n${itemsText(order)}\n\n${priceLine(order)}\nShipping to: ${shippingLine(order)}${donationText(order)}\n\nWe'll let you know when it ships.${trackText}`;
+    const html = shell(title, `
+        <p style="margin:0 0 4px;font-size:15px;line-height:1.6;color:${INK}">${intro}</p>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0 4px;border-top:1px solid ${LINE}">
             ${itemsHtml(order)}
         </table>
@@ -304,12 +364,22 @@ export function buildOrderConfirmation(order: Order, to: string): EmailMessage {
             <p style="margin:0;font-size:16px;font-weight:700;color:${INK}">${priceLineHtml(order)}</p>
             <p style="margin:10px 0 0;color:${MUTED};font-size:13px;line-height:1.5">Shipping to<br><span style="color:${INK}">${escapeHtml(shippingLine(order))}</span></p>
         `)}
+        ${donationHtml(order)}
         ${button(trackUrl, 'Track your order →')}`, {
-        eyebrow: 'Order confirmed',
+        eyebrow: isDonation ? 'Donation received' : 'Order confirmed',
         unsubscribeFor: to,
-        preview: `Order #${ref} confirmed — we'll email you when it ships.`,
+        preview: isDonation
+            ? `Donation received, tax receipt inside. Order #${ref}.`
+            : `Order #${ref} confirmed. We'll email you when it ships.`,
     });
-    return withUnsubscribe({ to, subject: `Your Hack Club Shop order #${ref}`, html, text });
+    return withUnsubscribe({
+        to,
+        subject: isDonation
+            ? `Your Hack Club donation receipt (order #${ref})`
+            : `Your Hack Club Shop order #${ref}`,
+        html,
+        text,
+    });
 }
 
 /** Alert to the staff inbox when a new order arrives. */
@@ -317,9 +387,18 @@ export function buildAdminNewOrder(order: Order): EmailMessage | null {
     if (!ADMIN_EMAIL) return null;
     const ref = order.id.slice(-8);
     const who = order.pathway === 'guest' ? (order.guestEmail || 'guest') : order.userId;
-    const text = `New ${order.pathway} order #${ref} from ${who}\n\nItems:\n${itemsText(order)}\n\n${priceLine(order)}\nShipping to: ${shippingLine(order)}\n\nManage it in the admin dashboard.`;
+    // Fulfillment cue for donation orders: which fund + the vest number to print.
+    const d = order.donation;
+    const donationNote = d
+        ? `\n\nDONATION ORDER: ${d.tier} tier, ${getDonationFund(d.fundId).name}${d.vestNumber !== undefined ? `. PRINT VEST NUMBER #${String(d.vestNumber).padStart(3, '0')} on the packing slip.` : '.'}`
+        : '';
+    const text = `New ${order.pathway} order #${ref} from ${who}\n\nItems:\n${itemsText(order)}\n\n${priceLine(order)}\nShipping to: ${shippingLine(order)}${donationNote}\n\nManage it in the admin dashboard.`;
+    const donationNoteHtml = d
+        ? `<p style="margin:14px 0 0;padding:12px 16px;background:#faf8f4;border-left:3px solid ${RED};color:${INK};font-size:14px;line-height:1.55"><strong>Donation order:</strong> ${escapeHtml(d.tier)} tier, ${escapeHtml(getDonationFund(d.fundId).name)}.${d.vestNumber !== undefined ? ` <strong>Print vest number #${String(d.vestNumber).padStart(3, '0')} on the packing slip.</strong>` : ''}</p>`
+        : '';
     const html = shell('New order just came in', `
-        <p style="margin:0 0 4px;font-size:15px;line-height:1.6;color:${INK}"><strong style="color:${RED}">#${ref}</strong> — ${escapeHtml(order.pathway)} order from <strong>${escapeHtml(who)}</strong></p>
+        <p style="margin:0 0 4px;font-size:15px;line-height:1.6;color:${INK}"><strong style="color:${RED}">#${ref}</strong>: ${escapeHtml(order.pathway)} order from <strong>${escapeHtml(who)}</strong></p>
+        ${donationNoteHtml}
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0 4px;border-top:1px solid ${LINE}">
             ${itemsHtml(order)}
         </table>
@@ -386,6 +465,45 @@ export function buildStatusUpdate(order: Order, to: string, message?: string): E
         preview: line,
     });
     return withUnsubscribe({ to, subject: `Update on your order #${ref}`, html, text });
+}
+
+/**
+ * Employer-match follow-up, sent by the match-followup cron a few days after a
+ * donation settles. This is a marketing send (not a receipt): the cron checks
+ * the suppression list before sending, and the unsubscribe footer is included.
+ * House style per CONVERSION_EMAILS.md: warm, parent to parent, ONE call to
+ * action, no em dashes.
+ */
+export function buildMatchFollowup(order: Order, to: string): EmailMessage {
+    const d = order.donation!;
+    const amount = usd(d.amount);
+    const doubled = usd(d.amount * 2);
+
+    const text = `One search could double your ${amount}.
+
+A few days ago you backed a teenager at Hack Club with a ${amount} donation. Thank you. It is already at work.
+
+Here is the part most people miss: many employers match charitable donations, and it takes about two minutes to check. If yours does, your ${amount} becomes ${doubled}, at no cost to you.
+
+Search your company's benefits portal (Benevity, YourCause, or ask HR) for "Hack Club" or "The Hack Foundation" (EIN 81-2908499). Your emailed receipt has everything the form asks for.
+
+With gratitude,
+The Hack Club team`;
+
+    const html = shell('One search could double your donation', `
+        <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:${INK}">A few days ago you backed a teenager at Hack Club with a <strong>${escapeHtml(amount)}</strong> donation. Thank you. It is already at work.</p>
+        <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:${INK}">Here is the part most people miss: <strong>many employers match charitable donations</strong>, and it takes about two minutes to check. If yours does, your ${escapeHtml(amount)} becomes <strong style="color:${RED}">${escapeHtml(doubled)}</strong>, at no cost to you.</p>
+        ${summaryBox(`
+            <p style="margin:0 0 6px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:${MUTED};font-weight:700">What to search for</p>
+            <p style="margin:0;font-size:15px;line-height:1.7;color:${INK}">In your company's benefits portal (Benevity, YourCause, or ask HR):<br/><strong>"Hack Club"</strong> or <strong>"The Hack Foundation"</strong> &middot; EIN 81-2908499</p>
+            <p style="margin:10px 0 0;color:${MUTED};font-size:13px;line-height:1.5">Your emailed receipt has everything the form asks for.</p>
+        `)}
+        <p style="margin:16px 0 0;font-size:15px;line-height:1.7;color:${INK}">With gratitude,<br/>The Hack Club team</p>`, {
+        eyebrow: 'Two minutes, double the impact',
+        unsubscribeFor: to,
+        preview: `Many employers match donations. Your ${amount} could become ${doubled}.`,
+    });
+    return withUnsubscribe({ to, subject: `One search could double your ${amount}`, html, text });
 }
 
 /**

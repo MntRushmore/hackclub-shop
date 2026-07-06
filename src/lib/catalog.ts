@@ -76,6 +76,7 @@ export function buildCatalogProduct(
         shippingOptions: config.shippingOptions || [],
         checkoutFields: config.checkoutFields || [],
         draft: config.draft,
+        donation: config.donation,
         createdAt: typeof stripeProduct.created === 'number'
             ? new Date(stripeProduct.created * 1000).toISOString()
             : undefined,

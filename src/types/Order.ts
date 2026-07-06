@@ -81,6 +81,30 @@ export interface OrderHcb {
     donatedAt?: string;     // ISO timestamp of the matched donation (HCB's donated_at)
 }
 
+/**
+ * Donation-tier summary for an order that contains donation-tier items (the
+ * shop's donation pivot: donate at a tier, merch is the thank-you gift).
+ * Amounts are USD, captured at checkout from the verified catalog prices — the
+ * receipt email turns this into the IRS quid-pro-quo acknowledgment, and the
+ * donor wall (Slice 3) reads displayName/dedication/isAnonymous from here.
+ */
+export interface OrderDonation {
+    tier: string;             // tier name of the largest donation line, e.g. "Philanthropist"
+    fundId: string;           // DonationFund id the donor directed the money to
+    amount: number;           // total donated across donation lines (USD)
+    fmvAmount: number;        // fair market value of the thank-you gifts (USD)
+    deductibleAmount: number; // amount minus fmvAmount, floored at 0 (USD)
+    dedication?: string;      // "in honor of Maya"
+    displayName?: string;     // donor-wall name, e.g. "The Chen Family"
+    isAnonymous?: boolean;
+    // Numbered-vest number (1–100), minted at payment settlement for tiers whose
+    // gift includes the numbered vest. Printed on the packing slip + receipt.
+    vestNumber?: number;
+    // ISO timestamp when the employer-match follow-up email went out (set by the
+    // match-followup cron; absent = not yet sent).
+    matchEmailSentAt?: string;
+}
+
 export interface Order {
     id: string;
     userId: string; // Hack Club user id for students; '' / guest email for guests
@@ -103,6 +127,8 @@ export interface Order {
     stripePaymentIntentId?: string;
     // HCB donation linkage — guest orders placed during the HCB-donation era.
     hcb?: OrderHcb;
+    // Donation-tier summary — set when the cart contained donation-tier items.
+    donation?: OrderDonation;
     shippingCountry?: string;
     shippingAddress?: ShippingAddress;
     // Postage/tracking, set at fulfillment time (Pirate Ship / EasyPost).

@@ -124,6 +124,12 @@ const ProductPage = () => {
         );
     }
 
+    // Donation tier: reframe price/CTA/copy around the donation, not the merch.
+    const donation = product.donation || null;
+    const donationAmount = donation ? getCashPrice(selectedVariant || undefined) || 0 : 0;
+    const donationDeductible = donation ? Math.max(0, donationAmount - donation.fmvCents / 100) : 0;
+    const dollars = (n: number) => `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+
     // Strict path separation: a variant is buyable only if it's priced for the
     // active pathway, and the product is only purchasable at all if at least one
     // variant is.
@@ -157,13 +163,35 @@ const ProductPage = () => {
                     </div>
 
                     <div className="bg-white rounded-2xl p-8 shadow-lg border-2 border-gray-200">
+                        {donation && (
+                            <p className="text-xs font-black uppercase tracking-widest text-hackclub-red mb-2">
+                                {donation.tier} tier
+                            </p>
+                        )}
                         <h1 className="text-4xl sm:text-5xl font-black text-hackclub-dark mb-4">
                             {product.name}
                         </h1>
-                        
+                        {donation?.impact && (
+                            <p className="text-lg font-bold text-hackclub-dark mb-3">{donation.impact}</p>
+                        )}
+                        {donation && product.description && (
+                            <p className="text-hackclub-slate leading-relaxed mb-4">{product.description}</p>
+                        )}
+
                         {selectedVariant && (
                             <div className="mb-8">
-                                {getDisplayPrice(selectedVariant, pathway) ? (
+                                {donation ? (
+                                    <>
+                                        <p className="text-3xl font-black text-hackclub-red">
+                                            {dollars(donationAmount)} donation
+                                        </p>
+                                        {donationDeductible > 0 && (
+                                            <p className="mt-1 text-sm font-bold text-hackclub-muted">
+                                                ~{dollars(donationDeductible)} tax-deductible · 501(c)(3)
+                                            </p>
+                                        )}
+                                    </>
+                                ) : getDisplayPrice(selectedVariant, pathway) ? (
                                     <p className="text-3xl font-black text-hackclub-red">
                                         {getDisplayPrice(selectedVariant, pathway)}
                                     </p>
@@ -181,7 +209,7 @@ const ProductPage = () => {
                         {variants.length > 0 && (
                             <div className="mb-8">
                                 <label htmlFor="variant" className="block text-lg font-bold text-hackclub-dark mb-3">
-                                    Choose your size:
+                                    {donation ? 'Choose your thank-you gift:' : 'Choose your size:'}
                                 </label>
                                 <select
                                     id="variant"
@@ -202,9 +230,10 @@ const ProductPage = () => {
                                             value={variant.id || variant.variant_id}
                                             disabled={variant.available === 0}
                                         >
-                                            {variant.size || 'Default'} / {variant.color || 'Default'}
-                                            {getDisplayPrice(variant, pathway) ? ` - ${getDisplayPrice(variant, pathway)}` : ''}
-                                            {variant.available === 0 ? ' (sold out)' : ''}
+                                            {donation
+                                                ? variant.name
+                                                : `${variant.size || 'Default'} / ${variant.color || 'Default'}${getDisplayPrice(variant, pathway) ? ` - ${getDisplayPrice(variant, pathway)}` : ''}`}
+                                            {variant.available === 0 ? (donation ? ' (fully claimed)' : ' (sold out)') : ''}
                                         </option>
                                     ))}
                                 </select>
@@ -223,7 +252,9 @@ const ProductPage = () => {
                                 }
                                 onClick={handleAddToCart}
                             >
-                                {selectedAvailable ? 'Add to Cart' : !selectedInStock ? 'Sold out' : 'Not available'}
+                                {selectedAvailable
+                                    ? (donation ? `Donate ${dollars(donationAmount)} →` : 'Add to Cart')
+                                    : !selectedInStock ? (donation ? 'Fully claimed' : 'Sold out') : 'Not available'}
                             </motion.button>
                         ) : (
                             <div className="rounded-2xl border-2 border-gray-200 bg-hackclub-smoke p-5 text-center">
@@ -244,14 +275,18 @@ const ProductPage = () => {
                         {anyVariantAvailable && (
                             <div className="mt-7 pt-7 border-t border-gray-100 space-y-4">
                                 <p className="text-hackclub-slate leading-relaxed">
-                                    Every purchase supports the teenagers who build, ship, and
-                                    dream at Hack Club. You&apos;re not just buying a shirt.
-                                    You&apos;re backing a kid who makes.
+                                    {donation
+                                        ? "Your donation funds the teenagers who build, ship, and dream at Hack Club. The merch is just our thanks."
+                                        : "Every purchase supports the teenagers who build, ship, and dream at Hack Club. You're not just buying a shirt. You're backing a kid who makes."}
                                 </p>
                                 <ul className="space-y-2.5 text-sm font-bold text-hackclub-dark">
                                     <li className="flex items-start gap-2.5">
                                         <span className="text-hackclub-red mt-0.5">♥</span>
-                                        <span>All proceeds support teenagers at Hack Club, a 501(c)(3) nonprofit (EIN 81-2908499).</span>
+                                        <span>
+                                            {donation
+                                                ? 'Hack Club is a 501(c)(3) nonprofit (EIN 81-2908499). Your receipt doubles as your tax acknowledgment, and the portion above the gift’s value is tax-deductible.'
+                                                : 'All proceeds support teenagers at Hack Club, a 501(c)(3) nonprofit (EIN 81-2908499).'}
+                                        </span>
                                     </li>
                                     <li className="flex items-start gap-2.5">
                                         <span className="text-hackclub-red mt-0.5">▸</span>

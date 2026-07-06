@@ -12,6 +12,7 @@ import { ShippingAddress } from '../../types/Order';
 import { EMPTY_ADDRESS, validateAddress } from '../../lib/address';
 import { formatPoints, formatCash, usdToPoints, pointsToUsd } from '../../lib/paymentUtils';
 import { usePathway } from '../../lib/usePathway';
+import { DONATION_FUNDS, DEFAULT_FUND_ID } from '../../lib/donation';
 import LiveShippingRates, { SelectedRate } from './LiveShippingRates';
 
 type CheckoutValue = string | ShippingAddress;
@@ -54,7 +55,31 @@ const Checkout = () => {
     const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
     const [checkoutFields, setCheckoutFields] = useState<CheckoutField[]>([]);
     const [loadingCheckoutInfo, setLoadingCheckoutInfo] = useState(true);
+    // Donation pivot: which cart products are donation tiers (id → tier config),
+    // so the fund picker / dedication UI only appears on donation checkouts and
+    // the summary can show the tax-deductible estimate. Server re-derives all of
+    // this from the catalog — these values are display-only.
+    const [donationTiers, setDonationTiers] = useState<Record<string, { tier: string; fmvCents: number }>>({});
+    const [fundId, setFundId] = useState<string>(DEFAULT_FUND_ID);
+    const [dedication, setDedication] = useState('');
+    const [donorName, setDonorName] = useState('');
+    const [donorAnonymous, setDonorAnonymous] = useState(false);
     const router = useRouter();
+
+    useEffect(() => {
+        // One catalog read to flag donation-tier cart items. Failure just means
+        // the donation extras don't render — checkout still works.
+        fetch('/api/products')
+            .then((r) => (r.ok ? r.json() : null))
+            .then((data) => {
+                const map: Record<string, { tier: string; fmvCents: number }> = {};
+                for (const p of data?.result || []) {
+                    if (p.donation) map[String(p.id)] = { tier: p.donation.tier, fmvCents: p.donation.fmvCents || 0 };
+                }
+                setDonationTiers(map);
+            })
+            .catch(() => {});
+    }, []);
 
     useEffect(() => {
         if (cartContext?.cart && cartContext.cart.length > 0) {
@@ -169,6 +194,15 @@ const Checkout = () => {
     }, 0);
     const shippingCash = selectedRate?.cost ?? 0;
     const cashTotal = itemsCash + shippingCash;
+
+    // Donation-tier presence + the display-only deductible estimate (donation
+    // minus each gift's fair market value; the server computes the real number).
+    const hasDonation = cart.some((item) => donationTiers[String(item.id)]);
+    const deductibleEstimate = cart.reduce((total, item) => {
+        const tier = donationTiers[String(item.id)];
+        if (!tier || !item.price_cash) return total;
+        return total + Math.max(0, item.price_cash - tier.fmvCents / 100) * (item.quantity || 1);
+    }, 0);
 
     const pointsBalance = pointsContext?.balance || 0;
     const hasEnoughPoints = pointsBalance >= requiredPoints;
@@ -313,6 +347,11 @@ const Checkout = () => {
                     ...(selectedRate?.shipmentId
                         ? { selectedRate: { rateId: selectedRate.rateId, shipmentId: selectedRate.shipmentId, quoteId: selectedRate.quoteId } }
                         : {}),
+                    // Donor fields — the server ignores these unless the verified
+                    // cart actually contains donation tiers.
+                    ...(hasDonation
+                        ? { donation: { fundId, dedication, displayName: donorName, anonymous: donorAnonymous } }
+                        : {}),
                 }),
             });
             const data = await response.json();
@@ -360,7 +399,11 @@ const Checkout = () => {
                         <div>
                             <h1 className="text-3xl font-black mb-2 text-hackclub-red">Checkout</h1>
                             <h2 className="text-lg font-bold text-hackclub-slate">
-                                {payWithPoints ? 'Pay with your points.' : 'Complete your order with a secure card payment.'}
+                                {payWithPoints
+                                    ? 'Pay with your points.'
+                                    : hasDonation
+                                        ? 'Complete your donation with a secure card payment.'
+                                        : 'Complete your order with a secure card payment.'}
                             </h2>
                         </div>
 
@@ -412,6 +455,77 @@ const Checkout = () => {
                                 ) : (
                                     <p className="text-xs text-hackclub-muted">For your order confirmation &amp; tracking. You&apos;ll only enter your card on Stripe&apos;s secure page, so your shipping address below is passed along and you won&apos;t retype it.</p>
                                 )}
+                            </motion.div>
+                        )}
+
+                        {/* Donation details — only for carts containing donation tiers.
+                            Fund choice + optional dedication and donor-wall name. */}
+                        {!payWithPoints && cart.length > 0 && hasDonation && (
+                            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-2xl bg-hackclub-smoke/30 border-2 border-hackclub-smoke space-y-3">
+                                <p className="font-bold text-hackclub-dark">What matters most to you?</p>
+                                <p className="text-xs text-hackclub-muted -mt-1">
+                                    This tells us what you care about. Every dollar goes to Hack Club&apos;s
+                                    programs for teenagers, wherever it helps them most.
+                                </p>
+                                <div className="space-y-2">
+                                    {DONATION_FUNDS.map((fund) => (
+                                        <label
+                                            key={fund.id}
+                                            className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-colors ${
+                                                fundId === fund.id
+                                                    ? 'border-hackclub-red bg-white'
+                                                    : 'border-hackclub-smoke bg-white/60 hover:border-hackclub-slate'
+                                            }`}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name="donation-fund"
+                                                value={fund.id}
+                                                checked={fundId === fund.id}
+                                                onChange={() => setFundId(fund.id)}
+                                                className="mt-1 w-4 h-4 accent-hackclub-red"
+                                            />
+                                            <span>
+                                                <span className="block font-bold text-hackclub-dark text-sm">{fund.name}</span>
+                                                <span className="block text-xs text-hackclub-muted leading-snug">{fund.description}</span>
+                                            </span>
+                                        </label>
+                                    ))}
+                                </div>
+                                <div>
+                                    <label htmlFor="donation-dedication" className="block text-sm font-bold text-hackclub-slate mb-1">Dedication (optional)</label>
+                                    <input
+                                        id="donation-dedication"
+                                        type="text"
+                                        maxLength={140}
+                                        placeholder="In honor of Maya"
+                                        value={dedication}
+                                        onChange={(e) => setDedication(e.target.value)}
+                                        className="w-full px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus-visible:border-hackclub-red focus-visible:ring-2 focus-visible:ring-hackclub-red/40 text-hackclub-dark font-medium"
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="donation-donor-name" className="block text-sm font-bold text-hackclub-slate mb-1">Name on the donor wall (optional)</label>
+                                    <input
+                                        id="donation-donor-name"
+                                        type="text"
+                                        maxLength={60}
+                                        placeholder="The Chen Family"
+                                        value={donorName}
+                                        onChange={(e) => setDonorName(e.target.value)}
+                                        disabled={donorAnonymous}
+                                        className={`w-full px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus-visible:border-hackclub-red focus-visible:ring-2 focus-visible:ring-hackclub-red/40 text-hackclub-dark font-medium ${donorAnonymous ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    />
+                                </div>
+                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                                    <input
+                                        type="checkbox"
+                                        checked={donorAnonymous}
+                                        onChange={(e) => setDonorAnonymous(e.target.checked)}
+                                        className="w-4 h-4 accent-hackclub-red"
+                                    />
+                                    <span className="text-sm font-bold text-hackclub-slate">Keep my donation anonymous</span>
+                                </label>
                             </motion.div>
                         )}
 
@@ -546,8 +660,18 @@ const Checkout = () => {
                                 <span>{payWithPoints ? 'Points Required:' : 'Subtotal:'}</span>
                                 <span className="text-hackclub-dark">{payWithPoints ? formatPoints(requiredPoints) : formatCash(cashTotal)}</span>
                             </div>
+                            {!payWithPoints && hasDonation && deductibleEstimate > 0 && (
+                                <div className="flex justify-between items-center text-sm font-bold text-hackclub-slate">
+                                    <span>Estimated tax-deductible portion:</span>
+                                    <span>{formatCash(deductibleEstimate)}</span>
+                                </div>
+                            )}
                             {!payWithPoints && (
-                                <p className="text-xs text-hackclub-muted text-right">Any applicable sales tax is calculated at checkout.</p>
+                                <p className="text-xs text-hackclub-muted text-right">
+                                    {hasDonation
+                                        ? 'Sales tax applies only to the gift’s value, not your donation. Your receipt doubles as your tax acknowledgment.'
+                                        : 'Any applicable sales tax is calculated at checkout.'}
+                                </p>
                             )}
                             {payWithPoints && (
                                 <div className="flex justify-between items-center text-sm text-hackclub-slate">
@@ -590,7 +714,7 @@ const Checkout = () => {
                                     </motion.span>
                                 ) : canCheckout ? (
                                     <motion.span key="checkout" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                                        {payWithPoints ? 'Checkout →' : 'Pay with card →'}
+                                        {payWithPoints ? 'Checkout →' : hasDonation ? 'Complete donation →' : 'Pay with card →'}
                                     </motion.span>
                                 ) : (
                                     <motion.span key="insufficient" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>

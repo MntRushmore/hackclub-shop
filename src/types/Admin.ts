@@ -1,3 +1,5 @@
+import type { DonationTierConfig } from '../lib/donation';
+
 export type AdminRole = 'manager' | 'store_manager' | 'reader';
 
 export interface AdminUser {
@@ -118,6 +120,10 @@ export interface Product {
     variants: ProductVariant[];
     shippingOptions: ShippingOption[];
     checkoutFields: CheckoutField[];
+    // Donation pivot: present iff this product is a donation tier — the cash
+    // price is the donation amount and the merch is the thank-you gift. Carried
+    // here so admin/import round-trips through toStripeProduct don't drop it.
+    donation?: DonationTierConfig;
     // Sourcing pipeline: a product created from an accepted quote starts as a draft.
     // Drafts are excluded from the storefront (`/api/products`) until an admin
     // publishes them (sets prices + clears the flag in the product editor). Existing

@@ -96,8 +96,8 @@ export default function HeroSplit() {
               You raised a <span className="text-hackclub-red">Hack&nbsp;Clubber.</span>
             </h1>
             <p className="text-xl sm:text-2xl text-hackclub-slate max-w-xl mx-auto lg:mx-0 mb-9 leading-relaxed">
-              Wear it proudly. Every purchase supports the teenagers who build,
-              ship, and dream at Hack Club.
+              Back them with a donation, and wear the proof. Every tier funds
+              the teenagers who build, ship, and dream at Hack Club.
             </p>
             <div className="flex flex-wrap gap-3 justify-center lg:justify-start items-center">
               <Link
@@ -105,11 +105,11 @@ export default function HeroSplit() {
                 className="group inline-flex items-center gap-2 font-bold text-lg text-white px-9 py-4 rounded-full shadow-hc-card transition-all duration-150 ease-in-out hover:scale-[1.0625] hover:shadow-hc-elevated"
                 style={{ backgroundImage: "radial-gradient(ellipse farthest-corner at top left, #ff8c37, #ec3750)" }}
               >
-                <span>Shop the collection</span>
+                <span>Back a teenager</span>
                 <span className="transition-transform duration-150 group-hover:translate-x-1">→</span>
               </Link>
               <span className="text-hackclub-muted font-bold text-sm">
-                All proceeds support teenagers at Hack Club
+                501(c)(3) nonprofit · tax-deductible above the gift&apos;s value
               </span>
             </div>
 

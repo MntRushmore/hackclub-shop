@@ -171,6 +171,13 @@ const Navigation = () => {
                 Browse
               </Link>
 
+              <Link
+                href="/donors"
+                className="text-hackclub-slate hover:text-hackclub-red font-bold text-xl transition-colors"
+              >
+                Donors
+              </Link>
+
               {session && isAdmin && (
                 <Link
                   href="/submit"

@@ -19,9 +19,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
             sync_product: {
                 id: product.id,
                 name: product.name,
+                description: product.description || '',
                 thumbnail_url: product.thumbnail_url,
                 shippingOptions: product.shippingOptions || [],
                 checkoutFields: product.checkoutFields || [],
+                // Donation tier config for the tier-framed product page.
+                donation: product.donation || null,
             },
             sync_variants: (product.variants || []).map((variant, idx) => ({
                 id: variant.id || `${product.id}_var_${idx}`,

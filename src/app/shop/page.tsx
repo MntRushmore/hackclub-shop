@@ -25,9 +25,13 @@ interface Variant {
 interface Product {
     id: string | number;
     name: string;
+    description?: string;
     thumbnail_url: string;
     category?: string | null;
     createdAt?: string | null;
+    // Donation tier marker (see src/lib/donation.ts): the cash price is the
+    // donation amount; the merch is the thank-you gift.
+    donation?: { tier: string; fmvCents: number; impact?: string } | null;
     sync_variants: Variant[];
 }
 
@@ -64,14 +68,25 @@ const Shop = () => {
         [products, pathway, pathwayLoading],
     );
 
-    // Distinct categories present in the pathway-visible catalog (for the chips).
+    // Donation pivot: tier products render as the ladder up top (anchored
+    // high — biggest ask first); everything else stays in the classic grid.
+    const donationTiers = useMemo(
+        () =>
+            pathwayProducts
+                .filter((p) => p.donation)
+                .sort((a, b) => (getCashPrice(b.sync_variants?.[0]) || 0) - (getCashPrice(a.sync_variants?.[0]) || 0)),
+        [pathwayProducts],
+    );
+    const retailProducts = useMemo(() => pathwayProducts.filter((p) => !p.donation), [pathwayProducts]);
+
+    // Distinct categories present in the pathway-visible grid (for the chips).
     const categories = useMemo(() => {
         const set = new Set<string>();
-        for (const p of pathwayProducts) {
+        for (const p of retailProducts) {
             if (p.category && p.category.trim()) set.add(p.category.trim());
         }
         return Array.from(set).sort((a, b) => a.localeCompare(b));
-    }, [pathwayProducts]);
+    }, [retailProducts]);
 
     // The pathway-aware unit price used for sorting/searching.
     const priceFor = (p: Product): number => {
@@ -83,7 +98,7 @@ const Shop = () => {
     // Search → category → sort, layered on top of the pathway filter.
     const visibleProducts = useMemo(() => {
         const q = query.trim().toLowerCase();
-        let list = pathwayProducts;
+        let list = retailProducts;
         if (q) list = list.filter((p) => p.name.toLowerCase().includes(q) || (p.category || '').toLowerCase().includes(q));
         if (category !== 'all') list = list.filter((p) => (p.category || '').trim() === category);
 
@@ -221,19 +236,20 @@ const Shop = () => {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 <div className="mb-8">
                     <h1 className="text-5xl sm:text-6xl font-black text-hackclub-dark mb-4" style={{ letterSpacing: "-0.02em" }}>
-                        Wear it proudly.
+                        Back a teenager.
                     </h1>
                     <p className="text-xl text-hackclub-slate font-bold max-w-2xl">
-                        Every piece supports the teenagers who build, ship, and dream at Hack Club.
+                        Pick a tier, and wear the proof. Every tier is a donation to
+                        Hack Club. The merch is our thanks.
                     </p>
                     {/* Trust strip: carries the homepage's nonprofit framing into the
-                        buy flow so the reason-to-buy doesn't evaporate at the door. */}
+                        buy flow so the reason-to-give doesn't evaporate at the door. */}
                     <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-5 text-sm font-bold text-hackclub-muted">
                         <span className="inline-flex items-center gap-1.5">
                             <span className="text-hackclub-red">●</span> 501(c)(3) nonprofit
                         </span>
                         <span className="inline-flex items-center gap-1.5">
-                            <span className="text-hackclub-red">●</span> All proceeds support teenagers
+                            <span className="text-hackclub-red">●</span> Tax-deductible above the gift&apos;s value
                         </span>
                         <span className="inline-flex items-center gap-1.5">
                             <span className="text-hackclub-red">●</span> Ships to your door
@@ -241,7 +257,26 @@ const Shop = () => {
                     </div>
                 </div>
 
+                {/* Donation tier ladder — anchored high (biggest ask first). */}
+                {!loading && donationTiers.length > 0 && (
+                    <div className="mb-14">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {donationTiers.map((tier) => (
+                                <TierCard key={tier.id} product={tier} />
+                            ))}
+                            <SustainerCard />
+                        </div>
+                    </div>
+                )}
+
+                {/* Grid controls + retail grid: shown only while the catalog still
+                    has non-tier products (admin full-catalog mode, leftovers). The
+                    pivoted storefront is usually just the ladder above. */}
+                {!loading && donationTiers.length > 0 && retailProducts.length > 0 && (
+                    <h2 className="text-2xl font-black text-hackclub-dark mb-5">More from the shop</h2>
+                )}
                 {/* Search + sort */}
+                {(loading || retailProducts.length > 0) && (
                 <div className="flex flex-col sm:flex-row gap-3 mb-5">
                     <div className="relative flex-1">
                         <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-hackclub-muted pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -270,6 +305,7 @@ const Shop = () => {
                         <option value="name">Name (A to Z)</option>
                     </select>
                 </div>
+                )}
 
                 {/* Category chips */}
                 {categories.length > 0 && (
@@ -311,7 +347,7 @@ const Shop = () => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {Array.from({ length: 8 }).map((_, i) => <CardSkeleton key={i} />)}
                     </div>
-                ) : !error && visibleProducts.length === 0 ? (
+                ) : !error && visibleProducts.length === 0 && !(donationTiers.length > 0 && retailProducts.length === 0) ? (
                     <div className="text-center py-20">
                         <div className="w-16 h-16 bg-hackclub-smoke rounded-full flex items-center justify-center mx-auto mb-4">
                             <svg className="w-8 h-8 text-hackclub-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -464,6 +500,138 @@ const Shop = () => {
         </motion.div>
     );
 };
+
+/**
+ * One rung of the donation ladder. The whole card links to the product page,
+ * where the donor picks their gift/size — carts and checkout treat tiers as
+ * ordinary products (the donation split happens server-side).
+ */
+function TierCard({ product }: { product: Product }) {
+    const firstVariant = product.sync_variants?.[0];
+    const amount = getCashPrice(firstVariant) || 0;
+    const soldOut =
+        product.sync_variants.length > 0 && product.sync_variants.every((v) => v.available === 0);
+    const deductible = Math.max(0, amount - (product.donation?.fmvCents ?? 0) / 100);
+    const dollars = (n: number) => `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+
+    return (
+        <Link
+            href={`/products/${product.id}`}
+            className={`group flex flex-col bg-white rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden border-2 border-gray-200 hover:border-hackclub-red ${soldOut ? 'opacity-60' : ''}`}
+        >
+            {product.thumbnail_url && (
+                <div className="aspect-[4/3] bg-hackclub-smoke relative overflow-hidden">
+                    <Image
+                        src={product.thumbnail_url}
+                        alt={product.name}
+                        fill
+                        className="object-contain p-6 group-hover:scale-105 transition-transform duration-300"
+                        draggable={false}
+                    />
+                    {soldOut && (
+                        <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-xs font-black bg-hackclub-dark text-white">
+                            Fully claimed
+                        </span>
+                    )}
+                </div>
+            )}
+            <div className="flex flex-col gap-2 p-6 flex-1">
+                <p className="text-xs font-black uppercase tracking-widest text-hackclub-red">
+                    {product.donation?.tier}
+                </p>
+                <p className="text-4xl font-black text-hackclub-dark" style={{ letterSpacing: '-0.02em' }}>
+                    {dollars(amount)}
+                </p>
+                {product.donation?.impact && (
+                    <p className="text-hackclub-dark font-bold leading-snug">{product.donation.impact}</p>
+                )}
+                {product.description && (
+                    <p className="text-sm text-hackclub-slate font-medium leading-relaxed line-clamp-3">
+                        {product.description}
+                    </p>
+                )}
+                <div className="mt-auto pt-3 flex items-center justify-between gap-2">
+                    {deductible > 0 && (
+                        <span className="text-xs font-bold text-hackclub-muted">
+                            ~{dollars(deductible)} tax-deductible
+                        </span>
+                    )}
+                    <span className={`ml-auto inline-flex items-center gap-1 font-black text-sm px-5 py-2 rounded-full transition-colors ${
+                        soldOut
+                            ? 'bg-gray-200 text-gray-400'
+                            : 'bg-hackclub-red text-white group-hover:bg-hackclub-orange'
+                    }`}>
+                        {soldOut ? 'Fully claimed' : `Donate ${dollars(amount)}`}
+                        {!soldOut && (
+                            <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                        )}
+                    </span>
+                </div>
+            </div>
+        </Link>
+    );
+}
+
+/**
+ * The recurring rung: $25/month Sustainer. Not a catalog product — the button
+ * POSTs to the subscription checkout route and hands off to Stripe (which also
+ * collects the donor-wall name). Sits last in the ladder as the "can't pick a
+ * tier? just stay close" option.
+ */
+function SustainerCard() {
+    const [starting, setStarting] = useState(false);
+    const [failed, setFailed] = useState(false);
+
+    const start = async () => {
+        setStarting(true);
+        setFailed(false);
+        try {
+            const res = await fetch('/api/checkout/sustain', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+            const data = await res.json();
+            if (res.ok && data.url) {
+                window.location.href = data.url;
+                return;
+            }
+            setFailed(true);
+        } catch {
+            setFailed(true);
+        }
+        setStarting(false);
+    };
+
+    return (
+        <div className="flex flex-col bg-hackclub-dark text-white rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden border-2 border-hackclub-dark">
+            <div className="flex flex-col gap-2 p-6 flex-1">
+                <p className="text-xs font-black uppercase tracking-widest text-hackclub-red">Sustainer</p>
+                <p className="text-4xl font-black" style={{ letterSpacing: '-0.02em' }}>
+                    $25<span className="text-xl text-white/60">/month</span>
+                </p>
+                <p className="font-bold leading-snug">Stays behind a teenager all year long.</p>
+                <p className="text-sm text-white/70 font-medium leading-relaxed">
+                    A monthly donation with a permanent spot on the donor wall and a
+                    members-only thank-you gift each year. Cancel anytime.
+                </p>
+                {failed && (
+                    <p className="text-sm font-bold text-hackclub-red">Couldn&apos;t start checkout. Please try again.</p>
+                )}
+                <div className="mt-auto pt-3 flex items-center justify-end">
+                    <button
+                        type="button"
+                        onClick={start}
+                        disabled={starting}
+                        className={`inline-flex items-center gap-1 font-black text-sm px-5 py-2 rounded-full transition-colors ${
+                            starting ? 'bg-white/20 text-white/60 cursor-wait' : 'bg-hackclub-red text-white hover:bg-hackclub-orange'
+                        }`}
+                    >
+                        {starting ? 'Starting…' : 'Become a Sustainer'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 function CategoryChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
     return (

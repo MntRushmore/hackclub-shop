@@ -9,8 +9,10 @@ import {
     isStripeTaxEnabled,
     GENERAL_GOODS_TAX_CODE,
     SHIPPING_TAX_CODE,
+    NONTAXABLE_TAX_CODE,
 } from '../../../../lib/stripe';
 import { pointsToUsd } from '../../../../lib/paymentUtils';
+import { sanitizeDonationInput, deductibleCents, type DonationCheckoutInput } from '../../../../lib/donation';
 import { validateCartItems, getProductById } from '../../../../lib/productValidation';
 import { isStructuredAddress, validateAddress, COUNTRIES } from '../../../../lib/address';
 import { rateLimit, rateLimitResponse } from '../../../../lib/rateLimit';
@@ -55,12 +57,15 @@ export async function POST(request: Request) {
     if (!rl.success) return rateLimitResponse();
 
     try {
-        const { items, email, shippingCountry, checkoutData, selectedRate } = await request.json() as {
+        const { items, email, shippingCountry, checkoutData, selectedRate, donation } = await request.json() as {
             items: { id: string; name: string; price: string; quantity: number; variant_id?: string | number }[];
             email?: string;
             shippingCountry?: string;
             checkoutData?: Record<string, string | ShippingAddress>;
             selectedRate?: { rateId: string; shipmentId: string; quoteId?: string };
+            // Donor-provided fields (fund choice, dedication, donor-wall name).
+            // Only honored when the verified cart actually contains donation tiers.
+            donation?: DonationCheckoutInput;
         };
 
         if (!items || !Array.isArray(items) || items.length === 0) {
@@ -185,7 +190,60 @@ export async function POST(request: Request) {
         const absoluteImage = (url?: string): string | undefined =>
             url && /^https?:\/\//i.test(url) ? url : undefined;
 
-        const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = validation.items!.map(item => {
+        // Donation tiers: the verified cash price is the DONATION amount; only the
+        // thank-you gift's fair market value is a sale of goods. FMV comes from
+        // catalog config and is clamped into [0, verified amount] so a misconfigured
+        // FMV can never bill more than the verified price or go negative.
+        const giftFmvCents = (item: { donation?: { fmvCents: number } }, verifiedCents: number): number =>
+            Math.min(Math.max(0, Math.round(item.donation?.fmvCents ?? 0)), verifiedCents);
+
+        const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = validation.items!.flatMap(item => {
+            // A donation-tier line is always billed via price_data, split in two:
+            // the gift's FMV as a taxable goods line, and everything above it as a
+            // nontaxable donation. Billing by the Stripe Price id would classify
+            // the whole amount as goods (the Product carries the goods tax_code)
+            // and charge the donor sales tax on their donation.
+            if (item.donation) {
+                const verifiedCents = Math.round(itemCashCost(item) * 100);
+                const fmvCents = giftFmvCents(item, verifiedCents);
+                const donationCents = verifiedCents - fmvCents;
+                const img = absoluteImage(item.thumbnail_url);
+                const split: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
+                if (fmvCents > 0) {
+                    split.push({
+                        quantity: item.quantity,
+                        price_data: {
+                            currency: 'usd',
+                            unit_amount: fmvCents,
+                            ...(taxEnabled ? { tax_behavior: 'exclusive' as const } : {}),
+                            product_data: {
+                                name: `${item.name} (thank-you gift)`,
+                                ...(img ? { images: [img] } : {}),
+                                ...(taxEnabled ? { tax_code: GENERAL_GOODS_TAX_CODE } : {}),
+                            },
+                        },
+                    });
+                }
+                if (donationCents > 0) {
+                    split.push({
+                        quantity: item.quantity,
+                        price_data: {
+                            currency: 'usd',
+                            unit_amount: donationCents,
+                            ...(taxEnabled ? { tax_behavior: 'exclusive' as const } : {}),
+                            product_data: {
+                                name: `${item.donation.tier} donation to Hack Club`,
+                                ...(taxEnabled ? { tax_code: NONTAXABLE_TAX_CODE } : {}),
+                            },
+                        },
+                    });
+                }
+                return split;
+            }
+            return [buildRetailLineItem(item)];
+        });
+
+        function buildRetailLineItem(item: NonNullable<typeof validation.items>[number]): Stripe.Checkout.SessionCreateParams.LineItem {
             // Stripe is the source of truth for the catalog: bill by the variant's
             // Stripe Price id when we have one. The Price already carries the USD
             // amount + tax_behavior, and its Product carries the tax_code, so Stripe
@@ -219,7 +277,35 @@ export async function POST(request: Request) {
                     },
                 },
             };
-        });
+        }
+
+        // Donation summary for the order: totals across donation-tier lines plus
+        // the donor's sanitized fund/dedication/wall-name input. The receipt email
+        // renders this as the IRS quid-pro-quo acknowledgment.
+        const donationItems = validation.items!.filter(i => i.donation);
+        let orderDonation: Order['donation'];
+        if (donationItems.length > 0) {
+            const donor = sanitizeDonationInput(donation);
+            let amountCents = 0;
+            let fmvTotalCents = 0;
+            for (const i of donationItems) {
+                const verifiedCents = Math.round(itemCashCost(i) * 100);
+                amountCents += verifiedCents * i.quantity;
+                fmvTotalCents += giftFmvCents(i, verifiedCents) * i.quantity;
+            }
+            // Label the order with the largest single donation line's tier.
+            const biggest = donationItems.reduce((a, b) => (itemCashCost(b) > itemCashCost(a) ? b : a));
+            orderDonation = {
+                tier: biggest.donation!.tier,
+                fundId: donor.fundId,
+                amount: amountCents / 100,
+                fmvAmount: fmvTotalCents / 100,
+                deductibleAmount: deductibleCents(amountCents, fmvTotalCents) / 100,
+                ...(donor.dedication ? { dedication: donor.dedication } : {}),
+                ...(donor.displayName ? { displayName: donor.displayName } : {}),
+                isAnonymous: donor.isAnonymous,
+            };
+        }
 
         // The shopper already entered their shipping address on our checkout page
         // (it's what the live shipping rate was quoted against). To avoid making
@@ -334,6 +420,7 @@ export async function POST(request: Request) {
             // payment; the webhook writes back the final amount_total it charged.
             totalAmount: itemsCashTotal + shippingCost,
             creditsPaid: 0,
+            ...(orderDonation ? { donation: orderDonation } : {}),
             stripeSessionId: session.id,
             shippingCountry: country,
             shippingAddress,

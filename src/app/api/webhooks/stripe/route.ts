@@ -5,6 +5,7 @@ import { getGuestOrder, getGuestOrderBySession, updateGuestOrder, deleteGuestOrd
 import { mirrorOrder } from '../../../../lib/airtableMirror';
 import { sendEmail, buildOrderConfirmation, buildAdminNewOrder } from '../../../../lib/email';
 import { commitReserved, release, claimOrderSettlement } from '../../../../lib/inventory';
+import { recordDonation, recordDonationEntry, bumpImpact, assignVestNumber } from '../../../../lib/donorWall';
 import { getStripe as getStripeClient } from '../../../../lib/stripe';
 import { CATALOG_MANAGED_FLAG } from '../../../../lib/catalogMapping';
 import { buildCatalogProduct, putCatalogCache, dropCatalogCache } from '../../../../lib/catalog';
@@ -44,6 +45,28 @@ export async function POST(request: Request) {
         switch (event.type) {
             case 'checkout.session.completed': {
                 const session = event.data.object as Stripe.Checkout.Session;
+
+                // Sustainer subscription start: no shop order exists — write the
+                // donor-wall entry + first month's impact directly. The claim
+                // makes duplicate deliveries no-ops.
+                if (session.mode === 'subscription' && session.metadata?.sustainer === '1') {
+                    if (session.payment_status !== 'paid') break;
+                    if (!(await claimOrderSettlement(`sustain:${session.id}`))) break;
+                    const wallName = session.custom_fields
+                        ?.find((f) => f.key === 'donor_wall_name')?.text?.value?.trim()
+                        .slice(0, 60) || undefined;
+                    await recordDonationEntry({
+                        orderId: `sustain_${session.id}`,
+                        tier: 'Sustainer',
+                        fundId: 'general',
+                        amount: typeof session.amount_total === 'number' ? session.amount_total / 100 : 25,
+                        displayName: wallName,
+                        isAnonymous: false,
+                        donatedAt: new Date().toISOString(),
+                    });
+                    break;
+                }
+
                 const orderId = session.metadata?.orderId;
 
                 // Resolve the order by metadata first, then by the session-id pointer.
@@ -90,12 +113,23 @@ export async function POST(request: Request) {
                     ? session.total_details.amount_tax / 100
                     : undefined;
 
+                // Donation orders: mint the vest number now that money
+                // settled (never at checkout — abandoned sessions must not burn
+                // numbers 1–100). Safe under the settlement claim: exactly one
+                // delivery reaches this line per order.
+                let donation = order.donation;
+                if (donation) {
+                    const vestNumber = await assignVestNumber(donation.tier);
+                    if (vestNumber !== undefined) donation = { ...donation, vestNumber };
+                }
+
                 const updated = await updateGuestOrder(order.id, {
                     paymentStatus: 'paid',
                     status: 'received',
                     stripePaymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : undefined,
                     totalAmount: amountTotal,
                     ...(taxAmount !== undefined ? { taxAmount } : {}),
+                    ...(donation ? { donation } : {}),
                     guestEmail: email,
                     statusHistory: [
                         ...order.statusHistory,
@@ -104,12 +138,30 @@ export async function POST(request: Request) {
                 });
 
                 if (updated) {
+                    // Donor wall + impact meters (server-only write; no-op for
+                    // non-donation orders, best-effort on Redis hiccups).
+                    void recordDonation(updated);
                     void mirrorOrder(updated);
                     // Confirm to the customer + alert staff (no-op until email is configured).
                     if (email) void sendEmail(buildOrderConfirmation(updated, email));
                     const adminMsg = buildAdminNewOrder(updated);
                     if (adminMsg) void sendEmail(adminMsg);
                 }
+                break;
+            }
+            case 'invoice.paid': {
+                // Sustainer monthly renewal: bump the impact counters (no new
+                // wall entry — the donor is already on the wall). The first
+                // invoice (billing_reason=subscription_create) is counted by
+                // checkout.session.completed above, so only cycles count here.
+                const invoice = event.data.object as Stripe.Invoice;
+                if (invoice.billing_reason !== 'subscription_cycle') break;
+                // Subscription metadata is snapshotted onto the invoice's parent
+                // details, so no extra Stripe read is needed to identify ours.
+                const subMeta = invoice.parent?.subscription_details?.metadata;
+                if (subMeta?.sustainer !== '1') break;
+                if (!(await claimOrderSettlement(`invoice:${invoice.id}`))) break;
+                await bumpImpact(subMeta.fund || 'general', invoice.amount_paid / 100);
                 break;
             }
             case 'checkout.session.expired': {

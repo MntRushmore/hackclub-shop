@@ -36,3 +36,10 @@ export const isStripeTaxEnabled = (): boolean =>
 export const GENERAL_GOODS_TAX_CODE = 'txcd_99999999';
 /** Shipping tax code — Stripe's standard "Shipping" code (taxable where required). */
 export const SHIPPING_TAX_CODE = 'txcd_92010001';
+/**
+ * Stripe's "Nontaxable" code, applied to the donation portion of a donation-tier
+ * checkout (the amount above the thank-you gift's fair market value). Only the
+ * FMV portion is billed as goods; a charitable contribution is not a sale.
+ * Treatment pending finance sign-off — see DONATION_PIVOT_PROMPT.md.
+ */
+export const NONTAXABLE_TAX_CODE = 'txcd_00000000';

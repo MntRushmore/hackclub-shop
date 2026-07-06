@@ -4,6 +4,13 @@ import Image from "next/image";
 import HeroSplit from "./components/HeroSplit";
 import HCFooter from "./components/HCFooter";
 import WaveDivider from "./components/WaveDivider";
+import { unstable_cache } from "next/cache";
+import { getImpactStats } from "../lib/donorWall";
+
+// Live impact meters read Redis. The Upstash client's fetches are no-store
+// (which would force this page dynamic), so the read is wrapped in
+// unstable_cache: one Redis hit per 5 minutes, not per pageview.
+const getCachedImpact = unstable_cache(() => getImpactStats(), ["homepage-impact"], { revalidate: 300 });
 
 /**
  * Parent-facing storefront landing, built in the Hack Club design language:
@@ -21,10 +28,23 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
     q: "Where does my money go?",
     a: (
       <>
-        Every dollar supports teenagers at Hack Club, funding hackathons,
-        coding clubs, and free programs that help young people build real
-        things. You&apos;re not buying a sticker; you&apos;re backing a kid who
+        Straight to teenagers at Hack Club. That looks like laptops for teens
+        coding on school Chromebooks, travel to a first hackathon, or a gap
+        year spent building something real. At checkout you can tell us what
+        matters most to you, and we&apos;ll put every dollar where it helps
+        teens most. You&apos;re not buying a mug; you&apos;re backing a kid who
         makes.
+      </>
+    ),
+  },
+  {
+    q: "Why does a mug cost $100?",
+    a: (
+      <>
+        It doesn&apos;t. The mug is free. The $100 is a donation to Hack Club,
+        and the mug is how we say thank you. That&apos;s why a donation here
+        does something an $18 mug never could: it puts real money behind a
+        teenager&apos;s next project.
       </>
     ),
   },
@@ -39,12 +59,15 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
     ),
   },
   {
-    q: "Is my purchase tax-deductible?",
+    q: "Is my donation tax-deductible?",
     a: (
       <>
-        Hack Club is a registered 501(c)(3) nonprofit (EIN 81-2908499).
-        Purchases support our programs; for the deductible portion of any gift,
-        keep your receipt and check with your tax advisor.
+        Yes. Hack Club is a registered 501(c)(3) nonprofit (EIN 81-2908499),
+        and the portion of your donation above the fair market value of your
+        thank-you gift is tax-deductible. Your emailed receipt doubles as the
+        IRS acknowledgment, with the exact numbers on it. Many employers also
+        match charitable donations, so it&apos;s worth a quick search of your
+        company&apos;s matching portal.
       </>
     ),
   },
@@ -52,15 +75,29 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
     q: "What will I receive?",
     a: (
       <>
-        Real merch: apparel and goods designed for the people who love a Hack
-        Clubber. Everything ships to your door. You&apos;ll get an order
-        confirmation by email and tracking when it&apos;s on the way.
+        Real merch as our thanks: apparel and goods designed for the people who
+        love a Hack Clubber, all the way up to the numbered vest (only 100 will
+        ever be made). Everything ships to your door with a confirmation email
+        and tracking when it&apos;s on the way.
       </>
     ),
   },
 ];
 
-const MainPage = () => {
+const dollars = (n: number) => `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+
+const MainPage = async () => {
+  // Live impact numbers (fail-soft to zeros; meters hide until money moves).
+  // Meters show dollars raised toward each cause. No "N laptops funded" style
+  // outcome claims: funds are donor preferences and the causes are examples of
+  // where the money goes, not earmarked pledges (see FINANCE_QUESTIONS.md Q5).
+  const impact = await getCachedImpact();
+  const meterFor = (fundId: string): string | null => {
+    const fund = impact.funds[fundId];
+    if (!fund || fund.amount <= 0) return null;
+    return `${dollars(fund.amount)} raised so far`;
+  };
+
   return (
     <div className="min-h-screen bg-white font-sans">
       {/* ── HERO: words left, vertical photo marquee right ──────────────── */}
@@ -85,8 +122,9 @@ const MainPage = () => {
             way, and the hackathons, clubs, and tools that help them do it.
           </p>
           <p className="text-hackclub-dark font-bold">
-            This shop exists so the people who love them can say it out loud,
-            and put every dollar back into the next thing they build.
+            This shop is how the people who love them chip in: donate at a
+            tier, take home the merch as our thanks, and put every dollar into
+            the next thing they build.
           </p>
         </div>
       </section>
@@ -101,17 +139,18 @@ const MainPage = () => {
         </div>
         <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="font-sans font-black mb-5 leading-[1.05]" style={{ fontSize: "clamp(32px, 5.5vw, 52px)", letterSpacing: "-0.02em" }}>
-            All proceeds support teenagers at Hack Club
+            What your donation makes possible
           </h2>
           <p className="text-xl text-white/80 max-w-2xl mx-auto mb-14 leading-relaxed">
-            We&apos;re a 501(c)(3) nonprofit. What you spend here doesn&apos;t go
-            to a corporation. It goes to young makers.
+            We&apos;re a 501(c)(3) nonprofit, and every dollar goes to teenagers.
+            Here&apos;s the kind of thing it pays for. At checkout you can tell
+            us which one matters most to you.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-left">
             {[
-              { title: "Hackathons", body: "Weekend-long events where teenagers build real projects with real mentors, most of them free to attend.", photo: "/images/hc/photo2.webp" },
-              { title: "Clubs", body: "Coding clubs in high schools around the world, with the curriculum and support to keep them running.", photo: "/images/hc/photo4.webp" },
-              { title: "Free programs", body: "Tools, hardware, and programs that put making within reach of any teenager who wants it.", photo: "/images/hc/photo7.webp" },
+              { title: "Laptops", body: "Refurbished laptops for teens coding on school Chromebooks. $500 is enough to put one in a teenager's hands.", photo: "/images/hc/photo2.webp", meter: meterFor("laptop") },
+              { title: "First hackathons", body: "Travel help so a teen can meet their community in person. $100 is enough to get one teen to their first hackathon.", photo: "/images/hc/photo4.webp", meter: meterFor("first-hackathon") },
+              { title: "Gap years & big projects", body: "Backing teenagers who take time to build something real, with tools, hardware, and grants.", photo: "/images/hc/photo7.webp", meter: meterFor("gap-year") },
             ].map((c) => (
               <div key={c.title} className="bg-white/[0.06] rounded-2xl border border-white/10 backdrop-blur-sm overflow-hidden flex flex-col">
                 <div className="relative aspect-[16/10] w-full">
@@ -121,10 +160,23 @@ const MainPage = () => {
                 <div className="p-7">
                   <h3 className="text-xl font-bold text-hackclub-red mb-2">{c.title}</h3>
                   <p className="text-white/75 leading-relaxed">{c.body}</p>
+                  {c.meter && (
+                    <p className="mt-4 text-sm font-black text-white/90 bg-white/[0.08] rounded-full px-3.5 py-1.5 inline-block">
+                      {c.meter}
+                    </p>
+                  )}
                 </div>
               </div>
             ))}
           </div>
+          <p className="mt-12 text-white/80 font-bold">
+            {impact.totalCount > 0 && (
+              <span className="mr-2">{dollars(impact.totalAmount)} raised by {impact.totalCount} donor{impact.totalCount === 1 ? "" : "s"} so far.</span>
+            )}
+            <Link href="/donors" className="text-hackclub-red hover:text-hackclub-orange underline decoration-2 underline-offset-4 transition-colors">
+              See the donor wall →
+            </Link>
+          </p>
         </div>
         {/* The smoke FAQ band rises into the dark section on the HC scallop wave. */}
         <WaveDivider color="#f9fafc" />
@@ -176,14 +228,14 @@ const MainPage = () => {
             Show the world you&apos;re proud.
           </h2>
           <p className="text-xl text-hackclub-slate max-w-xl mx-auto mb-9 leading-relaxed">
-            Find something for the maker in your life, and back the next thing they build.
+            Pick a tier, back the next thing they build, and wear the proof.
           </p>
           <Link
             href="/shop"
             className="group inline-flex items-center gap-2 font-bold text-lg text-white px-9 py-4 rounded-full shadow-hc-card transition-all duration-150 ease-in-out hover:scale-[1.0625] hover:shadow-hc-elevated"
             style={{ backgroundImage: "radial-gradient(ellipse farthest-corner at top left, #ff8c37, #ec3750)" }}
           >
-            <span>Shop the collection</span>
+            <span>Back a teenager</span>
             <span className="transition-transform duration-150 group-hover:translate-x-1">→</span>
           </Link>
         </div>
