@@ -13,7 +13,7 @@ export const SHAREABLE_TIERS = [
     'Champion',
     'Patron',
     'Philanthropist',
-    "Founder's Circle",
+    'Parents Founders Circle',
     'Sustainer',
 ] as const;
 
@@ -31,7 +31,7 @@ export function normalizeShareNumber(raw: string | null | undefined): number | n
 
 export function shareHeadline(tier: string | null, num: number | null): string {
     if (tier === 'Philanthropist' && num) return `We hold vest #${String(num).padStart(3, '0')} of 100.`;
-    if (tier === "Founder's Circle") return "We're in the Founder's Circle.";
+    if (tier === 'Parents Founders Circle') return "We're in the Parents Founders Circle.";
     if (tier) return `We're a Hack Club ${tier}.`;
     return 'We backed a teenager.';
 }

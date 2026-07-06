@@ -38,7 +38,7 @@ const VEST_COUNTER_KEY = 'vest:number';
 /** Only 100 vests exist; numbers above this are never minted. */
 export const VEST_NUMBER_MAX = 100;
 /** Tiers whose thank-you gift includes the numbered vest. */
-const NUMBERED_TIERS = ['Philanthropist', "Founder's Circle"];
+const NUMBERED_TIERS = ['Philanthropist', 'Parents Founders Circle'];
 
 /** One row on the public wall. Stored complete; sanitized on public read. */
 export interface DonorWallEntry {

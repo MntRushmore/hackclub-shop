@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
 
 /**
  * Live ops action feed for the admin home — reads /api/admin/overview and surfaces
@@ -49,10 +48,40 @@ const timeAgo = (iso: string) => {
 
 function Stat({ value, label, tone }: { value: number; label: string; tone: string }) {
     return (
-        <div>
-            <div className={`text-3xl font-black ${tone}`}>{value}</div>
-            <div className="text-xs text-hackclub-slate font-medium">{label}</div>
+        <div className="text-right">
+            <div className={`text-2xl font-black ${tone}`}>{value}</div>
+            <div className="text-xs font-medium text-hackclub-slate">{label}</div>
         </div>
+    );
+}
+
+function FeedCard({
+    href,
+    title,
+    active,
+    stat,
+    children,
+}: {
+    href: string;
+    title: string;
+    active: boolean;
+    stat: React.ReactNode;
+    children: React.ReactNode;
+}) {
+    return (
+        <Link href={href} className={active ? '' : 'pointer-events-none'}>
+            <div
+                className={`h-full rounded-xl border bg-white p-5 shadow-sm transition-shadow ${
+                    active ? 'border-gray-300 hover:shadow-md' : 'border-gray-200 opacity-60'
+                }`}
+            >
+                <div className="mb-2 flex items-center justify-between">
+                    <h3 className="font-black text-hackclub-dark">{title}</h3>
+                    {stat}
+                </div>
+                {children}
+            </div>
+        </Link>
     );
 }
 
@@ -66,7 +95,7 @@ export default function CommandCenter() {
                 const res = await fetch('/api/admin/overview');
                 if (res.ok) setData(await res.json());
             } catch {
-                // best-effort; the card grid below still works
+                // best-effort; nothing else on the page depends on it
             } finally {
                 setLoading(false);
             }
@@ -75,9 +104,9 @@ export default function CommandCenter() {
 
     if (loading) {
         return (
-            <div className="mb-12 grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                 {[0, 1, 2, 3].map((i) => (
-                    <div key={i} className="h-28 bg-hackclub-smoke/40 rounded-2xl animate-pulse" />
+                    <div key={i} className="h-28 animate-pulse rounded-xl bg-gray-200/60" />
                 ))}
             </div>
         );
@@ -96,145 +125,136 @@ export default function CommandCenter() {
         (!data.canProducts || unlabeled === 0);
 
     return (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="mb-12">
-            <h2 className="text-2xl font-black text-hackclub-dark mb-4">Needs attention</h2>
-
+        <div>
             {nothing && (
-                <div className="mb-6 p-6 bg-hackclub-green/5 border-2 border-hackclub-green/30 rounded-2xl text-center">
-                    <p className="text-hackclub-green font-black text-lg">All clear 🎉</p>
-                    <p className="text-hackclub-slate text-sm">No low stock, unfulfilled orders, expiring quotes, or overdue POs.</p>
+                <div className="mb-4 rounded-xl border border-hackclub-green/30 bg-hackclub-green/5 p-5 text-center">
+                    <p className="font-black text-hackclub-green">All clear 🎉</p>
+                    <p className="text-sm text-hackclub-slate">No low stock, unfulfilled orders, expiring quotes, or overdue POs.</p>
                 </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Low stock / reorder */}
-                <Link href="https://dashboard.stripe.com/products" className={cards.lowStock.count === 0 ? 'pointer-events-none' : ''}>
-                    <div className={`h-full bg-white rounded-2xl border-2 p-5 transition-all ${cards.lowStock.count > 0 ? 'border-hackclub-red/40 hover:shadow-lg' : 'border-hackclub-smoke opacity-70'}`}>
-                        <div className="flex items-center justify-between mb-2">
-                            <h3 className="font-black text-hackclub-dark">Reorder</h3>
-                            <Stat value={cards.lowStock.count} label="below reorder point" tone="text-hackclub-red" />
-                        </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <FeedCard
+                    href="https://dashboard.stripe.com/products"
+                    title="Reorder"
+                    active={cards.lowStock.count > 0}
+                    stat={<Stat value={cards.lowStock.count} label="below reorder point" tone="text-hackclub-red" />}
+                >
+                    <div className="space-y-1">
+                        {cards.lowStock.items.map((it) => (
+                            <div key={it.variantId} className="flex items-center justify-between gap-2 text-sm">
+                                <span className="truncate text-hackclub-dark">{it.productName} · {it.variantName}</span>
+                                <span className="whitespace-nowrap text-hackclub-slate">
+                                    {it.available} ≤ {it.reorderPoint}
+                                    {it.cheapestVendorId && data.canSourcing && (
+                                        <Link href={`/admin/sourcing/quotes?vendorId=${it.cheapestVendorId}`} className="ml-2 font-bold text-hackclub-blue hover:underline">
+                                            start PO
+                                        </Link>
+                                    )}
+                                </span>
+                            </div>
+                        ))}
+                        {cards.lowStock.count === 0 && <p className="text-sm text-hackclub-slate">Nothing low.</p>}
+                    </div>
+                </FeedCard>
+
+                <FeedCard
+                    href="/admin/orders"
+                    title="Orders"
+                    active={cards.orders.unfulfilled > 0}
+                    stat={<Stat value={cards.orders.unfulfilled} label="unfulfilled" tone="text-hackclub-orange" />}
+                >
+                    <p className="text-sm text-hackclub-slate">
+                        {cards.orders.unfulfilled > 0
+                            ? `Oldest waiting ${cards.orders.oldestDays} day${cards.orders.oldestDays === 1 ? '' : 's'}.`
+                            : 'Everything fulfilled.'}
+                    </p>
+                </FeedCard>
+
+                {data.canSourcing && (
+                    <FeedCard
+                        href="/admin/sourcing/quotes"
+                        title="Quotes expiring"
+                        active={cards.expiringQuotes.count > 0}
+                        stat={<Stat value={cards.expiringQuotes.count} label="within 14 days" tone="text-hackclub-dark" />}
+                    >
                         <div className="space-y-1">
-                            {cards.lowStock.items.map((it) => (
-                                <div key={it.variantId} className="text-sm flex items-center justify-between gap-2">
-                                    <span className="text-hackclub-dark truncate">{it.productName} · {it.variantName}</span>
-                                    <span className="text-hackclub-slate whitespace-nowrap">
-                                        {it.available} ≤ {it.reorderPoint}
-                                        {it.cheapestVendorId && data.canSourcing && (
-                                            <Link href={`/admin/sourcing/quotes?vendorId=${it.cheapestVendorId}`} className="ml-2 text-hackclub-blue font-bold hover:underline">
-                                                start PO
-                                            </Link>
-                                        )}
-                                    </span>
+                            {cards.expiringQuotes.items.map((q) => (
+                                <div key={q.id} className="flex justify-between gap-2 text-sm">
+                                    <span className="truncate text-hackclub-dark">{q.itemName}</span>
+                                    <span className="whitespace-nowrap text-hackclub-slate">{q.daysLeft <= 0 ? 'expired' : `${q.daysLeft}d`}</span>
                                 </div>
                             ))}
-                            {cards.lowStock.count === 0 && <p className="text-hackclub-slate text-sm">Nothing low.</p>}
+                            {cards.expiringQuotes.count === 0 && <p className="text-sm text-hackclub-slate">None expiring.</p>}
                         </div>
-                    </div>
-                </Link>
+                    </FeedCard>
+                )}
 
-                {/* Orders */}
-                <Link href="/admin/orders" className={cards.orders.unfulfilled === 0 ? 'pointer-events-none' : ''}>
-                    <div className={`h-full bg-white rounded-2xl border-2 p-5 transition-all ${cards.orders.unfulfilled > 0 ? 'border-hackclub-orange/40 hover:shadow-lg' : 'border-hackclub-smoke opacity-70'}`}>
-                        <div className="flex items-center justify-between mb-2">
-                            <h3 className="font-black text-hackclub-dark">Orders</h3>
-                            <Stat value={cards.orders.unfulfilled} label="unfulfilled" tone="text-hackclub-orange" />
-                        </div>
+                {data.canSourcing && (
+                    <FeedCard
+                        href="/admin/sourcing/pos"
+                        title="Purchase orders"
+                        active={cards.overduePOs.openCount > 0}
+                        stat={
+                            <Stat
+                                value={cards.overduePOs.count}
+                                label={`overdue · ${cards.overduePOs.openCount} open`}
+                                tone={cards.overduePOs.count > 0 ? 'text-hackclub-red' : 'text-hackclub-dark'}
+                            />
+                        }
+                    >
                         <p className="text-sm text-hackclub-slate">
-                            {cards.orders.unfulfilled > 0
-                                ? `Oldest waiting ${cards.orders.oldestDays} day${cards.orders.oldestDays === 1 ? '' : 's'}.`
-                                : 'Everything fulfilled.'}
+                            {cards.overduePOs.count > 0
+                                ? `${cards.overduePOs.count} past expected date.`
+                                : cards.overduePOs.openCount > 0
+                                    ? 'All open POs on schedule.'
+                                    : 'No open POs.'}
                         </p>
-                    </div>
-                </Link>
-
-                {/* Expiring quotes */}
-                {data.canSourcing && (
-                    <Link href="/admin/sourcing/quotes" className={cards.expiringQuotes.count === 0 ? 'pointer-events-none' : ''}>
-                        <div className={`h-full bg-white rounded-2xl border-2 p-5 transition-all ${cards.expiringQuotes.count > 0 ? 'border-hackclub-yellow/60 hover:shadow-lg' : 'border-hackclub-smoke opacity-70'}`}>
-                            <div className="flex items-center justify-between mb-2">
-                                <h3 className="font-black text-hackclub-dark">Quotes expiring</h3>
-                                <Stat value={cards.expiringQuotes.count} label="within 14 days" tone="text-hackclub-dark" />
-                            </div>
-                            <div className="space-y-1">
-                                {cards.expiringQuotes.items.map((q) => (
-                                    <div key={q.id} className="text-sm flex justify-between gap-2">
-                                        <span className="text-hackclub-dark truncate">{q.itemName}</span>
-                                        <span className="text-hackclub-slate whitespace-nowrap">{q.daysLeft <= 0 ? 'expired' : `${q.daysLeft}d`}</span>
-                                    </div>
-                                ))}
-                                {cards.expiringQuotes.count === 0 && <p className="text-hackclub-slate text-sm">None expiring.</p>}
-                            </div>
-                        </div>
-                    </Link>
+                    </FeedCard>
                 )}
 
-                {/* Overdue POs */}
-                {data.canSourcing && (
-                    <Link href="/admin/sourcing/pos" className={cards.overduePOs.openCount === 0 ? 'pointer-events-none' : ''}>
-                        <div className={`h-full bg-white rounded-2xl border-2 p-5 transition-all ${cards.overduePOs.count > 0 ? 'border-hackclub-red/40 hover:shadow-lg' : 'border-hackclub-smoke opacity-70'}`}>
-                            <div className="flex items-center justify-between mb-2">
-                                <h3 className="font-black text-hackclub-dark">Purchase orders</h3>
-                                <Stat value={cards.overduePOs.count} label={`overdue · ${cards.overduePOs.openCount} open`} tone={cards.overduePOs.count > 0 ? 'text-hackclub-red' : 'text-hackclub-dark'} />
-                            </div>
-                            <p className="text-sm text-hackclub-slate">
-                                {cards.overduePOs.count > 0
-                                    ? `${cards.overduePOs.count} past expected date.`
-                                    : cards.overduePOs.openCount > 0
-                                        ? 'All open POs on schedule.'
-                                        : 'No open POs.'}
-                            </p>
-                        </div>
-                    </Link>
-                )}
-
-                {/* Finance: uncosted */}
                 {data.canFinance && (
-                    <Link href="/admin/finance" className={cards.finance.uncostedVariants === 0 ? 'pointer-events-none' : ''}>
-                        <div className={`h-full bg-white rounded-2xl border-2 p-5 transition-all ${cards.finance.uncostedVariants > 0 ? 'border-hackclub-purple/40 hover:shadow-lg' : 'border-hackclub-smoke opacity-70'}`}>
-                            <div className="flex items-center justify-between mb-2">
-                                <h3 className="font-black text-hackclub-dark">Uncosted stock</h3>
-                                <Stat value={cards.finance.uncostedVariants} label="variants, no cost" tone="text-hackclub-purple" />
-                            </div>
-                            <p className="text-sm text-hackclub-slate">
-                                {cards.finance.uncostedVariants > 0 ? 'Set unit costs so valuation + margins are right.' : 'Everything costed.'}
-                            </p>
-                        </div>
-                    </Link>
+                    <FeedCard
+                        href="/admin/finance"
+                        title="Uncosted stock"
+                        active={cards.finance.uncostedVariants > 0}
+                        stat={<Stat value={cards.finance.uncostedVariants} label="variants, no cost" tone="text-hackclub-purple" />}
+                    >
+                        <p className="text-sm text-hackclub-slate">
+                            {cards.finance.uncostedVariants > 0 ? 'Set unit costs so valuation + margins are right.' : 'Everything costed.'}
+                        </p>
+                    </FeedCard>
                 )}
 
-                {/* Labels: unlabeled variants */}
                 {data.canProducts && (
-                    <Link href="/admin/labels" className={unlabeled === 0 ? 'pointer-events-none' : ''}>
-                        <div className={`h-full bg-white rounded-2xl border-2 p-5 transition-all ${unlabeled > 0 ? 'border-hackclub-purple/40 hover:shadow-lg' : 'border-hackclub-smoke opacity-70'}`}>
-                            <div className="flex items-center justify-between mb-2">
-                                <h3 className="font-black text-hackclub-dark">Unlabeled stock</h3>
-                                <Stat value={unlabeled} label="variants, no barcode" tone="text-hackclub-purple" />
-                            </div>
-                            <p className="text-sm text-hackclub-slate">
-                                {unlabeled > 0 ? 'Generate SKUs + print labels so they can be scanned to receive.' : 'Everything labeled.'}
-                            </p>
-                        </div>
-                    </Link>
+                    <FeedCard
+                        href="/admin/labels"
+                        title="Unlabeled stock"
+                        active={unlabeled > 0}
+                        stat={<Stat value={unlabeled} label="variants, no barcode" tone="text-hackclub-purple" />}
+                    >
+                        <p className="text-sm text-hackclub-slate">
+                            {unlabeled > 0 ? 'Generate SKUs + print labels so they can be scanned to receive.' : 'Everything labeled.'}
+                        </p>
+                    </FeedCard>
                 )}
 
-                {/* Recent activity */}
-                <div className="h-full bg-white rounded-2xl border-2 border-hackclub-smoke p-5">
-                    <div className="flex items-center justify-between mb-2">
+                <div className="h-full rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                    <div className="mb-2 flex items-center justify-between">
                         <h3 className="font-black text-hackclub-dark">Recent activity</h3>
                         <Link href="/admin/audit" className="text-sm font-bold text-hackclub-blue hover:underline">Audit log →</Link>
                     </div>
                     <div className="space-y-1">
-                        {cards.recentActivity.length === 0 && <p className="text-hackclub-slate text-sm">No recent activity.</p>}
+                        {cards.recentActivity.length === 0 && <p className="text-sm text-hackclub-slate">No recent activity.</p>}
                         {cards.recentActivity.map((a, i) => (
-                            <div key={i} className="text-sm flex justify-between gap-2">
-                                <span className="text-hackclub-dark truncate">{a.summary}</span>
-                                <span className="text-hackclub-slate whitespace-nowrap">{timeAgo(a.timestamp)}</span>
+                            <div key={i} className="flex justify-between gap-2 text-sm">
+                                <span className="truncate text-hackclub-dark">{a.summary}</span>
+                                <span className="whitespace-nowrap text-hackclub-slate">{timeAgo(a.timestamp)}</span>
                             </div>
                         ))}
                     </div>
                 </div>
             </div>
-        </motion.div>
+        </div>
     );
 }

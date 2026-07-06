@@ -31,7 +31,7 @@ interface Product {
     createdAt?: string | null;
     // Donation tier marker (see src/lib/donation.ts): the cash price is the
     // donation amount; the merch is the thank-you gift.
-    donation?: { tier: string; fmvCents: number; impact?: string } | null;
+    donation?: { tier: string; fmvCents: number; impact?: string; plus?: boolean } | null;
     sync_variants: Variant[];
 }
 
@@ -267,8 +267,8 @@ const Shop = () => {
                             <SustainerCard />
                         </div>
                         <p className="mt-6 text-center text-hackclub-slate font-bold">
-                            Want to give more than $1,000? Pick any tier and add an extra
-                            donation at checkout, for any amount you like.
+                            The Parents Founders Circle starts at $1,000 and goes as far as
+                            you like. Every tier has a give-more box at checkout.
                         </p>
                     </div>
                 )}
@@ -544,7 +544,7 @@ function TierCard({ product }: { product: Product }) {
                     {product.donation?.tier}
                 </p>
                 <p className="text-4xl font-black text-hackclub-dark" style={{ letterSpacing: '-0.02em' }}>
-                    {dollars(amount)}
+                    {dollars(amount)}{product.donation?.plus ? '+' : ''}
                 </p>
                 {product.donation?.impact && (
                     <p className="text-hackclub-dark font-bold leading-snug">{product.donation.impact}</p>
@@ -565,7 +565,7 @@ function TierCard({ product }: { product: Product }) {
                             ? 'bg-gray-200 text-gray-400'
                             : 'bg-hackclub-red text-white group-hover:bg-hackclub-orange'
                     }`}>
-                        {soldOut ? 'Fully claimed' : `Donate ${dollars(amount)}`}
+                        {soldOut ? 'Fully claimed' : `Donate ${dollars(amount)}${product.donation?.plus ? '+' : ''}`}
                         {!soldOut && (
                             <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

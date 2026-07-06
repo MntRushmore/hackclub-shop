@@ -219,11 +219,11 @@ const ProductPage = () => {
                                 {donation ? (
                                     <>
                                         <p className="text-3xl font-black text-hackclub-red">
-                                            {dollars(donationAmount)} donation
+                                            {dollars(donationAmount)}{donation.plus ? '+' : ''} donation
                                         </p>
                                         {donationDeductible > 0 && (
                                             <p className="mt-1 text-sm font-bold text-hackclub-muted">
-                                                ~{dollars(donationDeductible)} tax-deductible · 501(c)(3)
+                                                ~{dollars(donationDeductible)}{donation.plus ? '+' : ''} tax-deductible · 501(c)(3)
                                             </p>
                                         )}
                                     </>
@@ -290,7 +290,7 @@ const ProductPage = () => {
                                     onClick={donation ? handleDonate : handleAddToCart}
                                 >
                                     {donation
-                                        ? (anyGiftInStock ? `Donate ${dollars(donationAmount)} →` : 'Fully claimed')
+                                        ? (anyGiftInStock ? `Donate ${dollars(donationAmount)}${donation.plus ? '+' : ''} →` : 'Fully claimed')
                                         : selectedAvailable ? 'Add to Cart' : !selectedInStock ? 'Sold out' : 'Not available'}
                                 </motion.button>
                                 {donation && (

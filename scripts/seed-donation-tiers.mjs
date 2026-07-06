@@ -102,12 +102,13 @@ const TIERS = [
     },
     {
         id: 'donation-tier-founders-circle',
-        name: "Founder's Circle",
-        tier: "Founder's Circle",
+        name: 'Parents Founders Circle',
+        tier: 'Parents Founders Circle',
         amount: 1000,
+        plus: true, // renders as "$1,000+" — top up to any total at checkout
         fmvCents: 29000,
         impact: "One teenager's whole year: laptop, travel, grants.",
-        description: "The big one. A full year behind one kid, and we send you everything we make: the numbered vest, sweatshirt, tee, cap, mug, tote, and stickers. Pick your vest size and we'll email about the rest.",
+        description: "The big one. Starts at $1,000 and goes as far as you want (there's a give-more box at checkout). We send you everything we make: the numbered vest, sweatshirt, tee, cap, mug, tote, and stickers. Pick your vest size and we'll email about the rest.",
         variants: APPAREL_SIZES.map(size => ({ key: `kit-vest-${size.toLowerCase()}`, name: `Full Kit · Vest ${size}`, size, unitCost: 147.66 })),
     },
 ];
@@ -116,7 +117,7 @@ function productPayload(t) {
     const config = {
         category: 'donation',
         checkoutFields: [ADDRESS_FIELD],
-        donation: { tier: t.tier, fmvCents: t.fmvCents, impact: t.impact },
+        donation: { tier: t.tier, fmvCents: t.fmvCents, impact: t.impact, ...(t.plus ? { plus: true } : {}) },
     };
     const json = JSON.stringify(config);
     if (json.length > 500) throw new Error(`${t.id}: config metadata is ${json.length} chars (Stripe caps values at 500)`);

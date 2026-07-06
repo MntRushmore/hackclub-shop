@@ -63,6 +63,12 @@ export interface DonationTierConfig {
     /** Tier name shown to donors, e.g. "Philanthropist". */
     tier: string;
     /**
+     * Display the amount as open-ended ("$1,000+"): this tier is the entry
+     * point for custom giving, topped up via the extra-donation field at
+     * checkout. Display-only; the base charge is still the variant price.
+     */
+    plus?: boolean;
+    /**
      * Fair market value (integer cents) of the thank-you gift(s) for this tier.
      * Drives the IRS quid-pro-quo disclosure AND the taxable portion of the
      * checkout: only the FMV is billed as goods; the rest is a donation.

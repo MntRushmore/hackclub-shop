@@ -34,5 +34,5 @@ export interface ProductDetail {
     is_ignored?: boolean;
     // Donation tier marker (see src/lib/donation.ts): the cash price is the
     // donation amount; the merch is the thank-you gift.
-    donation?: { tier: string; fmvCents: number; impact?: string } | null;
+    donation?: { tier: string; fmvCents: number; impact?: string; plus?: boolean } | null;
 }
