@@ -580,9 +580,9 @@ function TierCard({ product }: { product: Product }) {
                                     src={piece.image}
                                     alt={piece.name}
                                     title={piece.name}
-                                    width={56}
-                                    height={56}
-                                    className="w-14 h-14 rounded-lg object-cover border-2 border-hackclub-smoke bg-hackclub-smoke"
+                                    width={96}
+                                    height={96}
+                                    className="w-24 h-24 rounded-xl object-cover border-2 border-hackclub-smoke bg-hackclub-smoke"
                                     draggable={false}
                                 />
                             ))}

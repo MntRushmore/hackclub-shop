@@ -244,9 +244,9 @@ const ProductPage = () => {
                                             src={piece.image}
                                             alt={piece.name}
                                             title={piece.name}
-                                            width={80}
-                                            height={80}
-                                            className="w-20 h-20 rounded-xl object-cover border-2 border-hackclub-smoke bg-hackclub-smoke"
+                                            width={128}
+                                            height={128}
+                                            className="w-32 h-32 rounded-xl object-cover border-2 border-hackclub-smoke bg-hackclub-smoke"
                                             draggable={false}
                                         />
                                     ))}
