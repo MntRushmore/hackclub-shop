@@ -262,13 +262,17 @@ const Shop = () => {
                 {!loading && donationTiers.length > 0 && (
                     <div className="mb-14">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {donationTiers.map((tier) => (
-                                <TierCard key={tier.id} product={tier} />
-                            ))}
+                            {donationTiers.map((tier) =>
+                                tier.donation?.tier === 'Philanthropist' ? (
+                                    <PhilanthropistSplit key={tier.id} product={tier} />
+                                ) : (
+                                    <TierCard key={tier.id} product={tier} />
+                                ),
+                            )}
                             <SustainerCard />
                         </div>
                         <p className="mt-6 text-center text-hackclub-slate font-bold">
-                            Want to give a different amount? You can add more to any tier
+                            Want to give a higher amount? You can add more to any tier
                             at checkout.
                         </p>
                     </div>
@@ -610,6 +614,82 @@ function TierCard({ product }: { product: Product }) {
                 </div>
             </div>
         </Link>
+    );
+}
+
+/**
+ * The Philanthropist cell splits into two half-height boxes, one aimed at
+ * dads (the numbered vest) and one at moms (the Mom hoodie). Same product,
+ * same $500, same checkout; only the pitch differs. Both link to the tier
+ * page, where the donor can still pick any gift.
+ */
+function PhilanthropistSplit({ product }: { product: Product }) {
+    const firstVariant = product.sync_variants?.[0];
+    const amount = getCashPrice(firstVariant) || 0;
+    const soldOut =
+        product.sync_variants.length > 0 && product.sync_variants.every((v) => v.available === 0);
+    const deductible = Math.max(0, amount - (product.donation?.fmvCents ?? 0) / 100);
+    const dollars = (n: number) => `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+    const imageFor = (prefix: string) =>
+        product.sync_variants.find((v) => v.name.startsWith(prefix))?.product?.image;
+
+    const halves = [
+        { who: 'For dads', image: imageFor('Numbered Vest') || '/gifts/vest.jpg', line: 'Your thanks is the numbered vest. Only 100 will ever exist.' },
+        { who: 'For moms', image: imageFor('Mom Sweatshirt') || '/gifts/mom-sweatshirt.jpg', line: 'Your thanks is the Mom hoodie. It says it right on the front.' },
+    ];
+
+    return (
+        <div className={`flex flex-col gap-6 ${soldOut ? 'opacity-60' : ''}`}>
+            {halves.map((half) => (
+                <Link
+                    key={half.who}
+                    href={`/products/${product.id}`}
+                    className="group flex flex-col flex-1 bg-white rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 border-2 border-gray-200 hover:border-hackclub-red p-6 gap-2"
+                >
+                    <p className="text-xs font-black uppercase tracking-widest text-hackclub-red">
+                        {product.donation?.tier} · {half.who}
+                    </p>
+                    <p className="text-3xl font-black text-hackclub-dark" style={{ letterSpacing: '-0.02em' }}>
+                        {dollars(amount)}<span className="text-lg text-hackclub-muted">/mo</span>
+                    </p>
+                    {product.donation?.impact && (
+                        <p className="text-hackclub-dark font-bold leading-snug">{product.donation.impact}</p>
+                    )}
+                    <div className="flex items-center gap-3">
+                        {half.image && (
+                            <Image
+                                src={half.image}
+                                alt={half.who}
+                                width={96}
+                                height={96}
+                                className="w-24 h-24 rounded-xl object-cover border-2 border-hackclub-smoke bg-hackclub-smoke"
+                                draggable={false}
+                            />
+                        )}
+                        <p className="text-sm text-hackclub-slate font-medium leading-snug">{half.line}</p>
+                    </div>
+                    <div className="mt-auto pt-2 flex items-center justify-between gap-2">
+                        {deductible > 0 && (
+                            <span className="text-xs font-bold text-hackclub-muted">
+                                ~{dollars(deductible)} tax-deductible
+                            </span>
+                        )}
+                        <span className={`ml-auto inline-flex items-center gap-1 font-black text-sm px-5 py-2 rounded-full transition-colors ${
+                            soldOut
+                                ? 'bg-gray-200 text-gray-400'
+                                : 'bg-hackclub-red text-white group-hover:bg-hackclub-orange'
+                        }`}>
+                            {soldOut ? 'Fully claimed' : `Donate ${dollars(amount)}/mo`}
+                            {!soldOut && (
+                                <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                            )}
+                        </span>
+                    </div>
+                </Link>
+            ))}
+        </div>
     );
 }
 

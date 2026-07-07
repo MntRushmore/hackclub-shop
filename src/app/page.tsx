@@ -182,6 +182,40 @@ const MainPage = async () => {
         <WaveDivider color="#f9fafc" />
       </section>
 
+      {/* ── THE THANK-YOU MERCH ──────────────────────────────────────────── */}
+      {/* Product photos only (the tier pages carry the story): a shelf of the
+          gifts a donation can come with, linking into the tier ladder. */}
+      <section className="bg-hackclub-smoke pt-16 sm:pt-20">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 text-center">
+          <h2 className="font-sans font-black text-hackclub-dark leading-[1.05]"
+              style={{ fontSize: "clamp(32px, 5.5vw, 52px)", letterSpacing: "-0.02em" }}>
+            The thank-you merch
+          </h2>
+          <p className="text-lg text-hackclub-slate mt-4 mb-10 max-w-xl mx-auto">
+            Every tier comes with a gift from this shelf. Higher tiers get to
+            pick from more of it.
+          </p>
+          <div className="flex flex-wrap justify-center gap-4 sm:gap-5">
+            {[
+              { name: "Sticker Pack", img: "/gifts/sticker.jpg" },
+              { name: "Mug", img: "/gifts/mug.jpg" },
+              { name: "Tote Bag", img: "/gifts/tote.jpg" },
+              { name: "Tee", img: "/gifts/tee.jpg" },
+              { name: "College Hoodie", img: "/gifts/hoodie.jpg" },
+              { name: "Mom Hoodie", img: "/gifts/mom-sweatshirt.jpg" },
+              { name: "Numbered Vest", img: "/gifts/vest.jpg" },
+            ].map((m) => (
+              <Link key={m.name} href="/shop" className="group w-32 sm:w-36">
+                <div className="relative aspect-square rounded-2xl overflow-hidden border border-black/[0.06] shadow-hc-card bg-white transition-shadow duration-150 group-hover:shadow-hc-elevated">
+                  <Image src={m.img} alt={m.name} fill className="object-cover transition-transform duration-200 group-hover:scale-105" sizes="144px" />
+                </div>
+                <p className="mt-2 text-sm font-bold text-hackclub-slate group-hover:text-hackclub-red transition-colors">{m.name}</p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── FAQ ──────────────────────────────────────────────────────────── */}
       {/* Tinted background so the white cards actually read as cards (on a white
           page they were invisible — only the faint shadow hinted at them). */}
@@ -228,7 +262,7 @@ const MainPage = async () => {
             Show the world you&apos;re proud.
           </h2>
           <p className="text-xl text-hackclub-slate max-w-xl mx-auto mb-9 leading-relaxed">
-            Pick a tier, back the next thing they build, and wear the proof.
+            Pick a tier and back the next thing they build. The merch is on us.
           </p>
           <Link
             href="/shop"

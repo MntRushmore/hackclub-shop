@@ -87,7 +87,7 @@ export default function HeroSplit() {
               width={1871}
               height={612}
               priority
-              className="h-12 sm:h-14 w-auto mb-6 mx-auto lg:mx-0"
+              className="h-16 sm:h-20 w-auto mb-6 mx-auto lg:mx-0"
             />
             <h1
               className="font-sans font-black text-hackclub-dark leading-[0.95] mb-6 text-[clamp(48px,6.5vw,84px)]"

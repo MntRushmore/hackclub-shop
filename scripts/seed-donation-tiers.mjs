@@ -47,7 +47,7 @@ const ADDRESS_FIELD = { id: 'shipping_address', name: 'shipping_address', label:
 // site-relative: next/image serves them, and Stripe-hosted pages (which need
 // absolute URLs) simply skip them.
 const GIFT_IMG = {
-    stickers: '/gifts/sticker-car.jpg',
+    stickers: '/gifts/sticker.jpg',
     mug: '/gifts/mug.jpg',
     tote: '/gifts/tote.jpg',
     tee: '/gifts/tee.jpg',
@@ -55,6 +55,20 @@ const GIFT_IMG = {
     mom: '/gifts/mom-sweatshirt.jpg',
     vest: '/gifts/vest.jpg',
 };
+
+// Gift pieces, shared across tiers: a tier's picker offers its own marquee
+// piece(s) PLUS everything from the tiers below it, so giving more never
+// means fewer choices. Keys repeat across tiers safely (variant ids are
+// namespaced per product). Order matters: marquee first (it drives the
+// stamped sort index and the default pick).
+const STICKERS = { key: 'stickers', name: 'Sticker Pack', unitCost: 1.9, image: GIFT_IMG.stickers };
+const MUG = { key: 'mug', name: 'Mug', unitCost: 7.12, image: GIFT_IMG.mug };
+const TOTE = { key: 'tote', name: 'Tote Bag', unitCost: 14.4, image: GIFT_IMG.tote };
+const CAP = { key: 'cap', name: 'Cap', unitCost: 15.94 };
+const TEES = APPAREL_SIZES.map(size => ({ key: `tee-${size.toLowerCase()}`, name: `T-Shirt · ${size}`, size, unitCost: 18.2, image: GIFT_IMG.tee }));
+const COLLEGES = APPAREL_SIZES.map(size => ({ key: `college-${size.toLowerCase()}`, name: `College Sweatshirt · ${size}`, size, unitCost: 36.4, image: GIFT_IMG.college }));
+const MOMS = APPAREL_SIZES.map(size => ({ key: `mom-${size.toLowerCase()}`, name: `Mom Sweatshirt · ${size}`, size, unitCost: 39.28, image: GIFT_IMG.mom }));
+const VESTS = (keyPrefix) => APPAREL_SIZES.map(size => ({ key: `${keyPrefix}-${size.toLowerCase()}`, name: `Numbered Vest · ${size}`, size, unitCost: 55.6, image: GIFT_IMG.vest }));
 const TIERS = [
     {
         id: 'donation-tier-supporter',
@@ -65,7 +79,7 @@ const TIERS = [
         impact: "Can keep a teenager's projects online for a year.",
         description: "$25 can cover a year of domains, hosting, and dev tools for one teenager. It's not flashy, but it's what keeps their projects online. We'll mail you a sticker pack as a thank you.",
         image: GIFT_IMG.stickers,
-        variants: [{ key: 'stickers', name: 'Sticker Pack', unitCost: 1.9, image: GIFT_IMG.stickers }],
+        variants: [STICKERS],
     },
     {
         id: 'donation-tier-friend',
@@ -74,12 +88,9 @@ const TIERS = [
         amount: 100,
         fmvCents: 3000,
         impact: 'Can get a teen to their first hackathon.',
-        description: 'Plenty of kids never make it to their first hackathon because they can\'t afford the bus or train to get there. $100 can go toward travel that puts one of them in the room. You can pick the mug or the tote bag as your thank you.',
+        description: 'Plenty of kids never make it to their first hackathon because they can\'t afford the bus or train to get there. $100 can go toward travel that puts one of them in the room. You can pick the mug, the tote bag, or the sticker pack as your thank you.',
         image: GIFT_IMG.mug,
-        variants: [
-            { key: 'mug', name: 'Mug', unitCost: 7.12, image: GIFT_IMG.mug },
-            { key: 'tote', name: 'Tote Bag', unitCost: 14.4, image: GIFT_IMG.tote },
-        ],
+        variants: [MUG, TOTE, STICKERS],
     },
     {
         id: 'donation-tier-champion',
@@ -88,12 +99,9 @@ const TIERS = [
         amount: 150,
         fmvCents: 3500,
         impact: "Can buy the parts for a kid's first hardware project.",
-        description: 'Somewhere a teenager is one small grant away from their first circuit board. $150 can fund a hardware grant, which for most teenagers means parts for something they\'ve been wanting to build for months. Your thank you gift is the Hack Club tee or the cap, whichever you want.',
+        description: 'Somewhere a teenager is one small grant away from their first circuit board. $150 can fund a hardware grant, which for most teenagers means parts for something they\'ve been wanting to build for months. Your thank you gift is the tee or the cap, or anything from the tiers below.',
         image: '/gifts/tee-event.jpg',
-        variants: [
-            ...APPAREL_SIZES.map(size => ({ key: `tee-${size.toLowerCase()}`, name: `T-Shirt · ${size}`, size, unitCost: 18.2, image: GIFT_IMG.tee })),
-            { key: 'cap', name: 'Cap', unitCost: 15.94 },
-        ],
+        variants: [...TEES, CAP, MUG, TOTE, STICKERS],
     },
     {
         id: 'donation-tier-patron',
@@ -102,12 +110,9 @@ const TIERS = [
         amount: 250,
         fmvCents: 8000,
         impact: "Can back a teenager's projects through the summer.",
-        description: 'Summer is when teenagers have time to build something real, if they can afford to spend it that way. $250 can back one kid through a summer of building. Pick the College sweatshirt or the Mom sweatshirt as your thank you, and we\'ll include stickers too.',
-        image: '/gifts/mom-sweatshirt-event.jpg',
-        variants: [
-            ...APPAREL_SIZES.map(size => ({ key: `college-${size.toLowerCase()}`, name: `College Sweatshirt · ${size}`, size, unitCost: 36.4, image: GIFT_IMG.college })),
-            ...APPAREL_SIZES.map(size => ({ key: `mom-${size.toLowerCase()}`, name: `Mom Sweatshirt · ${size}`, size, unitCost: 39.28, image: GIFT_IMG.mom })),
-        ],
+        description: 'Summer is when teenagers have time to build something real, if they can afford to spend it that way. $250 can back one kid through a summer of building. Pick the College sweatshirt or anything from the tiers below as your thank you.',
+        image: GIFT_IMG.college,
+        variants: [...COLLEGES, ...TEES, CAP, MUG, TOTE, STICKERS],
     },
     {
         id: 'donation-tier-philanthropist',
@@ -116,9 +121,9 @@ const TIERS = [
         amount: 500,
         fmvCents: 10000,
         impact: 'Can buy a laptop for a kid who needs one.',
-        description: "A lot of talented kids are coding on school Chromebooks or borrowed phones. $500 can buy one of them a real laptop. Your thank you gift is a numbered Hack Club vest. We're only ever making 100 of them.",
+        description: "A lot of talented kids are coding on school Chromebooks or borrowed phones. $500 can buy one of them a real laptop. Your thank you gift is a numbered Hack Club vest, and we're only ever making 100 of them. You can pick any gift from the tiers below instead.",
         image: GIFT_IMG.vest,
-        variants: APPAREL_SIZES.map(size => ({ key: `vest-${size.toLowerCase()}`, name: `Numbered Vest · ${size}`, size, unitCost: 55.6, image: GIFT_IMG.vest })),
+        variants: [...VESTS('vest'), ...COLLEGES, ...MOMS, ...TEES, CAP, MUG, TOTE, STICKERS],
     },
     {
         id: 'donation-tier-founders-circle',
@@ -136,16 +141,7 @@ const TIERS = [
         // own cost; checkout adds the second pick's cost onto the order line).
         // Vest keys stay `kit-vest-*` so the existing per-size stock caps on
         // those Stripe Prices, and old orders' variant joins, carry over.
-        variants: [
-            ...APPAREL_SIZES.map(size => ({ key: `kit-vest-${size.toLowerCase()}`, name: `Numbered Vest · ${size}`, size, unitCost: 55.6, image: GIFT_IMG.vest })),
-            ...APPAREL_SIZES.map(size => ({ key: `college-${size.toLowerCase()}`, name: `College Sweatshirt · ${size}`, size, unitCost: 36.4, image: GIFT_IMG.college })),
-            ...APPAREL_SIZES.map(size => ({ key: `mom-${size.toLowerCase()}`, name: `Mom Sweatshirt · ${size}`, size, unitCost: 39.28, image: GIFT_IMG.mom })),
-            ...APPAREL_SIZES.map(size => ({ key: `tee-${size.toLowerCase()}`, name: `T-Shirt · ${size}`, size, unitCost: 18.2, image: GIFT_IMG.tee })),
-            { key: 'cap', name: 'Cap', unitCost: 15.94 },
-            { key: 'mug', name: 'Mug', unitCost: 7.12, image: GIFT_IMG.mug },
-            { key: 'tote', name: 'Tote Bag', unitCost: 14.4, image: GIFT_IMG.tote },
-            { key: 'stickers', name: 'Sticker Pack', unitCost: 1.9, image: GIFT_IMG.stickers },
-        ],
+        variants: [...VESTS('kit-vest'), ...COLLEGES, ...MOMS, ...TEES, CAP, MUG, TOTE, STICKERS],
     },
 ];
 

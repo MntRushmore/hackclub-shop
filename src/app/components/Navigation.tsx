@@ -46,8 +46,7 @@ const ShoppingBagIcon = forwardRef<{ closeAndWait: () => Promise<void> }, unknow
     <div
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      style={{ width: 40, height: 40, cursor: 'pointer' }}
-      className="h-8"
+      style={{ width: 56, height: 56, cursor: 'pointer' }}
     >
       <Lottie
         lottieRef={lottieRef}
