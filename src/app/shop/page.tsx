@@ -561,15 +561,10 @@ function TierCard({ product }: { product: Product }) {
                 product.donation?.plus ? 'border-hackclub-red/60' : 'border-gray-200'
             } hover:border-hackclub-red ${soldOut ? 'opacity-60' : ''}`}
         >
-            {/* VIP badge on the open-ended top rung. */}
+            {/* VIP badge on the open-ended top rung — same flat badge language
+                as the Sold out pill, nothing decorative. */}
             {product.donation?.plus && (
-                <span
-                    className="absolute top-4 right-4 inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.18em] text-white pl-3 pr-3.5 py-1.5 rounded-full shadow-lg ring-2 ring-white/70"
-                    style={{ backgroundImage: 'radial-gradient(ellipse farthest-corner at top left, #ff8c37, #ec3750)' }}
-                >
-                    <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                        <path d="M10 1.5l2.47 5.01 5.53.8-4 3.9.94 5.5L10 14.11l-4.94 2.6.94-5.5-4-3.9 5.53-.8L10 1.5z" />
-                    </svg>
+                <span className="absolute top-4 right-4 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest bg-hackclub-dark text-white">
                     VIP
                 </span>
             )}
