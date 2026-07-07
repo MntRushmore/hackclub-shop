@@ -61,7 +61,7 @@ export default function FooterHeart() {
         onClick={() => (open ? hide() : show())}
         onFocus={show}
         onBlur={hide}
-        className={`text-hackclub-red inline-block cursor-default select-none bg-transparent border-0 p-0 m-0 text-inherit leading-inherit font-inherit outline-none ${
+        className={`text-hackclub-red inline-block cursor-default select-none bg-transparent border-0 p-0 m-0 outline-none ${
           open ? "hc-heart-beating" : ""
         }`}
         style={{ font: "inherit" }}
