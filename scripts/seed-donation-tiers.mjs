@@ -40,6 +40,21 @@ const ADDRESS_FIELD = { id: 'shipping_address', name: 'shipping_address', label:
 // the full fulfillment COGS for the tier (gift + any included extras), so
 // finance reporting stays honest. fmvCents is the tier-level fair market value
 // disclosure — set to the highest-value gift option where there's a choice.
+//
+// Images live in public/gifts/ (see product-photos/README.md for the intake
+// flow). `image` on a tier is the /shop card + product-page hero; `image` on a
+// variant follows that gift into pickers, carts, and receipts. All paths are
+// site-relative: next/image serves them, and Stripe-hosted pages (which need
+// absolute URLs) simply skip them.
+const GIFT_IMG = {
+    stickers: '/gifts/sticker-car.jpg',
+    mug: '/gifts/mug.jpg',
+    tote: '/gifts/tote.jpg',
+    tee: '/gifts/tee.jpg',
+    college: '/gifts/hoodie.jpg',
+    mom: '/gifts/mom-sweatshirt.jpg',
+    vest: '/gifts/vest.jpg',
+};
 const TIERS = [
     {
         id: 'donation-tier-supporter',
@@ -49,7 +64,8 @@ const TIERS = [
         fmvCents: 500,
         impact: "A year of domains and dev tools for one kid.",
         description: "$25 covers a year of domains, hosting, and dev tools for one teenager. It's not flashy, but it's what keeps their projects online. We'll mail you a sticker pack as a thank you.",
-        variants: [{ key: 'stickers', name: 'Sticker Pack', unitCost: 1.9 }],
+        image: GIFT_IMG.stickers,
+        variants: [{ key: 'stickers', name: 'Sticker Pack', unitCost: 1.9, image: GIFT_IMG.stickers }],
     },
     {
         id: 'donation-tier-friend',
@@ -59,9 +75,10 @@ const TIERS = [
         fmvCents: 3000,
         impact: 'Gets a teen to their first hackathon.',
         description: 'Plenty of kids never make it to their first hackathon because they can\'t afford the bus or train to get there. $100 covers that trip for one of them. You can pick the mug or the tote bag as your thank you.',
+        image: GIFT_IMG.mug,
         variants: [
-            { key: 'mug', name: 'Mug', unitCost: 7.12 },
-            { key: 'tote', name: 'Tote Bag', unitCost: 14.4 },
+            { key: 'mug', name: 'Mug', unitCost: 7.12, image: GIFT_IMG.mug },
+            { key: 'tote', name: 'Tote Bag', unitCost: 14.4, image: GIFT_IMG.tote },
         ],
     },
     {
@@ -72,8 +89,9 @@ const TIERS = [
         fmvCents: 3500,
         impact: 'A first hardware grant for a kid with an idea.',
         description: 'Somewhere a teenager is one small grant away from their first circuit board. $150 funds a hardware grant, which for most teenagers means parts for something they\'ve been wanting to build for months. Your thank you gift is the Hack Club tee or the cap, whichever you want.',
+        image: '/gifts/tee-event.jpg',
         variants: [
-            ...APPAREL_SIZES.map(size => ({ key: `tee-${size.toLowerCase()}`, name: `T-Shirt · ${size}`, size, unitCost: 18.2 })),
+            ...APPAREL_SIZES.map(size => ({ key: `tee-${size.toLowerCase()}`, name: `T-Shirt · ${size}`, size, unitCost: 18.2, image: GIFT_IMG.tee })),
             { key: 'cap', name: 'Cap', unitCost: 15.94 },
         ],
     },
@@ -85,9 +103,10 @@ const TIERS = [
         fmvCents: 8000,
         impact: 'A summer of building for one teenager.',
         description: 'Summer is when teenagers have time to build something real, if they can afford to spend it that way. $250 backs one kid through a summer of building. Pick the College sweatshirt or the Mom sweatshirt as your thank you, and we\'ll include stickers too.',
+        image: '/gifts/mom-sweatshirt-event.jpg',
         variants: [
-            ...APPAREL_SIZES.map(size => ({ key: `college-${size.toLowerCase()}`, name: `College Sweatshirt · ${size}`, size, unitCost: 36.4 })),
-            ...APPAREL_SIZES.map(size => ({ key: `mom-${size.toLowerCase()}`, name: `Mom Sweatshirt · ${size}`, size, unitCost: 39.28 })),
+            ...APPAREL_SIZES.map(size => ({ key: `college-${size.toLowerCase()}`, name: `College Sweatshirt · ${size}`, size, unitCost: 36.4, image: GIFT_IMG.college })),
+            ...APPAREL_SIZES.map(size => ({ key: `mom-${size.toLowerCase()}`, name: `Mom Sweatshirt · ${size}`, size, unitCost: 39.28, image: GIFT_IMG.mom })),
         ],
     },
     {
@@ -98,7 +117,8 @@ const TIERS = [
         fmvCents: 10000,
         impact: 'A laptop for a kid who needs one to build.',
         description: "A lot of talented kids are coding on school Chromebooks or borrowed phones. $500 buys one of them a real laptop. Your thank you gift is a numbered Hack Club vest. We're only ever making 100 of them.",
-        variants: APPAREL_SIZES.map(size => ({ key: `vest-${size.toLowerCase()}`, name: `Numbered Vest · ${size}`, size, unitCost: 55.6 })),
+        image: GIFT_IMG.vest,
+        variants: APPAREL_SIZES.map(size => ({ key: `vest-${size.toLowerCase()}`, name: `Numbered Vest · ${size}`, size, unitCost: 55.6, image: GIFT_IMG.vest })),
     },
     {
         id: 'donation-tier-founders-circle',
@@ -110,20 +130,21 @@ const TIERS = [
         fmvCents: 18000, // highest pick pair: vest ($100) + sweatshirt ($80)
         impact: "One teenager's whole year: laptop, travel, grants.",
         description: "This is roughly what it costs to back one teenager for a whole year: a laptop, travel to hackathons, and project grants. It starts at $1,000, and you can add more at checkout if you'd like. As a thank you, pick any two pieces of our merch. One of them can be the numbered vest, and only 100 of those will ever exist.",
+        image: '/gifts/hoodie-event.jpg',
         // Single pieces, not kits: the cart line's variant is the donor's first
         // pick and checkout collects the second (unitCost here is the piece's
         // own cost; checkout adds the second pick's cost onto the order line).
         // Vest keys stay `kit-vest-*` so the existing per-size stock caps on
         // those Stripe Prices, and old orders' variant joins, carry over.
         variants: [
-            ...APPAREL_SIZES.map(size => ({ key: `kit-vest-${size.toLowerCase()}`, name: `Numbered Vest · ${size}`, size, unitCost: 55.6 })),
-            ...APPAREL_SIZES.map(size => ({ key: `college-${size.toLowerCase()}`, name: `College Sweatshirt · ${size}`, size, unitCost: 36.4 })),
-            ...APPAREL_SIZES.map(size => ({ key: `mom-${size.toLowerCase()}`, name: `Mom Sweatshirt · ${size}`, size, unitCost: 39.28 })),
-            ...APPAREL_SIZES.map(size => ({ key: `tee-${size.toLowerCase()}`, name: `T-Shirt · ${size}`, size, unitCost: 18.2 })),
+            ...APPAREL_SIZES.map(size => ({ key: `kit-vest-${size.toLowerCase()}`, name: `Numbered Vest · ${size}`, size, unitCost: 55.6, image: GIFT_IMG.vest })),
+            ...APPAREL_SIZES.map(size => ({ key: `college-${size.toLowerCase()}`, name: `College Sweatshirt · ${size}`, size, unitCost: 36.4, image: GIFT_IMG.college })),
+            ...APPAREL_SIZES.map(size => ({ key: `mom-${size.toLowerCase()}`, name: `Mom Sweatshirt · ${size}`, size, unitCost: 39.28, image: GIFT_IMG.mom })),
+            ...APPAREL_SIZES.map(size => ({ key: `tee-${size.toLowerCase()}`, name: `T-Shirt · ${size}`, size, unitCost: 18.2, image: GIFT_IMG.tee })),
             { key: 'cap', name: 'Cap', unitCost: 15.94 },
-            { key: 'mug', name: 'Mug', unitCost: 7.12 },
-            { key: 'tote', name: 'Tote Bag', unitCost: 14.4 },
-            { key: 'stickers', name: 'Sticker Pack', unitCost: 1.9 },
+            { key: 'mug', name: 'Mug', unitCost: 7.12, image: GIFT_IMG.mug },
+            { key: 'tote', name: 'Tote Bag', unitCost: 14.4, image: GIFT_IMG.tote },
+            { key: 'stickers', name: 'Sticker Pack', unitCost: 1.9, image: GIFT_IMG.stickers },
         ],
     },
 ];
@@ -133,6 +154,7 @@ function productPayload(t) {
         category: 'donation',
         checkoutFields: [ADDRESS_FIELD],
         donation: { tier: t.tier, fmvCents: t.fmvCents, impact: t.impact, ...(t.plus ? { plus: true } : {}), ...(t.giftPicks ? { giftPicks: t.giftPicks } : {}) },
+        ...(t.image ? { image_url: t.image, thumbnail_url: t.image } : {}),
     };
     const json = JSON.stringify(config);
     if (json.length > 500) throw new Error(`${t.id}: config metadata is ${json.length} chars (Stripe caps values at 500)`);
@@ -158,6 +180,7 @@ function priceMetadata(t, v, index) {
         // (newest-first, second-resolution ties), so order is explicit.
         sort: String(index),
         ...(v.size ? { size: v.size } : {}),
+        ...(v.image ? { image_url: v.image } : {}),
     };
 }
 

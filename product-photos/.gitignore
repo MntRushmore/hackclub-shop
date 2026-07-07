@@ -1,0 +1,4 @@
+# Inbox only — originals stay local. Optimized copies ship from public/gifts/.
+*
+!README.md
+!.gitignore
