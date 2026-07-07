@@ -239,9 +239,12 @@ const ProductPage = () => {
                                 ) : (
                                     <p className="text-lg text-gray-400 font-medium">Not available</p>
                                 )}
-                                {selectedStock === 0 ? (
+                                {/* Stock badges are for retail only. Donation tiers track
+                                    stock per gift variant, and the donor picks their gift at
+                                    checkout, so per-variant scarcity here is just noise. */}
+                                {!donation && selectedStock === 0 ? (
                                     <p className="mt-2 inline-block px-3 py-1 rounded-full text-sm font-black bg-hackclub-dark text-white">Sold out</p>
-                                ) : selectedLow ? (
+                                ) : !donation && selectedLow ? (
                                     <p className="mt-2 inline-block px-3 py-1 rounded-full text-sm font-black bg-hackclub-orange text-white">Only {selectedStock} left</p>
                                 ) : null}
                             </div>

@@ -267,8 +267,8 @@ const Shop = () => {
                             <SustainerCard />
                         </div>
                         <p className="mt-6 text-center text-hackclub-slate font-bold">
-                            The Parents Founders Circle starts at $1,000 and goes as far as
-                            you like. Every tier has a give-more box at checkout.
+                            Want to give a different amount? You can add more to any tier
+                            at checkout.
                         </p>
                     </div>
                 )}

@@ -48,7 +48,7 @@ const TIERS = [
         amount: 25,
         fmvCents: 500,
         impact: "A year of domains and dev tools for one kid.",
-        description: "The easiest yes on this page. $25 covers the boring-but-critical stuff that keeps a teenager's projects online, and we send you a sticker pack for the laptop lid.",
+        description: "$25 covers a year of domains, hosting, and dev tools for one teenager. It's not flashy, but it's what keeps their projects online. We'll mail you a sticker pack as a thank you.",
         variants: [{ key: 'stickers', name: 'Sticker Pack', unitCost: 1.9 }],
     },
     {
@@ -58,7 +58,7 @@ const TIERS = [
         amount: 100,
         fmvCents: 3000,
         impact: 'Gets a teen to their first hackathon.',
-        description: 'The first hackathon is where it clicks: the room, the people, the 2am demo. $100 covers one kid\'s trip. Pick the mug or the tote as your thanks.',
+        description: 'Plenty of kids never make it to their first hackathon because they can\'t afford the bus or train to get there. $100 covers that trip for one of them. You can pick the mug or the tote bag as your thank you.',
         variants: [
             { key: 'mug', name: 'Mug', unitCost: 7.12 },
             { key: 'tote', name: 'Tote Bag', unitCost: 14.4 },
@@ -71,7 +71,7 @@ const TIERS = [
         amount: 150,
         fmvCents: 3500,
         impact: 'A first hardware grant for a kid with an idea.',
-        description: 'Somewhere a teenager is one small grant away from their first circuit board. $150 is that grant. Your thanks: the Hack Club tee or cap, your call.',
+        description: 'Somewhere a teenager is one small grant away from their first circuit board. $150 funds a hardware grant, which for most teenagers means parts for something they\'ve been wanting to build for months. Your thank you gift is the Hack Club tee or the cap, whichever you want.',
         variants: [
             ...APPAREL_SIZES.map(size => ({ key: `tee-${size.toLowerCase()}`, name: `T-Shirt · ${size}`, size, unitCost: 18.2 })),
             { key: 'cap', name: 'Cap', unitCost: 15.94 },
@@ -84,7 +84,7 @@ const TIERS = [
         amount: 250,
         fmvCents: 8000,
         impact: 'A summer of building for one teenager.',
-        description: 'School lets out, the real projects start. $250 backs one kid through a summer of shipping. Your thanks: the College sweatshirt or the "Mom" sweatshirt, plus stickers. Both excellent.',
+        description: 'Summer is when teenagers have time to build something real, if they can afford to spend it that way. $250 backs one kid through a summer of building. Pick the College sweatshirt or the Mom sweatshirt as your thank you, and we\'ll include stickers too.',
         variants: [
             ...APPAREL_SIZES.map(size => ({ key: `college-${size.toLowerCase()}`, name: `College Sweatshirt · ${size}`, size, unitCost: 36.4 })),
             ...APPAREL_SIZES.map(size => ({ key: `mom-${size.toLowerCase()}`, name: `Mom Sweatshirt · ${size}`, size, unitCost: 39.28 })),
@@ -97,7 +97,7 @@ const TIERS = [
         amount: 500,
         fmvCents: 10000,
         impact: 'A laptop for a kid who needs one to build.',
-        description: "Some of our best builders don't have a computer of their own. $500 puts a real laptop in a kid's hands. Your vest comes numbered, and only 100 will ever exist.",
+        description: "A lot of talented kids are coding on school Chromebooks or borrowed phones. $500 buys one of them a real laptop. Your thank you gift is a numbered Hack Club vest. We're only ever making 100 of them.",
         variants: APPAREL_SIZES.map(size => ({ key: `vest-${size.toLowerCase()}`, name: `Numbered Vest · ${size}`, size, unitCost: 55.6 })),
     },
     {
@@ -108,7 +108,7 @@ const TIERS = [
         plus: true, // renders as "$1,000+" — top up to any total at checkout
         fmvCents: 29000,
         impact: "One teenager's whole year: laptop, travel, grants.",
-        description: "The big one. Starts at $1,000 and goes as far as you want (there's a give-more box at checkout). We send you everything we make: the numbered vest, sweatshirt, tee, cap, mug, tote, and stickers. Pick your vest size and we'll email about the rest.",
+        description: "This is roughly what it costs to back one teenager for a whole year: a laptop, travel to hackathons, and project grants. It starts at $1,000, and you can add more at checkout if you'd like. As a thank you we'll send you one of everything we make, including the numbered vest. Pick your vest size here and we'll email you about sizing for the rest.",
         variants: APPAREL_SIZES.map(size => ({ key: `kit-vest-${size.toLowerCase()}`, name: `Full Kit · Vest ${size}`, size, unitCost: 147.66 })),
     },
 ];
