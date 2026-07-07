@@ -328,7 +328,9 @@ const ProductPage = () => {
                                 </motion.button>
                                 {donation && (
                                     <p className="mt-3 text-center text-sm font-bold text-hackclub-muted">
-                                        {variants.length > 1
+                                        {(donation.giftPicks || 1) > 1
+                                            ? "You'll pick your two thank-you gifts at checkout."
+                                            : variants.length > 1
                                             ? "You'll pick your thank-you gift and size at checkout."
                                             : `Your thank-you gift: ${variants[0]?.name || 'included'}.`}
                                     </p>

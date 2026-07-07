@@ -63,9 +63,13 @@ const Checkout = () => {
     type TierInfo = {
         tier: string;
         fmvCents: number;
+        giftPicks: number;
         variants: { variant_id: string; name: string; available: number | null }[];
     };
     const [donationTiers, setDonationTiers] = useState<Record<string, TierInfo>>({});
+    // Second gift choice for two-pick tiers (giftPicks = 2), keyed by cart item
+    // id. The cart line's variant_id is pick one; this is pick two.
+    const [secondGifts, setSecondGifts] = useState<Record<string, string>>({});
     const [fundId, setFundId] = useState<string>(DEFAULT_FUND_ID);
     const [dedication, setDedication] = useState('');
     const [donorName, setDonorName] = useState('');
@@ -92,6 +96,7 @@ const Checkout = () => {
                     map[String(p.id)] = {
                         tier: p.donation.tier,
                         fmvCents: p.donation.fmvCents || 0,
+                        giftPicks: p.donation.giftPicks || 1,
                         variants: (p.sync_variants || []).map((v: any) => ({
                             variant_id: String(v.variant_id),
                             name: v.name,
@@ -221,6 +226,22 @@ const Checkout = () => {
     // Donation-tier presence + the display-only deductible estimate (donation
     // minus each gift's fair market value; the server computes the real number).
     const hasDonation = cart.some((item) => donationTiers[String(item.id)]);
+    // The effective second pick for a two-pick tier line: the donor's choice if
+    // it's still valid (exists, in stock, differs from pick one), otherwise the
+    // first in-stock option that differs from pick one — so a donor who never
+    // touches the control still submits a valid pick.
+    const secondGiftFor = (item: { id: string | number; variant_id?: string | number | null }): string => {
+        const info = donationTiers[String(item.id)];
+        if (!info || info.giftPicks < 2) return '';
+        const pickOne = String(item.variant_id ?? '');
+        const chosen = info.variants.find(
+            (v) => v.variant_id === secondGifts[String(item.id)] && v.variant_id !== pickOne && v.available !== 0,
+        );
+        if (chosen) return chosen.variant_id;
+        return info.variants.find((v) => v.variant_id !== pickOne && v.available !== 0)?.variant_id || '';
+    };
+    const twoPickItem = cart.find((item) => (donationTiers[String(item.id)]?.giftPicks || 1) > 1);
+    const secondGiftId = twoPickItem ? secondGiftFor(twoPickItem) : '';
     const monthly = hasDonation && (monthlyOverride ?? cart.some((item) => donationTiers[String(item.id)] && item.recurring));
     const extraUsd = (() => {
         const n = parseFloat(extraDonation);
@@ -386,6 +407,7 @@ const Checkout = () => {
                                   anonymous: donorAnonymous,
                                   recurring: monthly,
                                   ...(extraUsd > 0 ? { extraCents: Math.round(extraUsd * 100) } : {}),
+                                  ...(secondGiftId ? { secondGiftVariantId: secondGiftId } : {}),
                               },
                           }
                         : {}),
@@ -529,27 +551,53 @@ const Checkout = () => {
                                     donor picks the real gift + size here. */}
                                 {cart.some((i) => (donationTiers[String(i.id)]?.variants.length || 0) > 1) && (
                                     <div className="space-y-3 pb-1">
-                                        <p className="font-bold text-hackclub-dark">Your thank-you gift</p>
+                                        <p className="font-bold text-hackclub-dark">
+                                            {twoPickItem ? 'Your thank-you gifts' : 'Your thank-you gift'}
+                                        </p>
                                         {cart.map((item) => {
                                             const info = donationTiers[String(item.id)];
                                             if (!info || info.variants.length <= 1) return null;
+                                            const twoPicks = info.giftPicks > 1;
                                             return (
-                                                <div key={String(item.id)}>
-                                                    <label htmlFor={`gift_${item.id}`} className="block text-sm font-bold text-hackclub-slate mb-1">
-                                                        {info.tier} tier{item.quantity > 1 ? ` (×${item.quantity})` : ''}
-                                                    </label>
-                                                    <select
-                                                        id={`gift_${item.id}`}
-                                                        value={String(item.variant_id ?? '')}
-                                                        onChange={(e) => updateItemVariant(item.id, e.target.value)}
-                                                        className="w-full px-3 py-2 border-2 border-hackclub-smoke rounded-lg bg-white focus:outline-none focus-visible:border-hackclub-red focus-visible:ring-2 focus-visible:ring-hackclub-red/40 text-hackclub-dark font-bold"
-                                                    >
-                                                        {info.variants.map((v) => (
-                                                            <option key={v.variant_id} value={v.variant_id} disabled={v.available === 0}>
-                                                                {v.name}{v.available === 0 ? ' (fully claimed)' : ''}
-                                                            </option>
-                                                        ))}
-                                                    </select>
+                                                <div key={String(item.id)} className={twoPicks ? 'space-y-2' : undefined}>
+                                                    <div>
+                                                        <label htmlFor={`gift_${item.id}`} className="block text-sm font-bold text-hackclub-slate mb-1">
+                                                            {info.tier} tier{twoPicks ? ' · first piece' : ''}{item.quantity > 1 ? ` (×${item.quantity})` : ''}
+                                                        </label>
+                                                        <select
+                                                            id={`gift_${item.id}`}
+                                                            value={String(item.variant_id ?? '')}
+                                                            onChange={(e) => updateItemVariant(item.id, e.target.value)}
+                                                            className="w-full px-3 py-2 border-2 border-hackclub-smoke rounded-lg bg-white focus:outline-none focus-visible:border-hackclub-red focus-visible:ring-2 focus-visible:ring-hackclub-red/40 text-hackclub-dark font-bold"
+                                                        >
+                                                            {info.variants.map((v) => (
+                                                                <option key={v.variant_id} value={v.variant_id} disabled={v.available === 0}>
+                                                                    {v.name}{v.available === 0 ? ' (fully claimed)' : ''}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                    {twoPicks && (
+                                                        <div>
+                                                            <label htmlFor={`gift2_${item.id}`} className="block text-sm font-bold text-hackclub-slate mb-1">
+                                                                {info.tier} tier · second piece
+                                                            </label>
+                                                            <select
+                                                                id={`gift2_${item.id}`}
+                                                                value={secondGiftFor(item)}
+                                                                onChange={(e) => setSecondGifts({ ...secondGifts, [String(item.id)]: e.target.value })}
+                                                                className="w-full px-3 py-2 border-2 border-hackclub-smoke rounded-lg bg-white focus:outline-none focus-visible:border-hackclub-red focus-visible:ring-2 focus-visible:ring-hackclub-red/40 text-hackclub-dark font-bold"
+                                                            >
+                                                                {info.variants
+                                                                    .filter((v) => v.variant_id !== String(item.variant_id ?? ''))
+                                                                    .map((v) => (
+                                                                        <option key={v.variant_id} value={v.variant_id} disabled={v.available === 0}>
+                                                                            {v.name}{v.available === 0 ? ' (fully claimed)' : ''}
+                                                                        </option>
+                                                                    ))}
+                                                            </select>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             );
                                         })}
@@ -623,12 +671,12 @@ const Checkout = () => {
                                     </p>
                                 </div>
                                 <div>
-                                    <label htmlFor="donation-dedication" className="block text-sm font-bold text-hackclub-slate mb-1">Dedication (optional)</label>
+                                    <label htmlFor="donation-dedication" className="block text-sm font-bold text-hackclub-slate mb-1">On behalf of (optional)</label>
                                     <input
                                         id="donation-dedication"
                                         type="text"
                                         maxLength={140}
-                                        placeholder="In honor of Maya"
+                                        placeholder="On behalf of Maya"
                                         value={dedication}
                                         onChange={(e) => setDedication(e.target.value)}
                                         className="w-full px-3 py-2 border-2 border-hackclub-smoke rounded-lg focus:outline-none focus-visible:border-hackclub-red focus-visible:ring-2 focus-visible:ring-hackclub-red/40 text-hackclub-dark font-medium"

@@ -119,15 +119,47 @@ export async function POST(request: Request) {
 
         const itemsCashTotal = validation.items!.reduce((sum, i) => sum + itemCashCost(i) * i.quantity, 0);
 
+        // Two-pick donation tiers (donation.giftPicks = 2, e.g. the Founders
+        // Circle): the donor's second gift arrives as donation.secondGiftVariantId.
+        // Resolve it against the same product's catalog variants, fold it into
+        // the verified line (fulfillment name + cost basis) and hold its stock
+        // alongside pick one. The price is untouched — both pieces are the one
+        // tier's thank-you gift.
+        let secondGiftHold: StockLine | null = null;
+        let secondGiftName: string | undefined;
+        const twoPickItem = validation.items!.find(i => (i.donation?.giftPicks ?? 1) > 1);
+        if (twoPickItem) {
+            const rawSecond = typeof donation?.secondGiftVariantId === 'string' ? donation.secondGiftVariantId.trim() : '';
+            const tierProduct = rawSecond ? await getProductById(twoPickItem.id) : null;
+            const second = tierProduct?.variants.find(v => String(v.variant_id || v.id) === rawSecond);
+            if (!second) {
+                return NextResponse.json({ error: 'Please pick your second thank-you gift.' }, { status: 400 });
+            }
+            if (String(second.variant_id || second.id) === twoPickItem.variantId) {
+                return NextResponse.json({ error: 'Please pick two different pieces for your thank-you gifts.' }, { status: 400 });
+            }
+            twoPickItem.name = `${twoPickItem.name} + ${second.name}`;
+            if (typeof second.unitCost === 'number' && second.unitCost >= 0) {
+                twoPickItem.unitCost = (twoPickItem.unitCost ?? 0) + second.unitCost;
+            }
+            secondGiftName = second.name;
+            secondGiftHold = { variantId: String(second.variant_id || second.id), quantity: twoPickItem.quantity };
+        }
+
         // Reserve stock before creating the Stripe session, so two guests can't
         // both buy the last unit during the in-flight payment window. Untracked
         // variants are unlimited and always succeed. The hold is released by the
         // webhook on expiry, or committed to a sale on payment.
-        const holdLines: StockLine[] = validation.items!.map(i => ({ variantId: i.variantId, quantity: i.quantity }));
+        const holdLines: StockLine[] = [
+            ...validation.items!.map(i => ({ variantId: i.variantId, quantity: i.quantity })),
+            ...(secondGiftHold ? [secondGiftHold] : []),
+        ];
         const reservation = await reserve(holdLines);
         if (!reservation.ok) {
             const oversold = validation.items!.find(i => i.variantId === reservation.variantId);
-            const name = oversold?.name || 'An item';
+            const name = oversold?.name
+                || (secondGiftHold && reservation.variantId === secondGiftHold.variantId ? secondGiftName : undefined)
+                || 'An item';
             return NextResponse.json(
                 {
                     error: reservation.available > 0

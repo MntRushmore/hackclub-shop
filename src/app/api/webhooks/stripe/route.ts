@@ -119,8 +119,16 @@ export async function POST(request: Request) {
                 // delivery reaches this line per order.
                 let donation = order.donation;
                 if (donation) {
-                    const vestNumber = await assignVestNumber(donation.tier);
-                    if (vestNumber !== undefined) donation = { ...donation, vestNumber };
+                    // Mint only when the settled gifts actually include a vest:
+                    // the Founders Circle donor picks any two pieces, so the
+                    // tier name alone no longer implies one. Philanthropist
+                    // gift variants are all vests, so this stays true for
+                    // every order of that tier.
+                    const includesVest = (order.inventoryHold || []).some(l => l.variantId.includes('vest'));
+                    if (includesVest) {
+                        const vestNumber = await assignVestNumber(donation.tier);
+                        if (vestNumber !== undefined) donation = { ...donation, vestNumber };
+                    }
                 }
 
                 const updated = await updateGuestOrder(order.id, {

@@ -72,9 +72,16 @@ export interface DonationTierConfig {
      * Fair market value (integer cents) of the thank-you gift(s) for this tier.
      * Drives the IRS quid-pro-quo disclosure AND the taxable portion of the
      * checkout: only the FMV is billed as goods; the rest is a donation.
-     * Set to the highest-value gift option when a tier offers a choice.
+     * Set to the highest-value gift option (or pick combination) when a tier
+     * offers a choice.
      */
     fmvCents: number;
+    /**
+     * How many gift pieces the donor chooses (default 1). At 2, the tier's
+     * variants are single pieces: the cart line's variant is pick one, and the
+     * second pick arrives as DonationCheckoutInput.secondGiftVariantId.
+     */
+    giftPicks?: number;
     /** Impact statement, e.g. "Puts a laptop in the hands of a teen." */
     impact?: string;
 }
@@ -92,6 +99,9 @@ export interface DonationCheckoutInput {
     extraCents?: number;
     // True = bill the tier amount monthly (Stripe subscription) instead of once.
     recurring?: boolean;
+    // Second gift choice for a giftPicks-2 tier (variant id on the same
+    // product). Checkout validates it against the catalog and holds its stock.
+    secondGiftVariantId?: string;
 }
 
 /** Ceiling for the extra-donation field: $100,000. Above this, talk to us. */
@@ -109,6 +119,7 @@ export function sanitizeDonationInput(input: DonationCheckoutInput | undefined):
     isAnonymous: boolean;
     extraCents: number;
     recurring: boolean;
+    secondGiftVariantId?: string;
 } {
     const clip = (s: unknown, max: number): string | undefined => {
         if (typeof s !== 'string') return undefined;
@@ -128,6 +139,7 @@ export function sanitizeDonationInput(input: DonationCheckoutInput | undefined):
         isAnonymous: Boolean(input?.anonymous),
         extraCents,
         recurring: Boolean(input?.recurring),
+        secondGiftVariantId: clip(input?.secondGiftVariantId, 100),
     };
 }
 

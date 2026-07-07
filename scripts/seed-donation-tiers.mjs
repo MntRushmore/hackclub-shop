@@ -106,10 +106,25 @@ const TIERS = [
         tier: 'Parents Founders Circle',
         amount: 1000,
         plus: true, // renders as "$1,000+" — top up to any total at checkout
-        fmvCents: 29000,
+        giftPicks: 2, // donor chooses two pieces; the second pick arrives at checkout
+        fmvCents: 18000, // highest pick pair: vest ($100) + sweatshirt ($80)
         impact: "One teenager's whole year: laptop, travel, grants.",
-        description: "This is roughly what it costs to back one teenager for a whole year: a laptop, travel to hackathons, and project grants. It starts at $1,000, and you can add more at checkout if you'd like. As a thank you we'll send you one of everything we make, including the numbered vest. Pick your vest size here and we'll email you about sizing for the rest.",
-        variants: APPAREL_SIZES.map(size => ({ key: `kit-vest-${size.toLowerCase()}`, name: `Full Kit · Vest ${size}`, size, unitCost: 147.66 })),
+        description: "This is roughly what it costs to back one teenager for a whole year: a laptop, travel to hackathons, and project grants. It starts at $1,000, and you can add more at checkout if you'd like. As a thank you, pick any two pieces of our merch. One of them can be the numbered vest, and only 100 of those will ever exist.",
+        // Single pieces, not kits: the cart line's variant is the donor's first
+        // pick and checkout collects the second (unitCost here is the piece's
+        // own cost; checkout adds the second pick's cost onto the order line).
+        // Vest keys stay `kit-vest-*` so the existing per-size stock caps on
+        // those Stripe Prices, and old orders' variant joins, carry over.
+        variants: [
+            ...APPAREL_SIZES.map(size => ({ key: `kit-vest-${size.toLowerCase()}`, name: `Numbered Vest · ${size}`, size, unitCost: 55.6 })),
+            ...APPAREL_SIZES.map(size => ({ key: `college-${size.toLowerCase()}`, name: `College Sweatshirt · ${size}`, size, unitCost: 36.4 })),
+            ...APPAREL_SIZES.map(size => ({ key: `mom-${size.toLowerCase()}`, name: `Mom Sweatshirt · ${size}`, size, unitCost: 39.28 })),
+            ...APPAREL_SIZES.map(size => ({ key: `tee-${size.toLowerCase()}`, name: `T-Shirt · ${size}`, size, unitCost: 18.2 })),
+            { key: 'cap', name: 'Cap', unitCost: 15.94 },
+            { key: 'mug', name: 'Mug', unitCost: 7.12 },
+            { key: 'tote', name: 'Tote Bag', unitCost: 14.4 },
+            { key: 'stickers', name: 'Sticker Pack', unitCost: 1.9 },
+        ],
     },
 ];
 
@@ -117,7 +132,7 @@ function productPayload(t) {
     const config = {
         category: 'donation',
         checkoutFields: [ADDRESS_FIELD],
-        donation: { tier: t.tier, fmvCents: t.fmvCents, impact: t.impact, ...(t.plus ? { plus: true } : {}) },
+        donation: { tier: t.tier, fmvCents: t.fmvCents, impact: t.impact, ...(t.plus ? { plus: true } : {}), ...(t.giftPicks ? { giftPicks: t.giftPicks } : {}) },
     };
     const json = JSON.stringify(config);
     if (json.length > 500) throw new Error(`${t.id}: config metadata is ${json.length} chars (Stripe caps values at 500)`);
