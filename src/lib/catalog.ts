@@ -62,10 +62,16 @@ export function buildCatalogProduct(
     const shopProductId = stripeProduct.metadata.shop_product_id || stripeProduct.id;
 
     // Stripe lists prices newest-first; display order should be seed order
-    // (oldest-first), so sizes run S→2XL and the marquee gift leads.
+    // (oldest-first), so the marquee gift leads. Prices seeded in the same
+    // second tie on `created`, so sizes break the tie (S→2XL), then id.
+    const sizeRank = (p: { metadata: Record<string, string> }): number => {
+        const i = ['S', 'M', 'L', 'XL', '2XL'].indexOf(p.metadata?.size || '');
+        return i === -1 ? 0 : i;
+    };
     const variants: CatalogVariant[] = prices
         .filter((p) => p.active)
-        .sort((a, b) => (a.created ?? 0) - (b.created ?? 0) || a.id.localeCompare(b.id))
+        .sort((a, b) =>
+            (a.created ?? 0) - (b.created ?? 0) || sizeRank(a) - sizeRank(b) || a.id.localeCompare(b.id))
         .map((p) => fromStripePrice(p));
 
     return {
