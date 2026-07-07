@@ -29,7 +29,7 @@ export const DONATION_FUNDS: DonationFund[] = [
     {
         id: 'laptop',
         name: 'Laptops',
-        description: 'Laptops for teens who don\'t have their own. $500 is enough to put one in a teenager\'s hands.',
+        description: 'Laptops for teens who don\'t have their own. $500 can put one in a teenager\'s hands.',
     },
     {
         id: 'first-hackathon',

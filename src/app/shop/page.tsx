@@ -647,7 +647,7 @@ function SustainerCard() {
                 <p className="text-4xl font-black" style={{ letterSpacing: '-0.02em' }}>
                     $500<span className="text-xl text-white/60">/month</span>
                 </p>
-                <p className="font-bold leading-snug">A laptop in a kid&apos;s hands, every single month.</p>
+                <p className="font-bold leading-snug">Can put a laptop in a kid&apos;s hands, every single month.</p>
                 <p className="text-sm text-white/70 font-medium leading-relaxed">
                     Our biggest commitment: a monthly donation with a permanent spot on
                     the donor wall and a members-only thank-you gift each year. Cancel

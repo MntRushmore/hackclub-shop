@@ -62,8 +62,8 @@ const TIERS = [
         tier: 'Supporter',
         amount: 25,
         fmvCents: 500,
-        impact: "Keeps a teenager's projects online for a year.",
-        description: "$25 covers a year of domains, hosting, and dev tools for one teenager. It's not flashy, but it's what keeps their projects online. We'll mail you a sticker pack as a thank you.",
+        impact: "Can keep a teenager's projects online for a year.",
+        description: "$25 can cover a year of domains, hosting, and dev tools for one teenager. It's not flashy, but it's what keeps their projects online. We'll mail you a sticker pack as a thank you.",
         image: GIFT_IMG.stickers,
         variants: [{ key: 'stickers', name: 'Sticker Pack', unitCost: 1.9, image: GIFT_IMG.stickers }],
     },
@@ -73,8 +73,8 @@ const TIERS = [
         tier: 'Friend',
         amount: 100,
         fmvCents: 3000,
-        impact: 'Helps get a teen to their first hackathon.',
-        description: 'Plenty of kids never make it to their first hackathon because they can\'t afford the bus or train to get there. $100 goes toward travel so one of them can be in the room. You can pick the mug or the tote bag as your thank you.',
+        impact: 'Can get a teen to their first hackathon.',
+        description: 'Plenty of kids never make it to their first hackathon because they can\'t afford the bus or train to get there. $100 can go toward travel that puts one of them in the room. You can pick the mug or the tote bag as your thank you.',
         image: GIFT_IMG.mug,
         variants: [
             { key: 'mug', name: 'Mug', unitCost: 7.12, image: GIFT_IMG.mug },
@@ -87,8 +87,8 @@ const TIERS = [
         tier: 'Champion',
         amount: 150,
         fmvCents: 3500,
-        impact: "Buys the parts for a kid's first hardware project.",
-        description: 'Somewhere a teenager is one small grant away from their first circuit board. $150 funds a hardware grant, which for most teenagers means parts for something they\'ve been wanting to build for months. Your thank you gift is the Hack Club tee or the cap, whichever you want.',
+        impact: "Can buy the parts for a kid's first hardware project.",
+        description: 'Somewhere a teenager is one small grant away from their first circuit board. $150 can fund a hardware grant, which for most teenagers means parts for something they\'ve been wanting to build for months. Your thank you gift is the Hack Club tee or the cap, whichever you want.',
         image: '/gifts/tee-event.jpg',
         variants: [
             ...APPAREL_SIZES.map(size => ({ key: `tee-${size.toLowerCase()}`, name: `T-Shirt · ${size}`, size, unitCost: 18.2, image: GIFT_IMG.tee })),
@@ -101,8 +101,8 @@ const TIERS = [
         tier: 'Patron',
         amount: 250,
         fmvCents: 8000,
-        impact: "Backs one teenager's projects through the summer.",
-        description: 'Summer is when teenagers have time to build something real, if they can afford to spend it that way. $250 backs one kid through a summer of building. Pick the College sweatshirt or the Mom sweatshirt as your thank you, and we\'ll include stickers too.',
+        impact: "Can back a teenager's projects through the summer.",
+        description: 'Summer is when teenagers have time to build something real, if they can afford to spend it that way. $250 can back one kid through a summer of building. Pick the College sweatshirt or the Mom sweatshirt as your thank you, and we\'ll include stickers too.',
         image: '/gifts/mom-sweatshirt-event.jpg',
         variants: [
             ...APPAREL_SIZES.map(size => ({ key: `college-${size.toLowerCase()}`, name: `College Sweatshirt · ${size}`, size, unitCost: 36.4, image: GIFT_IMG.college })),
@@ -115,8 +115,8 @@ const TIERS = [
         tier: 'Philanthropist',
         amount: 500,
         fmvCents: 10000,
-        impact: 'Buys a laptop for a kid who needs one.',
-        description: "A lot of talented kids are coding on school Chromebooks or borrowed phones. $500 buys one of them a real laptop. Your thank you gift is a numbered Hack Club vest. We're only ever making 100 of them.",
+        impact: 'Can buy a laptop for a kid who needs one.',
+        description: "A lot of talented kids are coding on school Chromebooks or borrowed phones. $500 can buy one of them a real laptop. Your thank you gift is a numbered Hack Club vest. We're only ever making 100 of them.",
         image: GIFT_IMG.vest,
         variants: APPAREL_SIZES.map(size => ({ key: `vest-${size.toLowerCase()}`, name: `Numbered Vest · ${size}`, size, unitCost: 55.6, image: GIFT_IMG.vest })),
     },
@@ -128,8 +128,8 @@ const TIERS = [
         plus: true, // renders as "$1,000+" — top up to any total at checkout
         giftPicks: 2, // donor chooses two pieces; the second pick arrives at checkout
         fmvCents: 18000, // highest pick pair: vest ($100) + sweatshirt ($80)
-        impact: "Buys one kid a laptop and helps with travel and grants.",
-        description: "$1,000 is enough to put a laptop in a kid's hands and still help with hackathon travel and a hardware grant. You can add more at checkout if you'd like. As a thank you, pick any two pieces of our merch. One of them can be the numbered vest, and only 100 of those will ever exist.",
+        impact: "Can buy one kid a laptop and help with travel and grants.",
+        description: "$1,000 can put a laptop in a kid's hands and still help with hackathon travel and a hardware grant. You can add more at checkout if you'd like. As a thank you, pick any two pieces of our merch. One of them can be the numbered vest, and only 100 of those will ever exist.",
         image: '/gifts/hoodie-event.jpg',
         // Single pieces, not kits: the cart line's variant is the donor's first
         // pick and checkout collects the second (unitCost here is the piece's

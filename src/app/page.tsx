@@ -143,12 +143,12 @@ const MainPage = async () => {
           </h2>
           <p className="text-xl text-white/80 max-w-2xl mx-auto mb-14 leading-relaxed">
             We&apos;re a 501(c)(3) nonprofit, and every dollar goes to teenagers.
-            Here&apos;s the kind of thing it pays for. At checkout you can tell
+            Here&apos;s the kind of thing it can pay for. At checkout you can tell
             us which one matters most to you.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-left">
             {[
-              { title: "Laptops", body: "A kid can't build much without a computer of their own. $500 is enough to put a laptop in a teenager's hands.", photo: "/images/hc/photo2.webp", meter: meterFor("laptop") },
+              { title: "Laptops", body: "A kid can't build much without a computer of their own. $500 can put a laptop in a teenager's hands.", photo: "/images/hc/photo2.webp", meter: meterFor("laptop") },
               { title: "First hackathons", body: "Travel help so a teen can meet their community in person. Sometimes a bus ticket is all that's in the way.", photo: "/images/hc/photo4.webp", meter: meterFor("first-hackathon") },
               { title: "Gap years & big projects", body: "Backing teenagers who take time to build something real, with tools, hardware, and grants.", photo: "/images/hc/photo7.webp", meter: meterFor("gap-year") },
             ].map((c) => (
