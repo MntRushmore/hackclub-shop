@@ -128,8 +128,8 @@ const TIERS = [
         plus: true, // renders as "$1,000+" — top up to any total at checkout
         giftPicks: 2, // donor chooses two pieces; the second pick arrives at checkout
         fmvCents: 18000, // highest pick pair: vest ($100) + sweatshirt ($80)
-        impact: "Covers a kid's laptop, hackathon travel, and grants for a year.",
-        description: "This is roughly what it costs to back one teenager for a whole year: a laptop, travel to hackathons, and project grants. It starts at $1,000, and you can add more at checkout if you'd like. As a thank you, pick any two pieces of our merch. One of them can be the numbered vest, and only 100 of those will ever exist.",
+        impact: "Buys one kid a laptop, a hackathon trip, and a hardware grant.",
+        description: "A laptop is $500. A hackathon trip is $100. A hardware grant is $150. At $1,000 you've covered one kid's whole setup with room to spare, and you can add more at checkout if you'd like. As a thank you, pick any two pieces of our merch. One of them can be the numbered vest, and only 100 of those will ever exist.",
         image: '/gifts/hoodie-event.jpg',
         // Single pieces, not kits: the cart line's variant is the donor's first
         // pick and checkout collects the second (unitCost here is the piece's
