@@ -239,7 +239,7 @@ const Shop = () => {
                         Back a teenager.
                     </h1>
                     <p className="text-xl text-hackclub-slate font-bold max-w-2xl">
-                        Every tier is a donation to Hack Club. It goes toward
+                        Every product is a donation to Hack Club. It goes toward
                         teenagers building real things, and we mail you something
                         to say thanks.
                     </p>
@@ -272,7 +272,7 @@ const Shop = () => {
                             <SustainerCard />
                         </div>
                         <p className="mt-6 text-center text-hackclub-slate font-bold">
-                            Want to give a higher amount? You can add more to any tier
+                            Want to give a higher amount? You can add more to any product
                             at checkout.
                         </p>
                     </div>
@@ -557,8 +557,22 @@ function TierCard({ product }: { product: Product }) {
     return (
         <Link
             href={`/products/${product.id}`}
-            className={`group flex flex-col bg-white rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden border-2 border-gray-200 hover:border-hackclub-red ${soldOut ? 'opacity-60' : ''}`}
+            className={`group relative flex flex-col bg-white rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden border-2 ${
+                product.donation?.plus ? 'border-hackclub-red/60' : 'border-gray-200'
+            } hover:border-hackclub-red ${soldOut ? 'opacity-60' : ''}`}
         >
+            {/* VIP badge on the open-ended top rung. */}
+            {product.donation?.plus && (
+                <span
+                    className="absolute top-4 right-4 inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.18em] text-white pl-3 pr-3.5 py-1.5 rounded-full shadow-lg ring-2 ring-white/70"
+                    style={{ backgroundImage: 'radial-gradient(ellipse farthest-corner at top left, #ff8c37, #ec3750)' }}
+                >
+                    <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path d="M10 1.5l2.47 5.01 5.53.8-4 3.9.94 5.5L10 14.11l-4.94 2.6.94-5.5-4-3.9 5.53-.8L10 1.5z" />
+                    </svg>
+                    VIP
+                </span>
+            )}
             <div className="flex flex-col gap-2 p-6 flex-1">
                 <p className="text-xs font-black uppercase tracking-widest text-hackclub-red">
                     {product.donation?.tier}

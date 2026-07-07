@@ -562,7 +562,7 @@ const Checkout = () => {
                                                 <div key={String(item.id)} className={twoPicks ? 'space-y-2' : undefined}>
                                                     <div>
                                                         <label htmlFor={`gift_${item.id}`} className="block text-sm font-bold text-hackclub-slate mb-1">
-                                                            {info.tier} tier{twoPicks ? ' · first piece' : ''}{item.quantity > 1 ? ` (×${item.quantity})` : ''}
+                                                            {info.tier}{twoPicks ? ' · first piece' : ''}{item.quantity > 1 ? ` (×${item.quantity})` : ''}
                                                         </label>
                                                         <select
                                                             id={`gift_${item.id}`}
@@ -580,7 +580,7 @@ const Checkout = () => {
                                                     {twoPicks && (
                                                         <div>
                                                             <label htmlFor={`gift2_${item.id}`} className="block text-sm font-bold text-hackclub-slate mb-1">
-                                                                {info.tier} tier · second piece
+                                                                {info.tier} · second piece
                                                             </label>
                                                             <select
                                                                 id={`gift2_${item.id}`}
@@ -667,7 +667,7 @@ const Checkout = () => {
                                         ))}
                                     </div>
                                     <p className="mt-1 text-xs text-hackclub-muted">
-                                        Goes on top of your tier and is fully tax-deductible. Giving more than $100,000? Email shop@hackclub.com.
+                                        Goes on top of your donation and is fully tax-deductible. Giving more than $100,000? Email shop@hackclub.com.
                                     </p>
                                 </div>
                                 <div>
@@ -854,7 +854,7 @@ const Checkout = () => {
                                 <p className="text-xs text-hackclub-muted text-right">
                                     {hasDonation
                                         ? monthly
-                                            ? 'Your tier amount repeats monthly; shipping and any extra donation bill once. Your receipt doubles as your tax acknowledgment.'
+                                            ? 'Your donation repeats monthly; shipping and any extra donation bill once. Your receipt doubles as your tax acknowledgment.'
                                             : 'Sales tax applies only to the gift’s value, not your donation. Your receipt doubles as your tax acknowledgment.'
                                         : 'Any applicable sales tax is calculated at checkout.'}
                                 </p>

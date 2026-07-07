@@ -216,7 +216,7 @@ const ProductPage = () => {
                         ) : (
                             <div className="aspect-square w-full rounded-xl bg-hackclub-dark flex flex-col items-center justify-center text-center p-8">
                                 <span className="text-xs font-black uppercase tracking-widest text-hackclub-red mb-3">
-                                    {product.donation ? `${product.donation.tier} tier` : 'Hack Club Shop'}
+                                    {product.donation ? product.donation.tier : 'Hack Club Shop'}
                                 </span>
                                 <span className="text-white font-black text-4xl" style={{ letterSpacing: '-0.02em' }}>
                                     {product.name}
@@ -258,7 +258,7 @@ const ProductPage = () => {
                     <div className="bg-white rounded-2xl p-8 shadow-lg border-2 border-gray-200">
                         {donation && (
                             <p className="text-xs font-black uppercase tracking-widest text-hackclub-red mb-2">
-                                {donation.tier} tier
+                                {donation.tier}
                             </p>
                         )}
                         <h1 className="text-4xl sm:text-5xl font-black text-hackclub-dark mb-4">

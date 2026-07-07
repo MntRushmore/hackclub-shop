@@ -390,11 +390,11 @@ export function buildAdminNewOrder(order: Order): EmailMessage | null {
     // Fulfillment cue for donation orders: which fund + the vest number to print.
     const d = order.donation;
     const donationNote = d
-        ? `\n\nDONATION ORDER: ${d.tier} tier, ${getDonationFund(d.fundId).name}${d.vestNumber !== undefined ? `. PRINT VEST NUMBER #${String(d.vestNumber).padStart(3, '0')} on the packing slip.` : '.'}`
+        ? `\n\nDONATION ORDER: ${d.tier}, ${getDonationFund(d.fundId).name}${d.vestNumber !== undefined ? `. PRINT VEST NUMBER #${String(d.vestNumber).padStart(3, '0')} on the packing slip.` : '.'}`
         : '';
     const text = `New ${order.pathway} order #${ref} from ${who}\n\nItems:\n${itemsText(order)}\n\n${priceLine(order)}\nShipping to: ${shippingLine(order)}${donationNote}\n\nManage it in the admin dashboard.`;
     const donationNoteHtml = d
-        ? `<p style="margin:14px 0 0;padding:12px 16px;background:#faf8f4;border-left:3px solid ${RED};color:${INK};font-size:14px;line-height:1.55"><strong>Donation order:</strong> ${escapeHtml(d.tier)} tier, ${escapeHtml(getDonationFund(d.fundId).name)}.${d.vestNumber !== undefined ? ` <strong>Print vest number #${String(d.vestNumber).padStart(3, '0')} on the packing slip.</strong>` : ''}</p>`
+        ? `<p style="margin:14px 0 0;padding:12px 16px;background:#faf8f4;border-left:3px solid ${RED};color:${INK};font-size:14px;line-height:1.55"><strong>Donation order:</strong> ${escapeHtml(d.tier)}, ${escapeHtml(getDonationFund(d.fundId).name)}.${d.vestNumber !== undefined ? ` <strong>Print vest number #${String(d.vestNumber).padStart(3, '0')} on the packing slip.</strong>` : ''}</p>`
         : '';
     const html = shell('New order just came in', `
         <p style="margin:0 0 4px;font-size:15px;line-height:1.6;color:${INK}"><strong style="color:${RED}">#${ref}</strong>: ${escapeHtml(order.pathway)} order from <strong>${escapeHtml(who)}</strong></p>

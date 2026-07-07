@@ -122,9 +122,9 @@ const MainPage = async () => {
             way, and the hackathons, clubs, and tools that help them do it.
           </p>
           <p className="text-hackclub-dark font-bold">
-            This shop is how the people who love them chip in: donate at a
-            tier, take home the merch as our thanks, and put every dollar into
-            the next thing they build.
+            This shop is how the people who love them chip in: pick a
+            product, take home the merch as our thanks, and put every dollar
+            into the next thing they build.
           </p>
         </div>
       </section>
@@ -192,8 +192,8 @@ const MainPage = async () => {
             The thank-you merch
           </h2>
           <p className="text-lg text-hackclub-slate mt-4 mb-10 max-w-xl mx-auto">
-            Every tier comes with a gift from this shelf. Higher tiers get to
-            pick from more of it.
+            Every product comes with a gift from this shelf. The bigger
+            donations pick from more of it.
           </p>
           <div className="flex flex-wrap justify-center gap-4 sm:gap-5">
             {[
@@ -262,7 +262,7 @@ const MainPage = async () => {
             Show the world you&apos;re proud.
           </h2>
           <p className="text-xl text-hackclub-slate max-w-xl mx-auto mb-9 leading-relaxed">
-            Pick a tier and back the next thing they build. The merch is on us.
+            Pick a product and back the next thing they build. The merch is on us.
           </p>
           <Link
             href="/shop"
