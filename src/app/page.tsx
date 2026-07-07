@@ -149,7 +149,7 @@ const MainPage = async () => {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-left">
             {[
               { title: "Laptops", body: "A kid can't build much without a computer of their own. $500 is enough to put a laptop in a teenager's hands.", photo: "/images/hc/photo2.webp", meter: meterFor("laptop") },
-              { title: "First hackathons", body: "Travel help so a teen can meet their community in person. $100 is enough to get one teen to their first hackathon.", photo: "/images/hc/photo4.webp", meter: meterFor("first-hackathon") },
+              { title: "First hackathons", body: "Travel help so a teen can meet their community in person. Sometimes a bus ticket is all that's in the way.", photo: "/images/hc/photo4.webp", meter: meterFor("first-hackathon") },
               { title: "Gap years & big projects", body: "Backing teenagers who take time to build something real, with tools, hardware, and grants.", photo: "/images/hc/photo7.webp", meter: meterFor("gap-year") },
             ].map((c) => (
               <div key={c.title} className="bg-white/[0.06] rounded-2xl border border-white/10 backdrop-blur-sm overflow-hidden flex flex-col">

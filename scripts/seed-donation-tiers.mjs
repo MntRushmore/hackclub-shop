@@ -73,8 +73,8 @@ const TIERS = [
         tier: 'Friend',
         amount: 100,
         fmvCents: 3000,
-        impact: 'Gets a teen to their first hackathon.',
-        description: 'Plenty of kids never make it to their first hackathon because they can\'t afford the bus or train to get there. $100 covers that trip for one of them. You can pick the mug or the tote bag as your thank you.',
+        impact: 'Helps get a teen to their first hackathon.',
+        description: 'Plenty of kids never make it to their first hackathon because they can\'t afford the bus or train to get there. $100 goes toward travel so one of them can be in the room. You can pick the mug or the tote bag as your thank you.',
         image: GIFT_IMG.mug,
         variants: [
             { key: 'mug', name: 'Mug', unitCost: 7.12, image: GIFT_IMG.mug },
@@ -101,7 +101,7 @@ const TIERS = [
         tier: 'Patron',
         amount: 250,
         fmvCents: 8000,
-        impact: "Covers one teenager's project costs over the summer.",
+        impact: "Backs one teenager's projects through the summer.",
         description: 'Summer is when teenagers have time to build something real, if they can afford to spend it that way. $250 backs one kid through a summer of building. Pick the College sweatshirt or the Mom sweatshirt as your thank you, and we\'ll include stickers too.',
         image: '/gifts/mom-sweatshirt-event.jpg',
         variants: [
@@ -128,8 +128,8 @@ const TIERS = [
         plus: true, // renders as "$1,000+" — top up to any total at checkout
         giftPicks: 2, // donor chooses two pieces; the second pick arrives at checkout
         fmvCents: 18000, // highest pick pair: vest ($100) + sweatshirt ($80)
-        impact: "Buys one kid a laptop, a hackathon trip, and a hardware grant.",
-        description: "A laptop is $500. A hackathon trip is $100. A hardware grant is $150. At $1,000 you've covered one kid's whole setup with room to spare, and you can add more at checkout if you'd like. As a thank you, pick any two pieces of our merch. One of them can be the numbered vest, and only 100 of those will ever exist.",
+        impact: "Buys one kid a laptop and helps with travel and grants.",
+        description: "$1,000 is enough to put a laptop in a kid's hands and still help with hackathon travel and a hardware grant. You can add more at checkout if you'd like. As a thank you, pick any two pieces of our merch. One of them can be the numbered vest, and only 100 of those will ever exist.",
         image: '/gifts/hoodie-event.jpg',
         // Single pieces, not kits: the cart line's variant is the donor's first
         // pick and checkout collects the second (unitCost here is the piece's

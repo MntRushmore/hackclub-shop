@@ -34,7 +34,7 @@ export const DONATION_FUNDS: DonationFund[] = [
     {
         id: 'first-hackathon',
         name: 'First hackathons',
-        description: 'Travel help so a teen can meet their community in person. $100 is enough to get one teen there.',
+        description: 'Travel help so a teen can meet their community in person. Sometimes a bus ticket is all that\'s in the way.',
     },
     {
         id: 'gap-year',
