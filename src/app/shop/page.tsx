@@ -239,8 +239,9 @@ const Shop = () => {
                         Back a teenager.
                     </h1>
                     <p className="text-xl text-hackclub-slate font-bold max-w-2xl">
-                        Pick a tier, and wear the proof. Every tier is a donation to
-                        Hack Club. The merch is our thanks.
+                        Every tier is a donation to Hack Club. It goes toward
+                        teenagers building real things, and we mail you something
+                        to say thanks.
                     </p>
                     {/* Trust strip: carries the homepage's nonprofit framing into the
                         buy flow so the reason-to-give doesn't evaporate at the door. */}
@@ -439,7 +440,7 @@ const Shop = () => {
                                         disabled={!canBuy}
                                         className={
                                             canBuy
-                                                ? "bg-hackclub-red hover:bg-hackclub-orange text-white font-bold px-4 py-1 rounded-full shadow transition-colors transition-opacity duration-200 text-sm opacity-0 group-hover:opacity-100 focus:opacity-100 ml-auto"
+                                                ? "bg-hackclub-red hover:bg-hackclub-orange text-white font-bold px-4 py-1 rounded-full shadow transition-all duration-200 text-sm opacity-0 group-hover:opacity-100 focus:opacity-100 ml-auto"
                                                 : "bg-gray-200 text-gray-400 font-bold px-4 py-1 rounded-full transition-opacity duration-200 text-sm opacity-0 group-hover:opacity-100 focus:opacity-100 ml-auto cursor-not-allowed"
                                         }
                                         onClick={(e) => {
