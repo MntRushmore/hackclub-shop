@@ -31,7 +31,7 @@ interface Product {
     createdAt?: string | null;
     // Donation tier marker (see src/lib/donation.ts): the cash price is the
     // donation amount; the merch is the thank-you gift.
-    donation?: { tier: string; fmvCents: number; impact?: string; plus?: boolean } | null;
+    donation?: { tier: string; fmvCents: number; impact?: string; plus?: boolean; giftPicks?: number } | null;
     sync_variants: Variant[];
 }
 
