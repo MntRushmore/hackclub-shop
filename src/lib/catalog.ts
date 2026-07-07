@@ -56,13 +56,16 @@ export function buildCatalogProduct(
         created?: number; // Stripe Product created (unix seconds)
         metadata: Record<string, string>;
     },
-    prices: Array<{ id: string; unit_amount: number | null; active: boolean; metadata: Record<string, string> }>,
+    prices: Array<{ id: string; unit_amount: number | null; active: boolean; created?: number; metadata: Record<string, string> }>,
 ): CatalogProduct {
     const config = parseProductConfig(stripeProduct.metadata.config);
     const shopProductId = stripeProduct.metadata.shop_product_id || stripeProduct.id;
 
+    // Stripe lists prices newest-first; display order should be seed order
+    // (oldest-first), so sizes run S→2XL and the marquee gift leads.
     const variants: CatalogVariant[] = prices
         .filter((p) => p.active)
+        .sort((a, b) => (a.created ?? 0) - (b.created ?? 0) || a.id.localeCompare(b.id))
         .map((p) => fromStripePrice(p));
 
     return {
@@ -99,12 +102,13 @@ export async function fetchCatalogFromStripe(): Promise<CatalogProduct[]> {
         // products (one-off invoices, etc.) out of the storefront.
         if (product.metadata?.managed_by !== CATALOG_MANAGED_FLAG) continue;
 
-        const prices: Array<{ id: string; unit_amount: number | null; active: boolean; metadata: Record<string, string> }> = [];
+        const prices: Array<{ id: string; unit_amount: number | null; active: boolean; created?: number; metadata: Record<string, string> }> = [];
         for await (const price of stripe.prices.list({ product: product.id, limit: 100 })) {
             prices.push({
                 id: price.id,
                 unit_amount: price.unit_amount,
                 active: price.active,
+                created: price.created,
                 metadata: price.metadata || {},
             });
         }
@@ -337,9 +341,9 @@ async function refreshProductCacheById(stripeProductId: string): Promise<void> {
     const stripe = getStripe();
     const product = await stripe.products.retrieve(stripeProductId);
     if (product.metadata?.managed_by !== CATALOG_MANAGED_FLAG) return;
-    const prices: Array<{ id: string; unit_amount: number | null; active: boolean; metadata: Record<string, string> }> = [];
+    const prices: Array<{ id: string; unit_amount: number | null; active: boolean; created?: number; metadata: Record<string, string> }> = [];
     for await (const price of stripe.prices.list({ product: stripeProductId, limit: 100 })) {
-        prices.push({ id: price.id, unit_amount: price.unit_amount, active: price.active, metadata: price.metadata || {} });
+        prices.push({ id: price.id, unit_amount: price.unit_amount, active: price.active, created: price.created, metadata: price.metadata || {} });
     }
     await putCatalogCache(
         buildCatalogProduct(
