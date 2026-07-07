@@ -519,9 +519,36 @@ function TierCard({ product }: { product: Product }) {
     const deductible = Math.max(0, amount - (product.donation?.fmvCents ?? 0) / 100);
     const dollars = (n: number) => `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 
-    // The gift stays a footnote: a small thumb, never the card's hero. The
-    // donation and its impact are what the card sells.
-    const giftImage = firstVariant?.product?.image || product.thumbnail_url;
+    // The gifts stay a footnote (small thumbs, never the card's hero), but each
+    // DISTINCT piece gets its own thumb so the ladder visibly escalates: one
+    // sticker pack at $25, a whole row with "pick any two" at $1,000. Variants
+    // are deduped to pieces by name (sizes share a photo); a variant whose
+    // image just falls back to the tier photo has no piece photo yet and is
+    // skipped, unless that leaves the row empty (single-gift tiers).
+    const pieces = (() => {
+        const seen = new Set<string>();
+        const out: { name: string; image: string }[] = [];
+        for (const v of product.sync_variants || []) {
+            const img = v.product?.image;
+            if (!img || img === product.thumbnail_url) continue;
+            const name = v.name.split(' · ')[0];
+            if (seen.has(name)) continue;
+            seen.add(name);
+            out.push({ name, image: img });
+        }
+        if (out.length === 0 && firstVariant?.product?.image) {
+            out.push({ name: firstVariant.name.split(' · ')[0], image: firstVariant.product.image });
+        }
+        return out;
+    })();
+    const giftPicks = product.donation?.giftPicks || 1;
+    const giftCaption = soldOut
+        ? 'Thank-you gifts fully claimed'
+        : giftPicks > 1
+        ? 'Your thank-you gifts: pick any two'
+        : pieces.length > 1
+        ? 'Your thank-you gift: pick one'
+        : `Your thank-you gift: ${pieces[0]?.name.toLowerCase() || 'included'}`;
 
     return (
         <Link
@@ -543,19 +570,23 @@ function TierCard({ product }: { product: Product }) {
                         {product.description}
                     </p>
                 )}
-                {giftImage && (
-                    <div className="flex items-center gap-3 mt-1">
-                        <Image
-                            src={giftImage}
-                            alt={`${product.donation?.tier} thank-you gift`}
-                            width={48}
-                            height={48}
-                            className="w-12 h-12 rounded-lg object-cover border-2 border-hackclub-smoke bg-hackclub-smoke"
-                            draggable={false}
-                        />
-                        <span className="text-xs font-bold text-hackclub-muted">
-                            {soldOut ? 'Thank-you gift fully claimed' : 'Your thank-you gift'}
-                        </span>
+                {pieces.length > 0 && (
+                    <div className="mt-2">
+                        <p className="text-xs font-bold text-hackclub-muted mb-2">{giftCaption}</p>
+                        <div className="flex flex-wrap gap-2">
+                            {pieces.map((piece) => (
+                                <Image
+                                    key={piece.name}
+                                    src={piece.image}
+                                    alt={piece.name}
+                                    title={piece.name}
+                                    width={56}
+                                    height={56}
+                                    className="w-14 h-14 rounded-lg object-cover border-2 border-hackclub-smoke bg-hackclub-smoke"
+                                    draggable={false}
+                                />
+                            ))}
+                        </div>
                     </div>
                 )}
                 <div className="mt-auto pt-3 flex items-center justify-between gap-2">

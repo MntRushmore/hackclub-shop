@@ -152,6 +152,26 @@ const ProductPage = () => {
 
     // Donation tier: reframe price/CTA/copy around the donation, not the merch.
     const donation = product.donation || null;
+    // Distinct gift pieces (sizes share a photo, so dedupe by name). A variant
+    // whose image just falls back to the tier photo has no piece photo yet and
+    // is skipped, unless that would leave the row empty (single-gift tiers).
+    const giftPieces = (() => {
+        if (!donation) return [] as { name: string; image: string }[];
+        const seen = new Set<string>();
+        const out: { name: string; image: string }[] = [];
+        for (const v of variants) {
+            const img = v.product?.image;
+            if (!img || img === product.thumbnail_url) continue;
+            const name = v.name.split(' · ')[0];
+            if (seen.has(name)) continue;
+            seen.add(name);
+            out.push({ name, image: img });
+        }
+        if (out.length === 0 && variants[0]?.product.image) {
+            out.push({ name: variants[0].name.split(' · ')[0], image: variants[0].product.image });
+        }
+        return out;
+    })();
     const donationAmount = donation ? getCashPrice(selectedVariant || undefined) || 0 : 0;
     const donationDeductible = donation ? Math.max(0, donationAmount - donation.fmvCents / 100) : 0;
     const dollars = (n: number) => `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
@@ -208,24 +228,29 @@ const ProductPage = () => {
                                 )}
                             </div>
                         )}
-                        {product.donation && (variants[0]?.product.image || product.thumbnail_url) && (
-                            <div className="mt-5 flex items-center gap-4">
-                                <Image
-                                    src={variants[0]?.product.image || product.thumbnail_url}
-                                    alt="Thank-you gift"
-                                    width={72}
-                                    height={72}
-                                    className="w-18 h-18 rounded-xl object-cover border-2 border-hackclub-smoke bg-hackclub-smoke"
-                                    style={{ width: 72, height: 72 }}
-                                />
-                                <p className="text-sm font-bold text-hackclub-slate">
-                                    Your thank-you gift.{' '}
+                        {product.donation && giftPieces.length > 0 && (
+                            <div className="mt-5">
+                                <p className="text-sm font-bold text-hackclub-slate mb-2">
                                     {(product.donation.giftPicks || 1) > 1
-                                        ? "You'll pick two pieces at checkout."
-                                        : variants.length > 1
-                                        ? "You'll pick yours at checkout."
-                                        : "It ships to your door."}
+                                        ? 'Your thank-you gifts. Pick any two at checkout.'
+                                        : giftPieces.length > 1 || variants.length > 1
+                                        ? 'Your thank-you gift. Pick one at checkout.'
+                                        : 'Your thank-you gift. It ships to your door.'}
                                 </p>
+                                <div className="flex flex-wrap gap-2.5">
+                                    {giftPieces.map((piece) => (
+                                        <Image
+                                            key={piece.name}
+                                            src={piece.image}
+                                            alt={piece.name}
+                                            title={piece.name}
+                                            width={80}
+                                            height={80}
+                                            className="w-20 h-20 rounded-xl object-cover border-2 border-hackclub-smoke bg-hackclub-smoke"
+                                            draggable={false}
+                                        />
+                                    ))}
+                                </div>
                             </div>
                         )}
                     </div>
