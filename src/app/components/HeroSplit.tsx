@@ -96,8 +96,8 @@ export default function HeroSplit() {
               You raised a <span className="text-hackclub-red">Hack&nbsp;Clubber.</span>
             </h1>
             <p className="text-xl sm:text-2xl text-hackclub-slate max-w-xl mx-auto lg:mx-0 mb-9 leading-relaxed">
-              Back them with a donation, and wear the proof. Every tier funds
-              the teenagers who build, ship, and dream at Hack Club.
+              Back them with a donation. Every product funds the teenagers
+              who build, ship, and dream at Hack Club.
             </p>
             <div className="flex flex-wrap gap-3 justify-center lg:justify-start items-center">
               <Link
