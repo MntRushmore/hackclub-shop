@@ -1,6 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import Image from "next/image";
+import FooterHeart from "./FooterHeart";
 
 /**
  * The hackclub.com footer, rebuilt for the shop: the same dark grid-line band,
@@ -124,8 +125,7 @@ export default function HCFooter() {
           <a href="https://the.hackfoundation.org/" target="_blank" rel="noopener noreferrer" className="text-white underline underline-offset-2">
             The Hack Foundation
           </a>
-          , a 501(c)(3) nonprofit (EIN: 81-2908499). Made with{" "}
-          <span aria-label="love" className="text-hackclub-red">♥</span> by teenagers.
+          , a 501(c)(3) nonprofit (EIN: 81-2908499). Made with <FooterHeart /> by teenagers.
         </p>
       </div>
     </footer>

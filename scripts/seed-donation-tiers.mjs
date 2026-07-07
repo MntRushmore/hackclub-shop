@@ -147,13 +147,16 @@ function productPayload(t) {
     };
 }
 
-function priceMetadata(t, v) {
+function priceMetadata(t, v, index) {
     return {
         managed_by: MANAGED_BY,
         variant_id: `${t.id}-${v.key}`,
         name: v.name,
         unit_cost: String(v.unitCost),
         is_cash_buyable: '1',
+        // Display position in gift pickers — Stripe list order isn't stable
+        // (newest-first, second-resolution ties), so order is explicit.
+        sort: String(index),
         ...(v.size ? { size: v.size } : {}),
     };
 }
@@ -188,8 +191,8 @@ async function main() {
             if (price.metadata?.variant_id) existing.set(price.metadata.variant_id, price);
         }
         const kept = new Set();
-        for (const v of tier.variants) {
-            const meta = priceMetadata(tier, v);
+        for (const [index, v] of tier.variants.entries()) {
+            const meta = priceMetadata(tier, v, index);
             const unitAmount = Math.round(tier.amount * 100);
             const cur = existing.get(meta.variant_id);
             if (cur && cur.unit_amount === unitAmount) {

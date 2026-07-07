@@ -61,17 +61,23 @@ export function buildCatalogProduct(
     const config = parseProductConfig(stripeProduct.metadata.config);
     const shopProductId = stripeProduct.metadata.shop_product_id || stripeProduct.id;
 
-    // Stripe lists prices newest-first; display order should be seed order
-    // (oldest-first), so the marquee gift leads. Prices seeded in the same
-    // second tie on `created`, so sizes break the tie (S→2XL), then id.
-    const sizeRank = (p: { metadata: Record<string, string> }): number => {
-        const i = ['S', 'M', 'L', 'XL', '2XL'].indexOf(p.metadata?.size || '');
-        return i === -1 ? 0 : i;
+    // Stripe lists prices newest-first with second-resolution `created` ties,
+    // so display order is explicit: the seeder stamps a `sort` index into each
+    // Price's metadata (the marquee gift first, sizes S→2XL). Prices without
+    // one (hand-made in Stripe) fall back to oldest-first.
+    const orderOf = (p: { metadata: Record<string, string> }): number | null => {
+        const n = Number(p.metadata?.sort);
+        return p.metadata?.sort !== undefined && p.metadata.sort !== '' && Number.isFinite(n) ? n : null;
     };
     const variants: CatalogVariant[] = prices
         .filter((p) => p.active)
-        .sort((a, b) =>
-            (a.created ?? 0) - (b.created ?? 0) || sizeRank(a) - sizeRank(b) || a.id.localeCompare(b.id))
+        .sort((a, b) => {
+            const sa = orderOf(a);
+            const sb = orderOf(b);
+            if (sa !== null && sb !== null) return sa - sb;
+            if (sa !== null || sb !== null) return sa !== null ? -1 : 1;
+            return (a.created ?? 0) - (b.created ?? 0) || a.id.localeCompare(b.id);
+        })
         .map((p) => fromStripePrice(p));
 
     return {
