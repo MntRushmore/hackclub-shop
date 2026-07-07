@@ -182,7 +182,10 @@ const ProductPage = () => {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 <div className="grid md:grid-cols-2 gap-12 items-start">
                     <div className="bg-white rounded-2xl p-8 shadow-lg border-2 border-gray-200">
-                        {selectedVariant?.product.image || product.thumbnail_url ? (
+                        {/* Donation tiers lead with the cause, never the merch: the
+                            branded panel is the hero and the gift is a small labeled
+                            preview below it. Retail products keep the product photo. */}
+                        {!product.donation && (selectedVariant?.product.image || product.thumbnail_url) ? (
                             <Image
                                 src={selectedVariant?.product.image || product.thumbnail_url}
                                 alt={product.name}
@@ -191,7 +194,6 @@ const ProductPage = () => {
                                 className="w-full h-auto object-contain"
                             />
                         ) : (
-                            /* No photography yet: a branded panel instead of a broken image. */
                             <div className="aspect-square w-full rounded-xl bg-hackclub-dark flex flex-col items-center justify-center text-center p-8">
                                 <span className="text-xs font-black uppercase tracking-widest text-hackclub-red mb-3">
                                     {product.donation ? `${product.donation.tier} tier` : 'Hack Club Shop'}
@@ -199,6 +201,31 @@ const ProductPage = () => {
                                 <span className="text-white font-black text-4xl" style={{ letterSpacing: '-0.02em' }}>
                                     {product.name}
                                 </span>
+                                {product.donation?.impact && (
+                                    <span className="text-white/80 font-bold mt-4 max-w-xs">
+                                        {product.donation.impact}
+                                    </span>
+                                )}
+                            </div>
+                        )}
+                        {product.donation && (variants[0]?.product.image || product.thumbnail_url) && (
+                            <div className="mt-5 flex items-center gap-4">
+                                <Image
+                                    src={variants[0]?.product.image || product.thumbnail_url}
+                                    alt="Thank-you gift"
+                                    width={72}
+                                    height={72}
+                                    className="w-18 h-18 rounded-xl object-cover border-2 border-hackclub-smoke bg-hackclub-smoke"
+                                    style={{ width: 72, height: 72 }}
+                                />
+                                <p className="text-sm font-bold text-hackclub-slate">
+                                    Your thank-you gift.{' '}
+                                    {(product.donation.giftPicks || 1) > 1
+                                        ? "You'll pick two pieces at checkout."
+                                        : variants.length > 1
+                                        ? "You'll pick yours at checkout."
+                                        : "It ships to your door."}
+                                </p>
                             </div>
                         )}
                     </div>

@@ -518,27 +518,15 @@ function TierCard({ product }: { product: Product }) {
     const deductible = Math.max(0, amount - (product.donation?.fmvCents ?? 0) / 100);
     const dollars = (n: number) => `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 
+    // The gift stays a footnote: a small thumb, never the card's hero. The
+    // donation and its impact are what the card sells.
+    const giftImage = firstVariant?.product?.image || product.thumbnail_url;
+
     return (
         <Link
             href={`/products/${product.id}`}
             className={`group flex flex-col bg-white rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden border-2 border-gray-200 hover:border-hackclub-red ${soldOut ? 'opacity-60' : ''}`}
         >
-            {product.thumbnail_url && (
-                <div className="aspect-[4/3] bg-hackclub-smoke relative overflow-hidden">
-                    <Image
-                        src={product.thumbnail_url}
-                        alt={product.name}
-                        fill
-                        className="object-contain p-6 group-hover:scale-105 transition-transform duration-300"
-                        draggable={false}
-                    />
-                    {soldOut && (
-                        <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-xs font-black bg-hackclub-dark text-white">
-                            Fully claimed
-                        </span>
-                    )}
-                </div>
-            )}
             <div className="flex flex-col gap-2 p-6 flex-1">
                 <p className="text-xs font-black uppercase tracking-widest text-hackclub-red">
                     {product.donation?.tier}
@@ -553,6 +541,21 @@ function TierCard({ product }: { product: Product }) {
                     <p className="text-sm text-hackclub-slate font-medium leading-relaxed line-clamp-3">
                         {product.description}
                     </p>
+                )}
+                {giftImage && (
+                    <div className="flex items-center gap-3 mt-1">
+                        <Image
+                            src={giftImage}
+                            alt={`${product.donation?.tier} thank-you gift`}
+                            width={48}
+                            height={48}
+                            className="w-12 h-12 rounded-lg object-cover border-2 border-hackclub-smoke bg-hackclub-smoke"
+                            draggable={false}
+                        />
+                        <span className="text-xs font-bold text-hackclub-muted">
+                            {soldOut ? 'Thank-you gift fully claimed' : 'Your thank-you gift'}
+                        </span>
+                    </div>
                 )}
                 <div className="mt-auto pt-3 flex items-center justify-between gap-2">
                     {deductible > 0 && (
