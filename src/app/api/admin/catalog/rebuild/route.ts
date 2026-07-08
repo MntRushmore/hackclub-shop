@@ -18,10 +18,19 @@ import { rebuildCatalogCache } from '../../../../../lib/catalog';
  * dashboard surgery).
  */
 export async function POST(request: Request) {
-    const session = await getServerSession(authOptions);
-    const perm = await requireAdminPermission(session, 'canManageProducts');
-    if (!perm.allowed) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    // Two ways in: an admin session (the normal path), or the deploy/ops
+    // secret (`Authorization: Bearer ${CRON_SECRET}`) so the go-live rebuild
+    // can run from a script right after the key flip, without waiting for a
+    // human to sign in while checkout is briefly pointing at stale price ids.
+    const cronSecret = process.env.CRON_SECRET;
+    const bearerOk = Boolean(cronSecret)
+        && request.headers.get('authorization') === `Bearer ${cronSecret}`;
+    if (!bearerOk) {
+        const session = await getServerSession(authOptions);
+        const perm = await requireAdminPermission(session, 'canManageProducts');
+        if (!perm.allowed) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        }
     }
     if (!isStripeConfigured()) {
         return NextResponse.json({ error: 'Stripe is not configured (STRIPE_SECRET_KEY missing)' }, { status: 400 });
