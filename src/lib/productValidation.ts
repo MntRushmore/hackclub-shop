@@ -27,6 +27,7 @@ export interface VerifiedCartItem {
     variantId: string;      // canonical variant id, for stock reservation
     unitCost?: number;      // finance: cost basis per unit (USD) at time of sale
     stripePriceId?: string; // the Stripe Price to bill (lets checkout use price_id)
+    taxCode?: string;       // Stripe Tax code for this variant (clothing vs general)
     // Set when the product is a donation tier: checkout splits the line into a
     // taxable gift-FMV portion and a nontaxable donation portion.
     donation?: CatalogProduct['donation'];
@@ -127,6 +128,7 @@ export async function validateCartItems(items: CartItemForValidation[]): Promise
             variantId: String(variant.variant_id || variant.id),
             unitCost: typeof variant.unitCost === 'number' && variant.unitCost >= 0 ? variant.unitCost : undefined,
             stripePriceId: variant.stripePriceId,
+            taxCode: variant.taxCode,
             donation: product.donation,
         });
     }

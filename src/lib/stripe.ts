@@ -149,6 +149,14 @@ export const isStripeTaxEnabled = (mode: StripeMode = 'live'): boolean => {
  * https://docs.stripe.com/tax/tax-codes
  */
 export const GENERAL_GOODS_TAX_CODE = 'txcd_99999999';
+/**
+ * Stripe's "Clothing & footwear" code — several states (Vermont among them,
+ * where the shop is registered) exempt clothing from sales tax, so apparel
+ * variants (tees, sweatshirts, vests, caps) carry this instead of the general
+ * code. Set per-variant via Price metadata `tax_code`; non-apparel gifts
+ * (mugs, stickers, totes) stay on the general code.
+ */
+export const CLOTHING_TAX_CODE = 'txcd_30011000';
 /** Shipping tax code — Stripe's standard "Shipping" code (taxable where required). */
 export const SHIPPING_TAX_CODE = 'txcd_92010001';
 /**

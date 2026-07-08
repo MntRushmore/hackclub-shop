@@ -136,6 +136,7 @@ export function toStripePrice(variant: ProductVariant): {
     if (variant.image_url) metadata.image_url = variant.image_url;
     if (variant.sku) metadata.sku = variant.sku;
     if (variant.scanCode) metadata.scan_code = variant.scanCode;
+    if (variant.taxCode) metadata.tax_code = variant.taxCode;
 
     return {
         unitAmount: typeof price_cash === 'number' ? toStripeAmount(price_cash) : 0,
@@ -165,6 +166,9 @@ export interface CatalogVariant {
     reorderPoint?: number;
     sku?: string;
     scanCode?: string;
+    // Stripe Tax product code for THIS variant (e.g. clothing vs general goods).
+    // Unset = the general tangible-goods default at checkout.
+    taxCode?: string;
     stripePriceId: string;  // the Stripe Price this variant maps to (checkout uses it)
 }
 
@@ -227,6 +231,7 @@ export function fromStripePrice(price: {
         reorderPoint: num(m.reorder_point),
         sku: m.sku || undefined,
         scanCode: m.scan_code || undefined,
+        taxCode: m.tax_code || undefined,
         stripePriceId: price.id,
     };
 }

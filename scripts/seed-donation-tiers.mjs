@@ -61,14 +61,19 @@ const GIFT_IMG = {
 // means fewer choices. Keys repeat across tiers safely (variant ids are
 // namespaced per product). Order matters: marquee first (it drives the
 // stamped sort index and the default pick).
+// Stripe Tax: clothing (tees/sweatshirts/vests/caps) carries the clothing code
+// — tax-exempt in Vermont, where the shop is registered — while general goods
+// (stickers, mugs, totes) stay on the tangible-goods default at checkout.
+const CLOTHING_TAX_CODE = 'txcd_30011000';
+
 const STICKERS = { key: 'stickers', name: 'Bumper Sticker', unitCost: 1.9, image: GIFT_IMG.stickers };
 const MUG = { key: 'mug', name: 'Mug', unitCost: 7.12, image: GIFT_IMG.mug };
 const TOTE = { key: 'tote', name: 'Tote Bag', unitCost: 14.4, image: GIFT_IMG.tote };
-const CAP = { key: 'cap', name: 'Cap', unitCost: 15.94 };
-const TEES = APPAREL_SIZES.map(size => ({ key: `tee-${size.toLowerCase()}`, name: `T-Shirt · ${size}`, size, unitCost: 18.2, image: GIFT_IMG.tee }));
-const COLLEGES = APPAREL_SIZES.map(size => ({ key: `college-${size.toLowerCase()}`, name: `College Sweatshirt · ${size}`, size, unitCost: 36.4, image: GIFT_IMG.college }));
-const MOMS = APPAREL_SIZES.map(size => ({ key: `mom-${size.toLowerCase()}`, name: `Mom Sweatshirt · ${size}`, size, unitCost: 39.28, image: GIFT_IMG.mom }));
-const VESTS = (keyPrefix) => APPAREL_SIZES.map(size => ({ key: `${keyPrefix}-${size.toLowerCase()}`, name: `Vest · ${size}`, size, unitCost: 55.6, image: GIFT_IMG.vest }));
+const CAP = { key: 'cap', name: 'Cap', unitCost: 15.94, taxCode: CLOTHING_TAX_CODE };
+const TEES = APPAREL_SIZES.map(size => ({ key: `tee-${size.toLowerCase()}`, name: `T-Shirt · ${size}`, size, unitCost: 18.2, image: GIFT_IMG.tee, taxCode: CLOTHING_TAX_CODE }));
+const COLLEGES = APPAREL_SIZES.map(size => ({ key: `college-${size.toLowerCase()}`, name: `College Sweatshirt · ${size}`, size, unitCost: 36.4, image: GIFT_IMG.college, taxCode: CLOTHING_TAX_CODE }));
+const MOMS = APPAREL_SIZES.map(size => ({ key: `mom-${size.toLowerCase()}`, name: `Mom Sweatshirt · ${size}`, size, unitCost: 39.28, image: GIFT_IMG.mom, taxCode: CLOTHING_TAX_CODE }));
+const VESTS = (keyPrefix) => APPAREL_SIZES.map(size => ({ key: `${keyPrefix}-${size.toLowerCase()}`, name: `Vest · ${size}`, size, unitCost: 55.6, image: GIFT_IMG.vest, taxCode: CLOTHING_TAX_CODE }));
 const TIERS = [
     {
         id: 'donation-tier-supporter',
@@ -171,6 +176,7 @@ function priceMetadata(t, v, index) {
         sort: String(index),
         ...(v.size ? { size: v.size } : {}),
         ...(v.image ? { image_url: v.image } : {}),
+        ...(v.taxCode ? { tax_code: v.taxCode } : {}),
     };
 }
 

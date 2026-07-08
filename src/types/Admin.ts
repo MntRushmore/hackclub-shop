@@ -91,6 +91,10 @@ export interface ProductVariant {
     // code and the human-readable SKU prints as text. Minted alongside the SKU and
     // indexed at `scancode:{code}`. A scan resolves via either the code or the full SKU.
     scanCode?: string;
+    // Stripe Tax product code for this variant (e.g. clothing txcd_30011000 —
+    // tax-exempt in Vermont — vs the general tangible-goods default). Rides in
+    // Price metadata `tax_code`; checkout uses it to classify the line.
+    taxCode?: string;
 }
 
 export interface ShippingOption {

@@ -153,6 +153,13 @@ export async function POST(request: Request) {
             if (typeof second.unitCost === 'number' && second.unitCost >= 0) {
                 twoPickItem.unitCost = (twoPickItem.unitCost ?? 0) + second.unitCost;
             }
+            // The gift-FMV line carries ONE tax code but now covers two pieces.
+            // If the picks classify differently (e.g. hoodie + mug), drop to the
+            // general (taxable) code: over-collecting a little beats under-
+            // collecting a tax liability, and the FMV can't be split per piece.
+            if ((second.taxCode || undefined) !== twoPickItem.taxCode) {
+                twoPickItem.taxCode = undefined;
+            }
             secondGiftName = second.name;
             secondGiftHold = { variantId: String(second.variant_id || second.id), quantity: twoPickItem.quantity };
         }
@@ -302,7 +309,9 @@ export async function POST(request: Request) {
                             product_data: {
                                 name: `${item.name} (thank-you gift)`,
                                 ...(img ? { images: [img] } : {}),
-                                ...(taxEnabled ? { tax_code: GENERAL_GOODS_TAX_CODE } : {}),
+                                // The chosen gift's own classification (apparel is
+                                // tax-exempt in e.g. Vermont); general goods when unset.
+                                ...(taxEnabled ? { tax_code: item.taxCode || GENERAL_GOODS_TAX_CODE } : {}),
                             },
                         },
                     });
@@ -373,9 +382,9 @@ export async function POST(request: Request) {
                     product_data: {
                         name: item.name,
                         ...(img ? { images: [img] } : {}),
-                        // General tangible goods. Stripe Tax needs a code to classify
-                        // the line; refine per-product later if a category differs.
-                        ...(taxEnabled ? { tax_code: GENERAL_GOODS_TAX_CODE } : {}),
+                        // The variant's own classification (apparel vs general
+                        // goods); the general tangible-goods code when unset.
+                        ...(taxEnabled ? { tax_code: item.taxCode || GENERAL_GOODS_TAX_CODE } : {}),
                     },
                 },
             };
