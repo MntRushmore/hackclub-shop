@@ -238,10 +238,17 @@ const Shop = () => {
                     <h1 className="text-5xl sm:text-6xl font-black text-hackclub-dark mb-4" style={{ letterSpacing: "-0.02em" }}>
                         Back a teenager.
                     </h1>
-                    <p className="text-xl text-hackclub-slate font-bold max-w-2xl">
-                        Every product is a donation to Hack Club. It goes toward
-                        teenagers building real things, and we mail you something
-                        to say thanks.
+                    <p className="text-xl text-hackclub-slate font-bold max-w-3xl">
+                        Nearly 10,000 teenagers have led a club, built a
+                        portfolio-ready technical project, or organized a
+                        hackathon at Hack Club since 2014. And more than 25,000
+                        have traveled to build projects with friends at our
+                        in-person hackathons.
+                    </p>
+                    <p className="text-xl text-hackclub-slate font-bold max-w-3xl mt-4">
+                        We can keep Hack Club free for all teens. Shop our
+                        exclusive-to-parents merch and make your gift to Hack
+                        Club teenagers.
                     </p>
                     {/* Trust strip: carries the homepage's nonprofit framing into the
                         buy flow so the reason-to-give doesn't evaporate at the door. */}
