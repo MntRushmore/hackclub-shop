@@ -31,7 +31,7 @@ interface Product {
     createdAt?: string | null;
     // Donation tier marker (see src/lib/donation.ts): the cash price is the
     // donation amount; the merch is the thank-you gift.
-    donation?: { tier: string; fmvCents: number; impact?: string; plus?: boolean; giftPicks?: number } | null;
+    donation?: { tier: string; fmvCents: number; plus?: boolean; giftPicks?: number } | null;
     sync_variants: Variant[];
 }
 
@@ -532,7 +532,7 @@ function TierCard({ product }: { product: Product }) {
 
     // The gifts stay a footnote (small thumbs, never the card's hero), but each
     // DISTINCT piece gets its own thumb so the ladder visibly escalates: one
-    // sticker pack at $25, a whole row with "pick any two" at $1,000. Variants
+    // bumper sticker at $25, a whole row with "pick any two" at $1,000. Variants
     // are deduped to pieces by name (sizes share a photo); a variant whose
     // image just falls back to the tier photo has no piece photo yet and is
     // skipped, unless that leaves the row empty (single-gift tiers).
@@ -582,9 +582,6 @@ function TierCard({ product }: { product: Product }) {
                 <p className="text-4xl font-black text-hackclub-dark" style={{ letterSpacing: '-0.02em' }}>
                     {dollars(amount)}{product.donation?.plus ? '+' : <span className="text-xl text-hackclub-muted">/mo</span>}
                 </p>
-                {product.donation?.impact && (
-                    <p className="text-hackclub-dark font-bold leading-snug">{product.donation.impact}</p>
-                )}
                 {product.description && (
                     <p className="text-sm text-hackclub-slate font-medium leading-relaxed line-clamp-3">
                         {product.description}
@@ -635,7 +632,7 @@ function TierCard({ product }: { product: Product }) {
 
 /**
  * The Philanthropist cell splits into two half-height boxes, one aimed at
- * dads (the numbered vest) and one at moms (the Mom hoodie). Same product,
+ * dads (the vest) and one at moms (the Mom hoodie). Same product,
  * same $500, same checkout; only the pitch differs. Both link to the tier
  * page, where the donor can still pick any gift.
  */
@@ -650,7 +647,7 @@ function PhilanthropistSplit({ product }: { product: Product }) {
         product.sync_variants.find((v) => v.name.startsWith(prefix))?.product?.image;
 
     const halves = [
-        { who: 'For dads', image: imageFor('Numbered Vest') || '/gifts/vest.jpg', line: 'Your thanks is the numbered vest. Only 100 will ever exist.' },
+        { who: 'For dads', image: imageFor('Vest') || '/gifts/vest.jpg', line: 'Your thanks is the Hack Club vest.' },
         { who: 'For moms', image: imageFor('Mom Sweatshirt') || '/gifts/mom-sweatshirt.jpg', line: 'Your thanks is the Mom hoodie. It says it right on the front.' },
     ];
 
@@ -668,9 +665,6 @@ function PhilanthropistSplit({ product }: { product: Product }) {
                     <p className="text-3xl font-black text-hackclub-dark" style={{ letterSpacing: '-0.02em' }}>
                         {dollars(amount)}<span className="text-lg text-hackclub-muted">/mo</span>
                     </p>
-                    {product.donation?.impact && (
-                        <p className="text-hackclub-dark font-bold leading-snug">{product.donation.impact}</p>
-                    )}
                     <div className="flex items-center gap-3">
                         {half.image && (
                             <Image
@@ -743,7 +737,6 @@ function SustainerCard() {
                 <p className="text-4xl font-black" style={{ letterSpacing: '-0.02em' }}>
                     $500<span className="text-xl text-white/60">/month</span>
                 </p>
-                <p className="font-bold leading-snug">Can put a laptop in a kid&apos;s hands, every single month.</p>
                 <p className="text-sm text-white/70 font-medium leading-relaxed">
                     Our biggest commitment: a monthly donation with a permanent spot on
                     the donor wall and a members-only thank-you gift each year. Cancel

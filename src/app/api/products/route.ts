@@ -23,8 +23,8 @@ export async function GET() {
         thumbnail_url: product.thumbnail_url,
         category: product.category || null,
         createdAt: product.createdAt || null,
-        // Donation tiers: tier name + impact statement + gift FMV so the
-        // storefront can render the ladder and the "~$X tax-deductible" line.
+        // Donation tiers: tier name + gift FMV so the storefront can render
+        // the ladder and the "~$X tax-deductible" line.
         donation: product.donation || null,
         sync_variants: (product.variants || []).map((variant, idx) => {
             const variantId = variant.variant_id || variant.id || `${product.id}_var_${idx}`;

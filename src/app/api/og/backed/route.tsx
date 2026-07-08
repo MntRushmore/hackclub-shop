@@ -85,7 +85,7 @@ export async function GET(request: Request) {
                             maxWidth: 980,
                         }}
                     >
-                        {shareSubline(tier)}
+                        {shareSubline()}
                     </div>
                 </div>
 

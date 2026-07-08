@@ -11,7 +11,7 @@
 //
 // THE SPLIT (edit before running if your size curve differs):
 //   Physical inventory from the wholesale order: 100 of each garment, 250
-//   sticker packs, 100 mugs, 100 totes, 100 caps. The 100 vests are shared by
+//   bumper stickers, 100 mugs, 100 totes, 100 caps. The 100 vests are shared by
 //   TWO tiers (Philanthropist + Founder's Circle both ship one), so they're
 //   split 80/20 here. Apparel uses a standard 15/25/30/20/10 S-2XL curve.
 //

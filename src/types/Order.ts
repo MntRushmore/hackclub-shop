@@ -97,8 +97,8 @@ export interface OrderDonation {
     dedication?: string;      // "in honor of Maya"
     displayName?: string;     // donor-wall name, e.g. "The Chen Family"
     isAnonymous?: boolean;
-    // Numbered-vest number (1–100), minted at payment settlement for tiers whose
-    // gift includes the numbered vest. Printed on the packing slip + receipt.
+    // Legacy: the numbered-vest program (retired 2026-07) minted a 1–100 number
+    // at settlement. Kept so old orders' receipts and packing slips still show it.
     vestNumber?: number;
     // True when the donation is a monthly subscription (first payment recorded
     // here; renewals bump the impact counters via the invoice.paid webhook).

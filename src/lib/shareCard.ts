@@ -36,12 +36,11 @@ export function shareHeadline(tier: string | null, num: number | null): string {
     return 'We backed a teenager.';
 }
 
-export function shareSubline(tier: string | null): string {
-    if (tier === 'Philanthropist') return 'Only 100 of these vests will ever be made. Ours stands for a donation to the teenagers of Hack Club.';
+export function shareSubline(): string {
     return 'Our donation funds the teenagers who build, ship, and dream at Hack Club.';
 }
 
 /** The share text a donor posts (thank-you page copy button + share intents). */
 export function shareText(tier: string | null, num: number | null, url: string): string {
-    return `${shareHeadline(tier, num)} ${shareSubline(tier)} ${url}`;
+    return `${shareHeadline(tier, num)} ${shareSubline()} ${url}`;
 }

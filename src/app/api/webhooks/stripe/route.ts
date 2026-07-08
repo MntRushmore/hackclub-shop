@@ -5,7 +5,7 @@ import { getGuestOrder, getGuestOrderBySession, updateGuestOrder, deleteGuestOrd
 import { mirrorOrder } from '../../../../lib/airtableMirror';
 import { sendEmail, buildOrderConfirmation, buildAdminNewOrder } from '../../../../lib/email';
 import { commitReserved, release, claimOrderSettlement } from '../../../../lib/inventory';
-import { recordDonation, recordDonationEntry, bumpImpact, assignVestNumber } from '../../../../lib/donorWall';
+import { recordDonation, recordDonationEntry, bumpImpact } from '../../../../lib/donorWall';
 import { getStripe as getStripeClient } from '../../../../lib/stripe';
 import { CATALOG_MANAGED_FLAG } from '../../../../lib/catalogMapping';
 import { buildCatalogProduct, putCatalogCache, dropCatalogCache } from '../../../../lib/catalog';
@@ -113,23 +113,7 @@ export async function POST(request: Request) {
                     ? session.total_details.amount_tax / 100
                     : undefined;
 
-                // Donation orders: mint the vest number now that money
-                // settled (never at checkout — abandoned sessions must not burn
-                // numbers 1–100). Safe under the settlement claim: exactly one
-                // delivery reaches this line per order.
-                let donation = order.donation;
-                if (donation) {
-                    // Mint only when the settled gifts actually include a vest:
-                    // the Founders Circle donor picks any two pieces, so the
-                    // tier name alone no longer implies one. Philanthropist
-                    // gift variants are all vests, so this stays true for
-                    // every order of that tier.
-                    const includesVest = (order.inventoryHold || []).some(l => l.variantId.includes('vest'));
-                    if (includesVest) {
-                        const vestNumber = await assignVestNumber(donation.tier);
-                        if (vestNumber !== undefined) donation = { ...donation, vestNumber };
-                    }
-                }
+                const donation = order.donation;
 
                 const updated = await updateGuestOrder(order.id, {
                     paymentStatus: 'paid',

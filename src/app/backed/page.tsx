@@ -17,7 +17,7 @@ export function generateMetadata({ searchParams }: { searchParams: Search }): Me
     const tier = normalizeShareTier(searchParams.t);
     const num = normalizeShareNumber(searchParams.n);
     const title = `${shareHeadline(tier, num)} · Hack Club`;
-    const description = shareSubline(tier);
+    const description = shareSubline();
     const og = `/api/og/backed?${new URLSearchParams({
         ...(tier ? { t: tier } : {}),
         ...(num ? { n: String(num) } : {}),
@@ -45,7 +45,7 @@ export default function BackedPage({ searchParams }: { searchParams: Search }) {
                 {shareHeadline(tier, num)}
             </h1>
             <p className="text-xl text-white/80 max-w-xl leading-relaxed mb-10">
-                {shareSubline(tier)} Donate at a tier and the merch is the thank-you.
+                {shareSubline()} Donate at a tier and the merch is the thank-you.
                 Hack Club is a 501(c)(3), so most of the donation is tax-deductible.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-3">

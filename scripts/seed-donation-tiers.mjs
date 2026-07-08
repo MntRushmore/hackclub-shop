@@ -15,7 +15,7 @@
 //
 // Requires STRIPE_SECRET_KEY (read from the environment or .env.local).
 // After seeding: set per-variant stock (Price metadata `stock`) before launch —
-// unset stock means UNTRACKED = unlimited, and the numbered vest must cap at 100.
+// unset stock means UNTRACKED = unlimited, and vest stock is limited.
 
 import Stripe from 'stripe';
 import { readFileSync } from 'node:fs';
@@ -61,14 +61,14 @@ const GIFT_IMG = {
 // means fewer choices. Keys repeat across tiers safely (variant ids are
 // namespaced per product). Order matters: marquee first (it drives the
 // stamped sort index and the default pick).
-const STICKERS = { key: 'stickers', name: 'Sticker Pack', unitCost: 1.9, image: GIFT_IMG.stickers };
+const STICKERS = { key: 'stickers', name: 'Bumper Sticker', unitCost: 1.9, image: GIFT_IMG.stickers };
 const MUG = { key: 'mug', name: 'Mug', unitCost: 7.12, image: GIFT_IMG.mug };
 const TOTE = { key: 'tote', name: 'Tote Bag', unitCost: 14.4, image: GIFT_IMG.tote };
 const CAP = { key: 'cap', name: 'Cap', unitCost: 15.94 };
 const TEES = APPAREL_SIZES.map(size => ({ key: `tee-${size.toLowerCase()}`, name: `T-Shirt · ${size}`, size, unitCost: 18.2, image: GIFT_IMG.tee }));
 const COLLEGES = APPAREL_SIZES.map(size => ({ key: `college-${size.toLowerCase()}`, name: `College Sweatshirt · ${size}`, size, unitCost: 36.4, image: GIFT_IMG.college }));
 const MOMS = APPAREL_SIZES.map(size => ({ key: `mom-${size.toLowerCase()}`, name: `Mom Sweatshirt · ${size}`, size, unitCost: 39.28, image: GIFT_IMG.mom }));
-const VESTS = (keyPrefix) => APPAREL_SIZES.map(size => ({ key: `${keyPrefix}-${size.toLowerCase()}`, name: `Numbered Vest · ${size}`, size, unitCost: 55.6, image: GIFT_IMG.vest }));
+const VESTS = (keyPrefix) => APPAREL_SIZES.map(size => ({ key: `${keyPrefix}-${size.toLowerCase()}`, name: `Vest · ${size}`, size, unitCost: 55.6, image: GIFT_IMG.vest }));
 const TIERS = [
     {
         id: 'donation-tier-supporter',
@@ -76,8 +76,7 @@ const TIERS = [
         tier: 'Supporter',
         amount: 25,
         fmvCents: 500,
-        impact: "Keeps a teenager's projects online for a year.",
-        description: "$25 can cover a year of domains, hosting, and dev tools for one teenager. It's not flashy, but it's what keeps their projects online. We'll mail you a sticker pack as a thank you.",
+        description: "$25 can cover a year of domains, hosting, and dev tools for one teenager. It's what keeps their projects online. We'll mail you a bumper sticker as a thank you.",
         image: GIFT_IMG.stickers,
         variants: [STICKERS],
     },
@@ -87,8 +86,7 @@ const TIERS = [
         tier: 'Friend',
         amount: 100,
         fmvCents: 3000,
-        impact: 'Gets a teen to their first hackathon.',
-        description: 'Plenty of kids never make it to their first hackathon because they can\'t afford the bus or train to get there. $100 can go toward travel that puts one of them in the room. You can pick the mug, the tote bag, or the sticker pack as your thank you.',
+        description: 'Plenty of kids never make it to their first hackathon because they can\'t afford the bus or train to get there. $100 can go toward travel that puts one of them in the room. You can pick the mug, the tote bag, or the bumper sticker as your thank you.',
         image: GIFT_IMG.mug,
         variants: [MUG, TOTE, STICKERS],
     },
@@ -98,7 +96,6 @@ const TIERS = [
         tier: 'Champion',
         amount: 150,
         fmvCents: 3500,
-        impact: "Buys the parts for a kid's first hardware project.",
         description: 'Somewhere a teenager is one small grant away from their first circuit board. $150 can fund a hardware grant, which for most teenagers means parts for something they\'ve been wanting to build for months. Your thank you gift is the tee or the cap, or any of the smaller gifts.',
         image: '/gifts/tee-event.jpg',
         variants: [...TEES, CAP, MUG, TOTE, STICKERS],
@@ -109,7 +106,6 @@ const TIERS = [
         tier: 'Patron',
         amount: 250,
         fmvCents: 8000,
-        impact: "Backs a teenager's projects through the summer.",
         description: 'Summer is when teenagers have time to build something real, if they can afford to spend it that way. $250 can back one kid through a summer of building. Pick the College sweatshirt or any of the smaller gifts as your thank you.',
         image: GIFT_IMG.college,
         variants: [...COLLEGES, ...TEES, CAP, MUG, TOTE, STICKERS],
@@ -120,8 +116,7 @@ const TIERS = [
         tier: 'Philanthropist',
         amount: 500,
         fmvCents: 10000,
-        impact: 'Buys a laptop for a kid who needs one.',
-        description: "A lot of talented kids are coding on school Chromebooks or borrowed phones. $500 can buy one of them a real laptop. Your thank you gift is a numbered Hack Club vest, and we're only ever making 100 of them. You can pick any of the smaller gifts instead.",
+        description: "A lot of talented kids are coding on school Chromebooks or borrowed phones. $500 can buy one of them a real laptop. Your thank you gift is the Hack Club vest, or you can pick any of the smaller gifts instead.",
         image: GIFT_IMG.vest,
         variants: [...VESTS('vest'), ...COLLEGES, ...MOMS, ...TEES, CAP, MUG, TOTE, STICKERS],
     },
@@ -133,8 +128,7 @@ const TIERS = [
         plus: true, // renders as "$1,000+" — top up to any total at checkout
         giftPicks: 2, // donor chooses two pieces; the second pick arrives at checkout
         fmvCents: 18000, // highest pick pair: vest ($100) + sweatshirt ($80)
-        impact: "Buys one kid a laptop and helps with travel and grants.",
-        description: "$1,000 can put a laptop in a kid's hands and still help with hackathon travel and a hardware grant. You can add more at checkout if you'd like. As a thank you, pick any two pieces of our merch. One of them can be the numbered vest, and only 100 of those will ever exist.",
+        description: "$1,000 can put a laptop in a kid's hands and still help with hackathon travel and a hardware grant. You can add more at checkout if you'd like. As a thank you, pick any two pieces of our merch, including the Hack Club vest.",
         image: '/gifts/hoodie-event.jpg',
         // Single pieces, not kits: the cart line's variant is the donor's first
         // pick and checkout collects the second (unitCost here is the piece's
@@ -149,7 +143,7 @@ function productPayload(t) {
     const config = {
         category: 'donation',
         checkoutFields: [ADDRESS_FIELD],
-        donation: { tier: t.tier, fmvCents: t.fmvCents, impact: t.impact, ...(t.plus ? { plus: true } : {}), ...(t.giftPicks ? { giftPicks: t.giftPicks } : {}) },
+        donation: { tier: t.tier, fmvCents: t.fmvCents, ...(t.plus ? { plus: true } : {}), ...(t.giftPicks ? { giftPicks: t.giftPicks } : {}) },
         ...(t.image ? { image_url: t.image, thumbnail_url: t.image } : {}),
     };
     const json = JSON.stringify(config);
@@ -238,7 +232,7 @@ async function main() {
     if (!DRY_RUN) {
         console.log('\nSeeded. Next steps:');
         console.log('  1. POST /api/admin/catalog/sync (or wait for webhooks) to refresh the storefront cache.');
-        console.log('  2. SET STOCK on every variant (Price metadata `stock`) — unset = unlimited, and the numbered vest must cap at 100 total.');
+        console.log('  2. SET STOCK on every variant (Price metadata `stock`) — unset = unlimited; cap vest stock across both tiers.');
         console.log('  3. Set gift images via the product config (image_url/thumbnail_url) when assets are ready.');
     }
 }

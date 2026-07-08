@@ -76,9 +76,9 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
     a: (
       <>
         Real merch as our thanks: apparel and goods designed for the people who
-        love a Hack Clubber, all the way up to the numbered vest (only 100 will
-        ever be made). Everything ships to your door with a confirmation email
-        and tracking when it&apos;s on the way.
+        love a Hack Clubber, all the way up to the Hack Club vest. Everything
+        ships to your door with a confirmation email and tracking when
+        it&apos;s on the way.
       </>
     ),
   },
@@ -197,13 +197,13 @@ const MainPage = async () => {
           </p>
           <div className="flex flex-wrap justify-center gap-4 sm:gap-5">
             {[
-              { name: "Sticker Pack", img: "/gifts/sticker.jpg" },
+              { name: "Bumper Sticker", img: "/gifts/sticker.jpg" },
               { name: "Mug", img: "/gifts/mug.jpg" },
               { name: "Tote Bag", img: "/gifts/tote.jpg" },
               { name: "Tee", img: "/gifts/tee.jpg" },
               { name: "College Hoodie", img: "/gifts/hoodie.jpg" },
               { name: "Mom Hoodie", img: "/gifts/mom-sweatshirt.jpg" },
-              { name: "Numbered Vest", img: "/gifts/vest.jpg" },
+              { name: "Vest", img: "/gifts/vest.jpg" },
             ].map((m) => (
               <Link key={m.name} href="/shop" className="group w-32 sm:w-36">
                 <div className="relative aspect-square rounded-2xl overflow-hidden border border-black/[0.06] shadow-hc-card bg-white transition-shadow duration-150 group-hover:shadow-hc-elevated">

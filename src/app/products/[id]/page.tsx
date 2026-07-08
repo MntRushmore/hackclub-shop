@@ -221,11 +221,6 @@ const ProductPage = () => {
                                 <span className="text-white font-black text-4xl" style={{ letterSpacing: '-0.02em' }}>
                                     {product.name}
                                 </span>
-                                {product.donation?.impact && (
-                                    <span className="text-white/80 font-bold mt-4 max-w-xs">
-                                        {product.donation.impact}
-                                    </span>
-                                )}
                             </div>
                         )}
                         {product.donation && giftPieces.length > 0 && (
@@ -264,9 +259,6 @@ const ProductPage = () => {
                         <h1 className="text-4xl sm:text-5xl font-black text-hackclub-dark mb-4">
                             {product.name}
                         </h1>
-                        {donation?.impact && (
-                            <p className="text-lg font-bold text-hackclub-dark mb-3">{donation.impact}</p>
-                        )}
                         {donation && product.description && (
                             <p className="text-hackclub-slate leading-relaxed mb-4">{product.description}</p>
                         )}

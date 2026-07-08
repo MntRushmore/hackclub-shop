@@ -1,5 +1,5 @@
 /**
- * Donor wall + impact counters + vest numbering (donation pivot,
+ * Donor wall + impact counters (donation pivot,
  * Slice 3 — see DONATION_PIVOT_PROMPT.md).
  *
  * Trust model matches points-are-money: every write here happens SERVER-SIDE
@@ -14,7 +14,6 @@
  *   impact:total:count          int counter, number of donations
  *   impact:fund:{id}:amount     float counter, USD directed to one fund
  *   impact:fund:{id}:count      int counter
- *   vest:number                 int counter — vest numbers, minted 1..VEST_NUMBER_MAX
  */
 
 import { Redis } from '@upstash/redis';
@@ -34,11 +33,6 @@ const redis = new Redis({
 
 const WALL_KEY = 'donors:wall';
 const DONATION_ORDERS_KEY = 'donations:orders';
-const VEST_COUNTER_KEY = 'vest:number';
-/** Only 100 vests exist; numbers above this are never minted. */
-export const VEST_NUMBER_MAX = 100;
-/** Tiers whose thank-you gift includes the numbered vest. */
-const NUMBERED_TIERS = ['Philanthropist', 'Parents Founders Circle'];
 
 /** One row on the public wall. Stored complete; sanitized on public read. */
 export interface DonorWallEntry {
@@ -49,6 +43,8 @@ export interface DonorWallEntry {
     displayName?: string;
     dedication?: string;
     isAnonymous: boolean;
+    // Legacy: early vest orders got a minted number (numbered-vest program,
+    // retired 2026-07). Kept so old wall entries still render theirs.
     vestNumber?: number;
     donatedAt: string;      // ISO
 }
@@ -57,29 +53,6 @@ export interface ImpactStats {
     totalAmount: number;
     totalCount: number;
     funds: Record<string, { amount: number; count: number }>;
-}
-
-/**
- * Mint the next vest number for a qualifying order, or undefined when
- * the tier isn't numbered / all 100 are claimed. Atomic INCR, so concurrent
- * settlements can't collide; minted only at webhook settlement time so an
- * abandoned checkout never burns a number.
- */
-export async function assignVestNumber(tier: string): Promise<number | undefined> {
-    if (!NUMBERED_TIERS.includes(tier)) return undefined;
-    try {
-        const n = await redis.incr(VEST_COUNTER_KEY);
-        if (n > VEST_NUMBER_MAX) {
-            // Stock caps should make this unreachable; don't roll back (another
-            // settlement may have INCRed past us) — just stop numbering.
-            console.error(`[donorWall] vest number ${n} exceeds ${VEST_NUMBER_MAX}; vest stock is over-sold or miscapped`);
-            return undefined;
-        }
-        return n;
-    } catch (err) {
-        console.error('[donorWall] vest number mint failed:', err instanceof Error ? err.message : err);
-        return undefined;
-    }
 }
 
 /**

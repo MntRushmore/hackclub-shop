@@ -82,8 +82,6 @@ export interface DonationTierConfig {
      * second pick arrives as DonationCheckoutInput.secondGiftVariantId.
      */
     giftPicks?: number;
-    /** Impact statement, e.g. "Puts a laptop in the hands of a teen." */
-    impact?: string;
 }
 
 /** Donor-provided fields sent alongside a donation-tier checkout. */
