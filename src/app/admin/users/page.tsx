@@ -116,7 +116,7 @@ export default function UsersAdmin() {
         <>
             <PageHeader
                 title="Users"
-                subtitle="View users and adjust their points. Everyone here signed in with Hack Club; guest (HCB) buyers don’t appear in this list."
+                subtitle="View users and adjust their points. Everyone here signed in with Hack Club; guest (card) buyers don’t appear in this list."
             />
 
             <Card className="mb-8">

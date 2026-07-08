@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import HcbConnectionCard from './HcbConnectionCard';
+import PaymentsCard from './PaymentsCard';
 import { PageHeader, Card, ErrorBanner, LoadingScreen } from '../ui';
 
 // ── Types mirrored from src/lib/finance.ts (kept loose; this is a display layer) ──
@@ -85,7 +85,7 @@ export default function FinanceAdmin() {
                 }
             />
 
-            <HcbConnectionCard />
+            <PaymentsCard />
 
             {error && <ErrorBanner message={error} />}
 
