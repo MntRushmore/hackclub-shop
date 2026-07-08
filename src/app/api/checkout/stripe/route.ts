@@ -8,6 +8,7 @@ import {
     isStripeConfigured,
     isStripeTaxEnabled,
     resolveStripeMode,
+    getActiveTaxRegistrationStates,
     GENERAL_GOODS_TAX_CODE,
     SHIPPING_TAX_CODE,
     NONTAXABLE_TAX_CODE,
@@ -226,6 +227,24 @@ export async function POST(request: Request) {
 
         const stripe = getStripe(mode);
         const taxEnabled = isStripeTaxEnabled(mode);
+
+        // Donor experience: a thank-you gift shouldn't wear a price tag. The
+        // gift-FMV lines exist so Stripe Tax can tax the goods portion — which
+        // only happens in states with an active tax registration. When the
+        // shipping address is provably OUTSIDE every registered state, the
+        // whole tier bills as ONE donation line (gift named, no amount) and
+        // the FMV stays internal (order record + IRS receipt disclosure).
+        // Itemize whenever tax is on and the state is registered, the address
+        // is unknown (Stripe collects it on its page), or the registration
+        // list couldn't be read — over-disclosing is safe, under-collecting
+        // tax is not.
+        let itemizeGiftFmv = taxEnabled;
+        if (taxEnabled && shippingAddress?.country?.toUpperCase() === 'US' && shippingAddress.state) {
+            const registered = await getActiveTaxRegistrationStates(mode);
+            if (registered !== null && !registered.includes(shippingAddress.state.toUpperCase())) {
+                itemizeGiftFmv = false;
+            }
+        }
         const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
         const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -327,10 +346,31 @@ export async function POST(request: Request) {
                         },
                     }];
                 }
+                const img = absoluteImage(item.thumbnail_url);
+
+                // No tax to compute at this destination: one clean donation
+                // line, the gift named but never priced. FMV still lands on
+                // the order (giftFmvParts below) for accounting + the receipt.
+                if (!itemizeGiftFmv) {
+                    return [{
+                        quantity: item.quantity,
+                        price_data: {
+                            currency: 'usd',
+                            unit_amount: verifiedCents,
+                            ...(taxEnabled ? { tax_behavior: 'exclusive' as const } : {}),
+                            product_data: {
+                                name: `${item.donation.tier} donation to Hack Club`,
+                                description: `Includes ${item.name} as our thank-you gift.`,
+                                ...(img ? { images: [img] } : {}),
+                                ...(taxEnabled ? { tax_code: NONTAXABLE_TAX_CODE } : {}),
+                            },
+                        },
+                    }];
+                }
+
                 const fmvParts = giftFmvParts(item, verifiedCents);
                 const fmvCents = fmvParts.reduce((s, p) => s + p.fmvCents, 0);
                 const donationCents = verifiedCents - fmvCents;
-                const img = absoluteImage(item.thumbnail_url);
                 const split: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
                 for (const [i, part] of fmvParts.entries()) {
                     if (part.fmvCents <= 0) continue;

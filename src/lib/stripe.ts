@@ -144,6 +144,37 @@ export const isStripeTaxEnabled = (mode: StripeMode = 'live'): boolean => {
 };
 
 /**
+ * US states with an ACTIVE Stripe Tax registration for the given mode, e.g.
+ * ['VT']. Cached for 10 minutes per mode. Used by checkout to decide whether a
+ * donation's gift value must be itemized for tax: outside registered states
+ * Stripe computes no tax, so the donor can see one clean donation line instead
+ * of their thank-you gift carrying a price tag.
+ *
+ * Returns null when the answer is unknown (API error) — callers must treat
+ * null as "assume registered" and itemize, since over-disclosing is safe and
+ * under-collecting tax is not.
+ */
+const _regCache: Partial<Record<StripeMode, { states: string[]; at: number }>> = {};
+export async function getActiveTaxRegistrationStates(mode: StripeMode = 'live'): Promise<string[] | null> {
+    const cached = _regCache[mode];
+    if (cached && Date.now() - cached.at < 10 * 60 * 1000) return cached.states;
+    try {
+        const states: string[] = [];
+        for await (const reg of getStripe(mode).tax.registrations.list({ status: 'active', limit: 100 })) {
+            if (reg.country === 'US') {
+                const state = (reg.country_options as { us?: { state?: string } } | null)?.us?.state;
+                if (state) states.push(state.toUpperCase());
+            }
+        }
+        _regCache[mode] = { states, at: Date.now() };
+        return states;
+    } catch (err) {
+        console.error('[stripe] tax registrations read failed:', err instanceof Error ? err.message : err);
+        return null;
+    }
+}
+
+/**
  * Stripe product tax code applied to merch line items (general tangible goods).
  * Correct for shirts/stickers/hardware; refine per-product later if needed.
  * https://docs.stripe.com/tax/tax-codes
