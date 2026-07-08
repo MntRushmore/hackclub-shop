@@ -491,6 +491,27 @@ export async function POST(request: Request) {
             };
         }
 
+        // Accounting: the FMV breakdown as payment metadata, on every donation
+        // charge. When the donor's checkout shows one clean donation line (no
+        // gift price tags), this metadata panel on the Stripe payment page —
+        // and in Sigma/CSV exports — is where the accountants still see the
+        // per-gift split. Buyer-invisible. Values are USD strings.
+        let donationMetadata: Record<string, string> = {};
+        if (orderDonation) {
+            const giftDetail = donationItems
+                .flatMap(i => giftFmvParts(i, Math.round(itemCashCost(i) * 100))
+                    .map(p => `${p.name}${i.quantity > 1 ? ` x${i.quantity}` : ''} $${(p.fmvCents / 100).toFixed(2)}`))
+                .join('; ');
+            donationMetadata = {
+                donation_total_usd: orderDonation.amount.toFixed(2),
+                gift_fmv_total_usd: orderDonation.fmvAmount.toFixed(2),
+                deductible_usd: orderDonation.deductibleAmount.toFixed(2),
+                // Stripe caps a metadata value at 500 chars.
+                gift_fmv_detail: giftDetail.slice(0, 500),
+                fund: orderDonation.fundId,
+            };
+        }
+
         // The shopper already entered their shipping address on our checkout page
         // (it's what the live shipping rate was quoted against). To avoid making
         // them retype it on Stripe's page, pre-create a Customer with that address
@@ -577,7 +598,12 @@ export async function POST(request: Request) {
             // Renewal invoices carry this metadata so the invoice.paid webhook
             // can bump the impact meters without another Stripe read.
             ...(wantsRecurring && donor
-                ? { subscription_data: { metadata: { donation: '1', fund: donor.fundId, orderId } } }
+                ? { subscription_data: { metadata: { donation: '1', fund: donor.fundId, orderId, ...donationMetadata } } }
+                : {}),
+            // One-time payments: the FMV breakdown rides on the PaymentIntent —
+            // the object the accountants open in the Payments dashboard.
+            ...(!wantsRecurring && orderDonation
+                ? { payment_intent_data: { metadata: { orderId, ...donationMetadata } } }
                 : {}),
             // Stripe Tax needs an address for the jurisdiction. When we pre-filled a
             // Customer with the shipping address, Stripe already has it — so we do NOT
@@ -594,7 +620,7 @@ export async function POST(request: Request) {
                 : {}),
             success_url: `${origin}/thank-you?session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: `${origin}/checkout`,
-            metadata: { orderId },
+            metadata: { orderId, ...donationMetadata },
             // Expire the session quickly (Stripe's minimum is 30 min) so abandoned
             // checkouts release their inventory hold and get cleaned up promptly via
             // the checkout.session.expired webhook, instead of sitting ~24h.
