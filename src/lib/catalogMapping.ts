@@ -137,6 +137,7 @@ export function toStripePrice(variant: ProductVariant): {
     if (variant.sku) metadata.sku = variant.sku;
     if (variant.scanCode) metadata.scan_code = variant.scanCode;
     if (variant.taxCode) metadata.tax_code = variant.taxCode;
+    if (typeof variant.fmvCents === 'number') metadata.fmv_cents = String(variant.fmvCents);
 
     return {
         unitAmount: typeof price_cash === 'number' ? toStripeAmount(price_cash) : 0,
@@ -169,6 +170,11 @@ export interface CatalogVariant {
     // Stripe Tax product code for THIS variant (e.g. clothing vs general goods).
     // Unset = the general tangible-goods default at checkout.
     taxCode?: string;
+    // Declared fair market value of THIS gift (integer cents) for donation
+    // tiers. When every chosen gift has one, checkout bills each gift as its
+    // own FMV line (own tax code) instead of one combined tier-level line.
+    // Unset = fall back to the tier's donation.fmvCents.
+    fmvCents?: number;
     stripePriceId: string;  // the Stripe Price this variant maps to (checkout uses it)
 }
 
@@ -232,6 +238,7 @@ export function fromStripePrice(price: {
         sku: m.sku || undefined,
         scanCode: m.scan_code || undefined,
         taxCode: m.tax_code || undefined,
+        fmvCents: num(m.fmv_cents),
         stripePriceId: price.id,
     };
 }

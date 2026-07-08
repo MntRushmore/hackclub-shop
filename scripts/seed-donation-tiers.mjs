@@ -66,14 +66,21 @@ const GIFT_IMG = {
 // (stickers, mugs, totes) stay on the tangible-goods default at checkout.
 const CLOTHING_TAX_CODE = 'txcd_30011000';
 
-const STICKERS = { key: 'stickers', name: 'Bumper Sticker', unitCost: 1.9, image: GIFT_IMG.stickers };
-const MUG = { key: 'mug', name: 'Mug', unitCost: 7.12, image: GIFT_IMG.mug };
-const TOTE = { key: 'tote', name: 'Tote Bag', unitCost: 14.4, image: GIFT_IMG.tote };
-const CAP = { key: 'cap', name: 'Cap', unitCost: 15.94, taxCode: CLOTHING_TAX_CODE };
-const TEES = APPAREL_SIZES.map(size => ({ key: `tee-${size.toLowerCase()}`, name: `T-Shirt · ${size}`, size, unitCost: 18.2, image: GIFT_IMG.tee, taxCode: CLOTHING_TAX_CODE }));
-const COLLEGES = APPAREL_SIZES.map(size => ({ key: `college-${size.toLowerCase()}`, name: `College Sweatshirt · ${size}`, size, unitCost: 36.4, image: GIFT_IMG.college, taxCode: CLOTHING_TAX_CODE }));
-const MOMS = APPAREL_SIZES.map(size => ({ key: `mom-${size.toLowerCase()}`, name: `Mom Sweatshirt · ${size}`, size, unitCost: 39.28, image: GIFT_IMG.mom, taxCode: CLOTHING_TAX_CODE }));
-const VESTS = (keyPrefix) => APPAREL_SIZES.map(size => ({ key: `${keyPrefix}-${size.toLowerCase()}`, name: `Vest · ${size}`, size, unitCost: 55.6, image: GIFT_IMG.vest, taxCode: CLOTHING_TAX_CODE }));
+// Per-gift declared fair market value (integer cents, Price metadata
+// `fmv_cents`). Checkout bills each chosen gift as its own FMV line — own
+// value, own tax code — so a Founders Circle vest+mug pick discloses
+// $100 + $30, not the tier-level $180 pair maximum. Derived from the
+// tier-level fmvCents declarations below (each tier's FMV = its
+// highest-value gift): stickers $5, mug/tote $30, tee/cap $35,
+// sweatshirts $80, vest $100.
+const STICKERS = { key: 'stickers', name: 'Bumper Sticker', unitCost: 1.9, image: GIFT_IMG.stickers, fmvCents: 500 };
+const MUG = { key: 'mug', name: 'Mug', unitCost: 7.12, image: GIFT_IMG.mug, fmvCents: 3000 };
+const TOTE = { key: 'tote', name: 'Tote Bag', unitCost: 14.4, image: GIFT_IMG.tote, fmvCents: 3000 };
+const CAP = { key: 'cap', name: 'Cap', unitCost: 15.94, taxCode: CLOTHING_TAX_CODE, fmvCents: 3500 };
+const TEES = APPAREL_SIZES.map(size => ({ key: `tee-${size.toLowerCase()}`, name: `T-Shirt · ${size}`, size, unitCost: 18.2, image: GIFT_IMG.tee, taxCode: CLOTHING_TAX_CODE, fmvCents: 3500 }));
+const COLLEGES = APPAREL_SIZES.map(size => ({ key: `college-${size.toLowerCase()}`, name: `College Sweatshirt · ${size}`, size, unitCost: 36.4, image: GIFT_IMG.college, taxCode: CLOTHING_TAX_CODE, fmvCents: 8000 }));
+const MOMS = APPAREL_SIZES.map(size => ({ key: `mom-${size.toLowerCase()}`, name: `Mom Sweatshirt · ${size}`, size, unitCost: 39.28, image: GIFT_IMG.mom, taxCode: CLOTHING_TAX_CODE, fmvCents: 8000 }));
+const VESTS = (keyPrefix) => APPAREL_SIZES.map(size => ({ key: `${keyPrefix}-${size.toLowerCase()}`, name: `Vest · ${size}`, size, unitCost: 55.6, image: GIFT_IMG.vest, taxCode: CLOTHING_TAX_CODE, fmvCents: 10000 }));
 const TIERS = [
     {
         id: 'donation-tier-supporter',
@@ -177,6 +184,7 @@ function priceMetadata(t, v, index) {
         ...(v.size ? { size: v.size } : {}),
         ...(v.image ? { image_url: v.image } : {}),
         ...(v.taxCode ? { tax_code: v.taxCode } : {}),
+        ...(v.fmvCents ? { fmv_cents: String(v.fmvCents) } : {}),
     };
 }
 

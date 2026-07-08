@@ -138,6 +138,11 @@ export async function POST(request: Request) {
         // tier's thank-you gift.
         let secondGiftHold: StockLine | null = null;
         let secondGiftName: string | undefined;
+        // Split-line billing needs the picks' own identities, so remember the
+        // primary pick's name (before the fulfillment-name merge below) and the
+        // second pick's declared FMV/tax classification.
+        let twoPickPrimaryName: string | undefined;
+        let secondGiftMeta: { name: string; fmvCents?: number; taxCode?: string } | null = null;
         const twoPickItem = validation.items!.find(i => (i.donation?.giftPicks ?? 1) > 1);
         if (twoPickItem) {
             const rawSecond = typeof donation?.secondGiftVariantId === 'string' ? donation.secondGiftVariantId.trim() : '';
@@ -149,17 +154,12 @@ export async function POST(request: Request) {
             if (String(second.variant_id || second.id) === twoPickItem.variantId) {
                 return NextResponse.json({ error: 'Please pick two different pieces for your thank-you gifts.' }, { status: 400 });
             }
+            twoPickPrimaryName = twoPickItem.name;
             twoPickItem.name = `${twoPickItem.name} + ${second.name}`;
             if (typeof second.unitCost === 'number' && second.unitCost >= 0) {
                 twoPickItem.unitCost = (twoPickItem.unitCost ?? 0) + second.unitCost;
             }
-            // The gift-FMV line carries ONE tax code but now covers two pieces.
-            // If the picks classify differently (e.g. hoodie + mug), drop to the
-            // general (taxable) code: over-collecting a little beats under-
-            // collecting a tax liability, and the FMV can't be split per piece.
-            if ((second.taxCode || undefined) !== twoPickItem.taxCode) {
-                twoPickItem.taxCode = undefined;
-            }
+            secondGiftMeta = { name: second.name, fmvCents: second.fmvCents, taxCode: second.taxCode };
             secondGiftName = second.name;
             secondGiftHold = { variantId: String(second.variant_id || second.id), quantity: twoPickItem.quantity };
         }
@@ -241,11 +241,43 @@ export async function POST(request: Request) {
             url && /^https?:\/\//i.test(url) ? url : undefined;
 
         // Donation tiers: the verified cash price is the DONATION amount; only the
-        // thank-you gift's fair market value is a sale of goods. FMV comes from
-        // catalog config and is clamped into [0, verified amount] so a misconfigured
-        // FMV can never bill more than the verified price or go negative.
-        const giftFmvCents = (item: { donation?: { fmvCents: number } }, verifiedCents: number): number =>
-            Math.min(Math.max(0, Math.round(item.donation?.fmvCents ?? 0)), verifiedCents);
+        // thank-you gift's fair market value is a sale of goods. Each chosen gift
+        // becomes its OWN FMV line (own declared value + own tax code — e.g. an
+        // exempt vest next to a taxable mug) when the variant carries a declared
+        // per-gift fmvCents; otherwise one combined line at the tier-level FMV.
+        // Totals are clamped into [0, verified amount] so a misconfigured FMV can
+        // never bill more than the verified price or go negative.
+        interface GiftFmvPart { name: string; fmvCents: number; taxCode?: string }
+        const giftFmvParts = (
+            item: NonNullable<typeof validation.items>[number],
+            verifiedCents: number,
+        ): GiftFmvPart[] => {
+            const clamp = (v: number, max: number) => Math.min(Math.max(0, Math.round(v)), max);
+            const isTwoPick = item === twoPickItem && secondGiftMeta !== null;
+            if (isTwoPick && typeof item.fmvCents === 'number' && typeof secondGiftMeta!.fmvCents === 'number') {
+                const fmv1 = clamp(item.fmvCents, verifiedCents);
+                const fmv2 = clamp(secondGiftMeta!.fmvCents!, verifiedCents - fmv1);
+                return [
+                    { name: twoPickPrimaryName || item.name, fmvCents: fmv1, taxCode: item.taxCode },
+                    { name: secondGiftMeta!.name, fmvCents: fmv2, taxCode: secondGiftMeta!.taxCode },
+                ];
+            }
+            // Single pick: the gift's declared FMV wins over the tier-level one.
+            // Combined two-pick fallback (a pick lacks a declared FMV): tier-level
+            // FMV on one line; if the picks classify differently, drop to the
+            // general (taxable) code — over-collecting a little beats under-
+            // collecting a tax liability.
+            const fmv = clamp(
+                !isTwoPick && typeof item.fmvCents === 'number' ? item.fmvCents : (item.donation?.fmvCents ?? 0),
+                verifiedCents,
+            );
+            const taxCode = isTwoPick && (secondGiftMeta!.taxCode || undefined) !== item.taxCode
+                ? undefined
+                : item.taxCode;
+            return [{ name: item.name, fmvCents: fmv, taxCode }];
+        };
+        const giftFmvCents = (item: NonNullable<typeof validation.items>[number], verifiedCents: number): number =>
+            giftFmvParts(item, verifiedCents).reduce((s, p) => s + p.fmvCents, 0);
 
         // Donor input is honored only when the verified cart contains donation
         // tiers. The optional extra amount (custom giving above the tier price,
@@ -295,23 +327,25 @@ export async function POST(request: Request) {
                         },
                     }];
                 }
-                const fmvCents = giftFmvCents(item, verifiedCents);
+                const fmvParts = giftFmvParts(item, verifiedCents);
+                const fmvCents = fmvParts.reduce((s, p) => s + p.fmvCents, 0);
                 const donationCents = verifiedCents - fmvCents;
                 const img = absoluteImage(item.thumbnail_url);
                 const split: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
-                if (fmvCents > 0) {
+                for (const [i, part] of fmvParts.entries()) {
+                    if (part.fmvCents <= 0) continue;
                     split.push({
                         quantity: item.quantity,
                         price_data: {
                             currency: 'usd',
-                            unit_amount: fmvCents,
+                            unit_amount: part.fmvCents,
                             ...(taxEnabled ? { tax_behavior: 'exclusive' as const } : {}),
                             product_data: {
-                                name: `${item.name} (thank-you gift)`,
-                                ...(img ? { images: [img] } : {}),
-                                // The chosen gift's own classification (apparel is
+                                name: `${part.name} (thank-you gift)`,
+                                ...(i === 0 && img ? { images: [img] } : {}),
+                                // Each gift's own classification (apparel is
                                 // tax-exempt in e.g. Vermont); general goods when unset.
-                                ...(taxEnabled ? { tax_code: item.taxCode || GENERAL_GOODS_TAX_CODE } : {}),
+                                ...(taxEnabled ? { tax_code: part.taxCode || GENERAL_GOODS_TAX_CODE } : {}),
                             },
                         },
                     });

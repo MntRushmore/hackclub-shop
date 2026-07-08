@@ -95,6 +95,10 @@ export interface ProductVariant {
     // tax-exempt in Vermont — vs the general tangible-goods default). Rides in
     // Price metadata `tax_code`; checkout uses it to classify the line.
     taxCode?: string;
+    // Donation tiers: declared fair market value of this gift (integer cents),
+    // in Price metadata `fmv_cents`. Lets checkout bill each chosen gift as its
+    // own FMV line; unset falls back to the tier-level donation.fmvCents.
+    fmvCents?: number;
 }
 
 export interface ShippingOption {
