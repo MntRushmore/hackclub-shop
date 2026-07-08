@@ -137,6 +137,67 @@ function toEasyPostAddress(addr: ShippingAddress) {
     };
 }
 
+interface EpVerifiedAddress {
+    street1?: string;
+    street2?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+    country?: string;
+    verifications?: {
+        delivery?: {
+            success: boolean;
+            errors?: { message?: string; suggestion?: string | null }[];
+        };
+    };
+}
+
+export type VerifyAddressResult =
+    | { ok: true; normalized?: ShippingAddress }
+    /** Verification couldn't run (EasyPost off or erroring) — callers proceed. */
+    | { ok: false; reason: 'unavailable' }
+    | { ok: false; reason: 'undeliverable'; message: string };
+
+/**
+ * USPS-backed deliverability check for a US shipping address (EasyPost address
+ * verification — free for US addresses). Catches fake or mistyped addresses
+ * (wrong ZIP for the city, nonexistent street number) BEFORE a session is
+ * created and stock is held for a parcel that can never be delivered.
+ *
+ * Fails open: an EasyPost outage returns 'unavailable', not a rejection — a
+ * vendor hiccup must not block checkout. Non-US addresses return ok untouched
+ * (shipping is US-only today; international verification is a paid add-on).
+ */
+export async function verifyShippingAddress(addr: ShippingAddress): Promise<VerifyAddressResult> {
+    if (!isShippingConfigured()) return { ok: false, reason: 'unavailable' };
+    if ((addr.country || 'US').toUpperCase() !== 'US') return { ok: true };
+    try {
+        const created = await easypost<EpVerifiedAddress>('/addresses', {
+            method: 'POST',
+            body: JSON.stringify({ address: toEasyPostAddress(addr), verify: ['delivery'] }),
+        });
+        const delivery = created.verifications?.delivery;
+        if (delivery && delivery.success === false) {
+            const detail = delivery.errors?.map((e) => e.message).filter(Boolean).join('; ');
+            return { ok: false, reason: 'undeliverable', message: detail || 'address not found' };
+        }
+        // USPS-standardized form (ZIP+4, canonical street/city spelling).
+        const normalized: ShippingAddress = {
+            name: addr.name,
+            line1: created.street1 || addr.line1,
+            line2: created.street2 || addr.line2,
+            city: created.city || addr.city,
+            state: created.state || addr.state,
+            postal_code: created.zip || addr.postal_code,
+            country: created.country || addr.country || 'US',
+        };
+        return { ok: true, normalized };
+    } catch (err) {
+        console.error('[shipping] address verification failed:', err instanceof Error ? err.message : err);
+        return { ok: false, reason: 'unavailable' };
+    }
+}
+
 export interface ParcelSpec {
     /** ounces; EasyPost wants weight in oz. Defaults to a light flat-pack. */
     weightOz?: number;

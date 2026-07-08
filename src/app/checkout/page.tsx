@@ -10,6 +10,7 @@ import { PointsContext } from '../../context/PointsContext';
 import { ShippingOption, CheckoutField } from '../../types/Admin';
 import { ShippingAddress } from '../../types/Order';
 import { EMPTY_ADDRESS, validateAddress } from '../../lib/address';
+import AddressAutocomplete, { AutocompletedAddress } from '../components/AddressAutocomplete';
 import { formatPoints, formatCash, usdToPoints, pointsToUsd } from '../../lib/paymentUtils';
 import { usePathway } from '../../lib/usePathway';
 import { DONATION_FUNDS, DEFAULT_FUND_ID } from '../../lib/donation';
@@ -286,6 +287,16 @@ const Checkout = () => {
             }
         }
         return true;
+    };
+
+    // A Google Places pick fills street/city/state/ZIP in one shot (name and
+    // line2 are the shopper's own and left untouched).
+    const applyAutocompletedAddress = (fieldName: string, picked: AutocompletedAddress) => {
+        const current = (checkoutData[fieldName] as ShippingAddress) || EMPTY_ADDRESS;
+        setCheckoutData({
+            ...checkoutData,
+            [fieldName]: { ...current, ...picked },
+        });
     };
 
     const updateAddressField = (fieldName: string, key: keyof ShippingAddress, val: string) => {
@@ -729,6 +740,7 @@ const Checkout = () => {
                                                     value={addr.name} onChange={(e) => updateAddressField(field.name, 'name', e.target.value)} />
                                                 <input className={inputClass} name="address-line1" placeholder="Address line 1" autoComplete="shipping address-line1"
                                                     value={addr.line1} onChange={(e) => updateAddressField(field.name, 'line1', e.target.value)} />
+                                                <AddressAutocomplete inputName="address-line1" onSelect={(picked) => applyAutocompletedAddress(field.name, picked)} />
                                                 <input className={inputClass} name="address-line2" placeholder="Address line 2 (optional)" autoComplete="shipping address-line2"
                                                     value={addr.line2 || ''} onChange={(e) => updateAddressField(field.name, 'line2', e.target.value)} />
                                                 <div className="grid grid-cols-2 gap-2">

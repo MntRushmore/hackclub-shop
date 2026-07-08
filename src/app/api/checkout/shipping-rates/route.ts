@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { Redis } from '@upstash/redis';
 import { isStructuredAddress, validateAddress } from '../../../../lib/address';
 import { rateLimit, rateLimitResponse } from '../../../../lib/rateLimit';
-import { getRates, isShippingConfigured, defaultParcelOz, stampShippingQuote } from '../../../../lib/shipping';
+import { getRates, isShippingConfigured, defaultParcelOz, stampShippingQuote, verifyShippingAddress } from '../../../../lib/shipping';
 import { cartAddressFingerprint } from '../../../../lib/checkoutUtils';
 import { ShippingAddress } from '../../../../types/Order';
 
@@ -75,6 +75,20 @@ export async function POST(request: Request) {
     const addrErrors = validateAddress(address);
     if (addrErrors.length > 0) {
         return NextResponse.json({ configured: true, needsAddress: true, options: [], error: addrErrors[0] });
+    }
+
+    // USPS deliverability check — rejects fake or mistyped addresses (wrong
+    // ZIP for the city, nonexistent street) before any rate is quoted, which
+    // also gates checkout itself: with EasyPost on, payment requires a rate
+    // quoted for exactly this address. Fails open on a vendor hiccup.
+    const verification = await verifyShippingAddress(address);
+    if (!verification.ok && verification.reason === 'undeliverable') {
+        return NextResponse.json({
+            configured: true,
+            needsAddress: true,
+            options: [],
+            error: `We couldn't verify that address (${verification.message}). Please double-check the street number, city, state, and ZIP.`,
+        });
     }
 
     // Sum parcel weight from per-variant weightOz where set, else default per unit.
