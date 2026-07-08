@@ -27,6 +27,7 @@ const NAV: Array<{ group: string; items: NavItem[] }> = [
         items: [
             { href: '/admin', label: 'Overview' },
             { href: '/admin/orders', label: 'Orders' },
+            { href: '/admin/warehouse', label: 'Warehouse', permission: 'canViewStats' },
             { href: 'https://dashboard.stripe.com/products', label: 'Products', external: true },
             { href: '/admin/coupons', label: 'Coupons', permission: 'canManageCoupons' },
             { href: '/admin/projects', label: 'Projects' },
