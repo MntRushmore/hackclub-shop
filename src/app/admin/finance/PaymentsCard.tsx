@@ -16,15 +16,21 @@ interface StripeAccount { id: string; name: string | null; email: string | null 
 interface StripeStatus {
     loading: boolean; configured: boolean; reachable: boolean; livemode: boolean;
     taxEnabled: boolean; webhookConfigured: boolean; account: StripeAccount | null;
+    testConfigured: boolean; testReachable: boolean; testWebhookConfigured: boolean;
 }
+type Mode = 'live' | 'test';
+interface ModeState { global: Mode; personal: Mode | null; effective: Mode }
 interface HcbUser { id?: string; name?: string; email?: string }
 interface HcbStatus { loading: boolean; configured: boolean; connected: boolean; user: HcbUser | null }
 
-const STRIPE_EMPTY: StripeStatus = { loading: true, configured: false, reachable: false, livemode: false, taxEnabled: false, webhookConfigured: false, account: null };
+const STRIPE_EMPTY: StripeStatus = { loading: true, configured: false, reachable: false, livemode: false, taxEnabled: false, webhookConfigured: false, account: null, testConfigured: false, testReachable: false, testWebhookConfigured: false };
 const HCB_EMPTY: HcbStatus = { loading: true, configured: false, connected: false, user: null };
 
 export default function PaymentsCard() {
     const [stripe, setStripe] = useState<StripeStatus>(STRIPE_EMPTY);
+    const [mode, setMode] = useState<ModeState | null>(null);
+    const [modeError, setModeError] = useState<string | null>(null);
+    const [modeBusy, setModeBusy] = useState(false);
     const [hcb, setHcb] = useState<HcbStatus>(HCB_EMPTY);
     const [busy, setBusy] = useState(false);
 
@@ -41,12 +47,39 @@ export default function PaymentsCard() {
                     taxEnabled: Boolean(data.taxEnabled),
                     webhookConfigured: Boolean(data.webhookConfigured),
                     account: data.account ?? null,
+                    testConfigured: Boolean(data.test?.configured),
+                    testReachable: Boolean(data.test?.reachable),
+                    testWebhookConfigured: Boolean(data.test?.webhookConfigured),
                 });
+                if (data.mode) setMode(data.mode as ModeState);
             } catch {
                 setStripe({ ...STRIPE_EMPTY, loading: false });
             }
         })();
     }, []);
+
+    const changeMode = async (scope: 'global' | 'personal', next: Mode | null) => {
+        if (modeBusy) return;
+        setModeBusy(true);
+        setModeError(null);
+        try {
+            const res = await fetch('/api/admin/stripe/mode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ scope, mode: next }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                setModeError(data.error || 'Could not change the mode.');
+                return;
+            }
+            setMode({ global: data.global, personal: data.personal, effective: data.effective });
+        } catch {
+            setModeError('Could not change the mode.');
+        } finally {
+            setModeBusy(false);
+        }
+    };
 
     const loadHcb = useCallback(async () => {
         try {
@@ -126,6 +159,67 @@ export default function PaymentsCard() {
                 )}
             </div>
 
+            {/* ── Checkout mode: which key slot charges cards (live vs test) ── */}
+            {stripe.configured && mode && (
+                <div className="mt-4 pt-4 border-t border-hackclub-smoke">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div>
+                            <p className="font-bold text-hackclub-dark text-sm flex items-center gap-2">
+                                Checkout mode
+                                <Badge tone={mode.effective === 'live' ? 'green' : 'orange'}>
+                                    {mode.effective === 'live' ? 'You checkout in Live' : 'You checkout in Test'}
+                                </Badge>
+                            </p>
+                            <p className="text-sm text-hackclub-slate max-w-xl">
+                                {!stripe.testConfigured
+                                    ? 'Set STRIPE_SECRET_KEY_TEST (and STRIPE_WEBHOOK_SECRET_TEST) to unlock test-mode checkouts with Stripe test cards.'
+                                    : mode.global === 'test'
+                                        ? 'The whole store is in test mode. Guests cannot be charged real money until this is switched back to Live.'
+                                        : 'Everyone checks out in live mode. Use the personal override to run test-card checkouts without affecting customers.'}
+                            </p>
+                            {modeError && <p className="text-sm text-hackclub-red mt-1">{modeError}</p>}
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-hackclub-muted uppercase tracking-wide">Everyone</span>
+                                <Segmented
+                                    value={mode.global}
+                                    disabled={modeBusy || !stripe.testConfigured}
+                                    options={[
+                                        { value: 'live', label: 'Live' },
+                                        { value: 'test', label: 'Test' },
+                                    ]}
+                                    onChange={(v) => changeMode('global', v as Mode)}
+                                />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-hackclub-muted uppercase tracking-wide">Just me</span>
+                                <Segmented
+                                    value={mode.personal ?? 'follow'}
+                                    disabled={modeBusy}
+                                    options={[
+                                        { value: 'follow', label: 'Follow store' },
+                                        { value: 'live', label: 'Live', disabled: false },
+                                        { value: 'test', label: 'Test', disabled: !stripe.testConfigured },
+                                    ]}
+                                    onChange={(v) => changeMode('personal', v === 'follow' ? null : (v as Mode))}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    {stripe.testConfigured && !stripe.testWebhookConfigured && (
+                        <p className="text-sm text-hackclub-orange mt-2">
+                            STRIPE_WEBHOOK_SECRET_TEST is not set. Test payments will succeed on Stripe but the orders will stay unpaid, since the webhook is the only trusted paid signal.
+                        </p>
+                    )}
+                    {stripe.testConfigured && !stripe.testReachable && (
+                        <p className="text-sm text-hackclub-red mt-2">
+                            The test key is set but Stripe rejected it. Test-mode checkout is down until STRIPE_SECRET_KEY_TEST is fixed.
+                        </p>
+                    )}
+                </div>
+            )}
+
             {/* ── HCB: legacy, reconciliation of pre-migration orders only ── */}
             {!hcb.loading && hcb.configured && (
                 <div className="mt-4 pt-4 border-t border-hackclub-smoke flex flex-wrap items-center justify-between gap-4">
@@ -167,6 +261,39 @@ export default function PaymentsCard() {
                 </div>
             )}
         </Card>
+    );
+}
+
+function Segmented({ value, options, onChange, disabled }: {
+    value: string;
+    options: { value: string; label: string; disabled?: boolean }[];
+    onChange: (value: string) => void;
+    disabled?: boolean;
+}) {
+    return (
+        <div className="inline-flex rounded-full border-2 border-hackclub-smoke overflow-hidden" role="group">
+            {options.map((opt) => {
+                const active = opt.value === value;
+                return (
+                    <button
+                        key={opt.value}
+                        type="button"
+                        disabled={disabled || opt.disabled}
+                        aria-pressed={active}
+                        onClick={() => !active && onChange(opt.value)}
+                        className={`px-3 py-1 text-xs font-bold transition-colors disabled:opacity-50 ${
+                            active
+                                ? opt.value === 'test'
+                                    ? 'bg-hackclub-orange text-white'
+                                    : 'bg-hackclub-dark text-white'
+                                : 'bg-white text-hackclub-slate hover:bg-hackclub-snow'
+                        }`}
+                    >
+                        {opt.label}
+                    </button>
+                );
+            })}
+        </div>
     );
 }
 

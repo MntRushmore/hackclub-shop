@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type Stripe from 'stripe';
-import { getStripe } from '../../../../lib/stripe';
+import { getStripe, isStripeConfigured, webhookSecretFor, type StripeMode } from '../../../../lib/stripe';
 import { getGuestOrder, getGuestOrderBySession, updateGuestOrder, deleteGuestOrder } from '../../../../lib/guestOrders';
 import { mirrorOrder } from '../../../../lib/airtableMirror';
 import { sendEmail, buildOrderConfirmation, buildAdminNewOrder } from '../../../../lib/email';
@@ -13,15 +13,26 @@ import { buildCatalogProduct, putCatalogCache, dropCatalogCache } from '../../..
 /**
  * Stripe webhook — the ONLY trusted signal that a guest order was paid. The
  * success redirect is never treated as proof of payment; finalization happens
- * here after verifying the signature against STRIPE_WEBHOOK_SECRET.
+ * here after verifying the signature against the webhook secret.
+ *
+ * Both the live and test key slots point their webhook endpoints here. The
+ * signature is checked against each configured secret (STRIPE_WEBHOOK_SECRET,
+ * then STRIPE_WEBHOOK_SECRET_TEST); whichever verifies identifies the slot the
+ * event came from. Test-slot events finalize their (isTest-stamped) orders and
+ * release holds exactly like live ones, but never touch live aggregates: no
+ * donor-wall entries, no impact bumps, no admin new-order alert, and no
+ * catalog-cache writes (the live account's products are the storefront's
+ * source of truth).
  */
 
 // Stripe needs the raw, unparsed request body to verify the signature.
 export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
-    const secret = process.env.STRIPE_WEBHOOK_SECRET;
-    if (!secret) {
+    const slots = (['live', 'test'] as StripeMode[])
+        .map((m) => ({ mode: m, secret: webhookSecretFor(m) }))
+        .filter((s) => Boolean(s.secret));
+    if (slots.length === 0) {
         console.error('[Stripe webhook] STRIPE_WEBHOOK_SECRET not set');
         return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 });
     }
@@ -33,13 +44,26 @@ export async function POST(request: Request) {
 
     const rawBody = await request.text();
 
-    let event: Stripe.Event;
-    try {
-        event = getStripe().webhooks.constructEvent(rawBody, sig, secret);
-    } catch (err) {
-        console.error('[Stripe webhook] Signature verification failed:', err instanceof Error ? err.message : err);
+    // constructEvent is pure HMAC — any constructible client can verify, so use
+    // whichever key slot exists even if it isn't the slot the event came from.
+    const verifier = getStripe(isStripeConfigured('live') ? 'live' : 'test');
+
+    let event: Stripe.Event | null = null;
+    let eventMode: StripeMode = 'live';
+    for (const slot of slots) {
+        try {
+            event = verifier.webhooks.constructEvent(rawBody, sig, slot.secret!);
+            eventMode = slot.mode;
+            break;
+        } catch {
+            // Try the next configured slot's secret.
+        }
+    }
+    if (!event) {
+        console.error('[Stripe webhook] Signature verification failed for all configured secrets');
         return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
     }
+    const isLiveEvent = eventMode === 'live';
 
     try {
         switch (event.type) {
@@ -51,6 +75,8 @@ export async function POST(request: Request) {
                 // makes duplicate deliveries no-ops.
                 if (session.mode === 'subscription' && session.metadata?.sustainer === '1') {
                     if (session.payment_status !== 'paid') break;
+                    // Test-slot sustainer signups never reach the public wall.
+                    if (!isLiveEvent) break;
                     if (!(await claimOrderSettlement(`sustain:${session.id}`))) break;
                     const wallName = session.custom_fields
                         ?.find((f) => f.key === 'donor_wall_name')?.text?.value?.trim()
@@ -131,13 +157,19 @@ export async function POST(request: Request) {
 
                 if (updated) {
                     // Donor wall + impact meters (server-only write; no-op for
-                    // non-donation orders, best-effort on Redis hiccups).
-                    void recordDonation(updated);
+                    // non-donation orders, best-effort on Redis hiccups). Test
+                    // orders never reach the public wall or the meters.
+                    if (isLiveEvent && !updated.isTest) void recordDonation(updated);
+                    // Mirror still runs for test orders — the sheet has an Is Test
+                    // column, so the record matches what admins see in the shop.
                     void mirrorOrder(updated);
-                    // Confirm to the customer + alert staff (no-op until email is configured).
+                    // Confirm to the customer (the tester wants to see the receipt),
+                    // but don't page staff about a test order.
                     if (email) void sendEmail(buildOrderConfirmation(updated, email));
-                    const adminMsg = buildAdminNewOrder(updated);
-                    if (adminMsg) void sendEmail(adminMsg);
+                    if (isLiveEvent && !updated.isTest) {
+                        const adminMsg = buildAdminNewOrder(updated);
+                        if (adminMsg) void sendEmail(adminMsg);
+                    }
                 }
                 break;
             }
@@ -152,6 +184,8 @@ export async function POST(request: Request) {
                 // details, so no extra Stripe read is needed to identify ours.
                 const subMeta = invoice.parent?.subscription_details?.metadata;
                 if (subMeta?.sustainer !== '1' && subMeta?.donation !== '1') break;
+                // Test-slot renewals must not inflate the public impact meters.
+                if (!isLiveEvent) break;
                 if (!(await claimOrderSettlement(`invoice:${invoice.id}`))) break;
                 await bumpImpact(subMeta.fund || 'general', invoice.amount_paid / 100);
                 break;
@@ -174,9 +208,11 @@ export async function POST(request: Request) {
             }
             // ---- Catalog sync: Stripe is the source of truth for products/prices.
             // Any edit in the Stripe Dashboard refreshes that product's cache entry
-            // so the storefront/checkout projection stays current.
+            // so the storefront/checkout projection stays current. LIVE slot only:
+            // the test account's products must never overwrite the live catalog.
             case 'product.created':
             case 'product.updated': {
+                if (!isLiveEvent) break;
                 const product = event.data.object as Stripe.Product;
                 if (product.metadata?.managed_by !== CATALOG_MANAGED_FLAG) break;
                 if (product.active === false || product.deleted) {
@@ -187,6 +223,7 @@ export async function POST(request: Request) {
                 break;
             }
             case 'product.deleted': {
+                if (!isLiveEvent) break;
                 const product = event.data.object as Stripe.Product;
                 if (product.metadata?.managed_by !== CATALOG_MANAGED_FLAG) break;
                 await dropCatalogCache(product.metadata.shop_product_id || product.id);
@@ -195,6 +232,7 @@ export async function POST(request: Request) {
             case 'price.created':
             case 'price.updated':
             case 'price.deleted': {
+                if (!isLiveEvent) break;
                 // A price change can flip a variant's availability/amount. Reproject
                 // the owning product from Stripe so the variant list is rebuilt.
                 const price = event.data.object as Stripe.Price;

@@ -128,6 +128,10 @@ export interface Order {
     // Stripe linkage (current guest cash path).
     stripeSessionId?: string;
     stripePaymentIntentId?: string;
+    // Which Stripe key slot created the session ('live' when absent — orders
+    // predate the toggle). Refunds must go through the same slot, and 'test'
+    // orders are also stamped isTest so every aggregate ignores them.
+    stripeMode?: 'live' | 'test';
     // HCB donation linkage — guest orders placed during the HCB-donation era.
     hcb?: OrderHcb;
     // Donation-tier summary — set when the cart contained donation-tier items.

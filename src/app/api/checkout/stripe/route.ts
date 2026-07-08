@@ -7,6 +7,7 @@ import {
     getStripe,
     isStripeConfigured,
     isStripeTaxEnabled,
+    resolveStripeMode,
     GENERAL_GOODS_TAX_CODE,
     SHIPPING_TAX_CODE,
     NONTAXABLE_TAX_CODE,
@@ -47,7 +48,7 @@ const ALLOWED_COUNTRIES = COUNTRIES
  * moved back to Stripe.
  */
 export async function POST(request: Request) {
-    if (!isStripeConfigured()) {
+    if (!isStripeConfigured('live') && !isStripeConfigured('test')) {
         return NextResponse.json({ error: 'Card payments are not available right now.' }, { status: 503 });
     }
 
@@ -99,7 +100,17 @@ export async function POST(request: Request) {
         // Admins (full-catalog mode) may card-pay for ANY item — a points-only
         // item is charged at 1 point = $1. Regular guests may only buy cash-priced
         // items.
-        const buyerIsAdmin = await isAdmin(await getServerSession(authOptions));
+        const authSession = await getServerSession(authOptions);
+        const buyerIsAdmin = await isAdmin(authSession);
+
+        // Which Stripe key slot this checkout charges through: the signed-in
+        // admin's personal override if set, otherwise the store-wide mode.
+        // Fail closed if the resolved slot's key is missing — never silently
+        // charge through the other account.
+        const mode = await resolveStripeMode(authSession);
+        if (!isStripeConfigured(mode)) {
+            return NextResponse.json({ error: 'Card payments are not available right now.' }, { status: 503 });
+        }
 
         // Effective per-item cash cost: the real cash price, or (for admins) the
         // points price at 1:1 when no cash price exists.
@@ -206,8 +217,8 @@ export async function POST(request: Request) {
             }
         }
 
-        const stripe = getStripe();
-        const taxEnabled = isStripeTaxEnabled();
+        const stripe = getStripe(mode);
+        const taxEnabled = isStripeTaxEnabled(mode);
         const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
         const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -342,9 +353,11 @@ export async function POST(request: Request) {
             // can pay a points-derived cash equivalent (itemCashCost differs from the
             // variant's list price_cash). If they diverge, fall back to price_data so
             // the customer is billed exactly the verified amount.
+            // Catalog Price ids live in the LIVE account — they don't exist in
+            // test mode, so a test checkout always bills inline price_data.
             const verifiedCents = Math.round(itemCashCost(item) * 100);
             const listCents = Math.round((item.priceCash ?? 0) * 100);
-            if (item.stripePriceId && verifiedCents === listCents) {
+            if (mode === 'live' && item.stripePriceId && verifiedCents === listCents) {
                 return { quantity: item.quantity, price: item.stripePriceId };
             }
 
@@ -534,6 +547,10 @@ export async function POST(request: Request) {
             creditsPaid: 0,
             ...(orderDonation ? { donation: orderDonation } : {}),
             stripeSessionId: session.id,
+            stripeMode: mode,
+            // Test-mode orders are junk data by definition: stamping isTest makes
+            // stats, finance, the warehouse queue, and the donor wall ignore them.
+            ...(mode === 'test' ? { isTest: true } : {}),
             shippingCountry: country,
             shippingAddress,
             inventoryHold: holdLines.filter(l => l.quantity > 0),

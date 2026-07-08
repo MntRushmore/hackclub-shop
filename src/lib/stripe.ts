@@ -1,22 +1,131 @@
 import Stripe from 'stripe';
+import { Redis } from '@upstash/redis';
+import type { Session } from 'next-auth';
+import { isAdmin } from './adminAuth';
 
 /**
- * Server-side Stripe client. Throws if accessed without a configured secret key
- * so misconfiguration fails loudly at request time rather than silently.
+ * Stripe runs in one of two modes, backed by two separate key slots:
+ *
+ *   - `live`: STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET — the primary account,
+ *     what real customers are charged through.
+ *   - `test`: STRIPE_SECRET_KEY_TEST / STRIPE_WEBHOOK_SECRET_TEST — the same
+ *     account's test-mode keys, so admins can run end-to-end checkouts with
+ *     Stripe's test cards without moving real money.
+ *
+ * Which mode a checkout uses is resolved per-request (`resolveStripeMode`):
+ * an admin's personal override (Redis, `stripe:mode:admin:{userId}`) wins,
+ * then the global mode (`stripe:mode`, admin-settable, default live). Guests
+ * always get the global mode. Switching to test is only permitted when the
+ * test key is configured; if a stored mode's key is missing, checkout fails
+ * closed (503) rather than silently charging through the other account.
+ *
+ * The catalog is NOT mode-switched: Stripe live products/prices stay the
+ * source of truth for the storefront. Test-mode checkouts therefore always
+ * bill via inline price_data (live Price ids don't exist in the test
+ * account), and orders they create are stamped `isTest` so stats, finance,
+ * the warehouse queue, and the donor wall all ignore them.
  */
-let _stripe: Stripe | null = null;
 
-export function getStripe(): Stripe {
-    if (_stripe) return _stripe;
-    const key = process.env.STRIPE_SECRET_KEY;
-    if (!key) {
-        throw new Error('STRIPE_SECRET_KEY is not set');
-    }
-    _stripe = new Stripe(key);
-    return _stripe;
+export type StripeMode = 'live' | 'test';
+
+const redis = new Redis({
+    url: process.env.UPSTASH_REDIS_REST_URL!,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+});
+
+const GLOBAL_MODE_KEY = 'stripe:mode';
+const adminModeKey = (userId: string) => `stripe:mode:admin:${userId}`;
+
+function secretKeyFor(mode: StripeMode): string | undefined {
+    return mode === 'test' ? process.env.STRIPE_SECRET_KEY_TEST : process.env.STRIPE_SECRET_KEY;
 }
 
-export const isStripeConfigured = (): boolean => Boolean(process.env.STRIPE_SECRET_KEY);
+export function webhookSecretFor(mode: StripeMode): string | undefined {
+    return mode === 'test' ? process.env.STRIPE_WEBHOOK_SECRET_TEST : process.env.STRIPE_WEBHOOK_SECRET;
+}
+
+/**
+ * Server-side Stripe clients, one per mode. Throws if accessed without the
+ * mode's secret key so misconfiguration fails loudly at request time rather
+ * than silently.
+ */
+const _clients: Partial<Record<StripeMode, Stripe>> = {};
+
+export function getStripe(mode: StripeMode = 'live'): Stripe {
+    const cached = _clients[mode];
+    if (cached) return cached;
+    const key = secretKeyFor(mode);
+    if (!key) {
+        throw new Error(mode === 'test' ? 'STRIPE_SECRET_KEY_TEST is not set' : 'STRIPE_SECRET_KEY is not set');
+    }
+    const client = new Stripe(key);
+    _clients[mode] = client;
+    return client;
+}
+
+export const isStripeConfigured = (mode: StripeMode = 'live'): boolean => Boolean(secretKeyFor(mode));
+
+/** Sanitize a stored/user-supplied mode value; anything unrecognized is live. */
+export const asStripeMode = (value: unknown): StripeMode => (value === 'test' ? 'test' : 'live');
+
+/**
+ * The store-wide checkout mode (what guests and admins without a personal
+ * override get). Defaults to live; 'test' is only honored while the test key
+ * is actually configured, so a leftover Redis flag can never dead-end checkout
+ * after the test key is removed.
+ */
+export async function getGlobalStripeMode(): Promise<StripeMode> {
+    try {
+        const stored = asStripeMode(await redis.get(GLOBAL_MODE_KEY));
+        return stored === 'test' && !isStripeConfigured('test') ? 'live' : stored;
+    } catch {
+        // Fail safe: a Redis hiccup must not flip real customers into test mode.
+        return 'live';
+    }
+}
+
+export async function setGlobalStripeMode(mode: StripeMode): Promise<void> {
+    await redis.set(GLOBAL_MODE_KEY, mode);
+}
+
+/**
+ * A single admin's personal mode override. Applies only to checkouts started
+ * while that admin is signed in; null = follow the global mode.
+ */
+export async function getAdminStripeMode(userId: string): Promise<StripeMode | null> {
+    try {
+        const stored = await redis.get(adminModeKey(userId));
+        if (stored !== 'test' && stored !== 'live') return null;
+        if (stored === 'test' && !isStripeConfigured('test')) return null;
+        return stored;
+    } catch {
+        return null;
+    }
+}
+
+export async function setAdminStripeMode(userId: string, mode: StripeMode | null): Promise<void> {
+    if (mode === null) {
+        await redis.del(adminModeKey(userId));
+    } else {
+        await redis.set(adminModeKey(userId), mode);
+    }
+}
+
+/**
+ * Which mode THIS request's checkout should run in: the signed-in admin's
+ * personal override if one is set, otherwise the global mode. Non-admins
+ * (guests, students) always get the global mode — the personal override is
+ * checked only after an admin-role lookup, so a regular user can never opt
+ * themselves into test mode.
+ */
+export async function resolveStripeMode(session: Session | null): Promise<StripeMode> {
+    const userId = session?.user?.id;
+    if (userId && (await isAdmin(session))) {
+        const personal = await getAdminStripeMode(userId);
+        if (personal) return personal;
+    }
+    return getGlobalStripeMode();
+}
 
 /**
  * Whether to ask Stripe to compute sales tax on the checkout. Gated separately
@@ -24,9 +133,15 @@ export const isStripeConfigured = (): boolean => Boolean(process.env.STRIPE_SECR
  * in the Stripe Dashboard — flip STRIPE_TAX_ENABLED on once the nexus/registration
  * setup is done, otherwise Checkout session creation errors. When off, checkout
  * works exactly as before, just without an automatic tax line.
+ *
+ * Test mode has its own flag (STRIPE_TAX_ENABLED_TEST) because tax registrations
+ * are per-mode in Stripe — a live registration doesn't exist in the test account,
+ * and requesting automatic_tax without one fails the whole session.
  */
-export const isStripeTaxEnabled = (): boolean =>
-    isStripeConfigured() && /^(1|true|yes|on)$/i.test(process.env.STRIPE_TAX_ENABLED || '');
+export const isStripeTaxEnabled = (mode: StripeMode = 'live'): boolean => {
+    const flag = mode === 'test' ? process.env.STRIPE_TAX_ENABLED_TEST : process.env.STRIPE_TAX_ENABLED;
+    return isStripeConfigured(mode) && /^(1|true|yes|on)$/i.test(flag || '');
+};
 
 /**
  * Stripe product tax code applied to merch line items (general tangible goods).

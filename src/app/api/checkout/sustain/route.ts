@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getStripe, isStripeConfigured, NONTAXABLE_TAX_CODE } from '../../../../lib/stripe';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '../../../../lib/authOptions';
+import { getStripe, isStripeConfigured, resolveStripeMode, NONTAXABLE_TAX_CODE } from '../../../../lib/stripe';
 import { rateLimit, rateLimitResponse } from '../../../../lib/rateLimit';
 
 /**
- * Sustainer checkout (donation pivot, Slice 4): a $25/month recurring donation
+ * Sustainer checkout (donation pivot, Slice 4): a $500/month recurring donation
  * via Stripe Checkout in subscription mode. No cart, no shipping, no gift per
  * month — the pitch is a members-only annual thank-you gift plus a permanent
  * donor-wall spot, so the whole monthly charge is a pure donation (the price's
@@ -20,7 +22,10 @@ const SUSTAINER_LOOKUP_KEY = 'sustainer_monthly';
 const SUSTAINER_AMOUNT_CENTS = 50000; // $500/mo
 
 export async function POST(request: Request) {
-    if (!isStripeConfigured()) {
+    // Live/test key slot for this checkout: signed-in admin's override wins,
+    // then the store-wide mode. Fails closed if the slot's key is missing.
+    const mode = await resolveStripeMode(await getServerSession(authOptions));
+    if (!isStripeConfigured(mode)) {
         return NextResponse.json({ error: 'Card payments are not available right now.' }, { status: 503 });
     }
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
@@ -29,7 +34,7 @@ export async function POST(request: Request) {
 
     try {
         const { email } = (await request.json().catch(() => ({}))) as { email?: string };
-        const stripe = getStripe();
+        const stripe = getStripe(mode);
         const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
         // Find-or-create the recurring price by lookup_key, so re-deploys and
