@@ -348,7 +348,7 @@ const Shop = () => {
                             Admin: show all products
                         </span>
                         <span className="text-hackclub-muted text-xs">
-                            {isAdminMode ? 'Viewing every product. Pick points or Hack Club Bank at checkout.' : 'Currently shopping the public storefront.'}
+                            {isAdminMode ? 'Viewing every product. Pick points or card at checkout.' : 'Currently shopping the public storefront.'}
                         </span>
                     </label>
                 )}
@@ -704,7 +704,7 @@ function PhilanthropistSplit({ product }: { product: Product }) {
 }
 
 /**
- * The recurring rung: $25/month Sustainer. Not a catalog product — the button
+ * The recurring rung: $500/month Sustainer. Not a catalog product — the button
  * POSTs to the subscription checkout route and hands off to Stripe (which also
  * collects the donor-wall name). Sits last in the ladder as the "can't pick a
  * tier? just stay close" option.

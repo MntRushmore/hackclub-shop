@@ -14,6 +14,20 @@ const redis = new Redis({
 const balanceKey = (userId: string) => `user:${userId}:pointsBalance`;
 const txKey = (userId: string) => `user:${userId}:pointsTransactions`;
 
+// Atomic adjust-with-floor: read, add, clamp at 0, write — one script, so two
+// concurrent adjustments can't read the same base and clobber each other.
+// Returns {previous, new, applied} (applied differs from the request when the
+// floor clips a deduction; the audit trail records the real delta).
+const ADJUST_LUA = `
+local key = KEYS[1]
+local delta = tonumber(ARGV[1])
+local prev = tonumber(redis.call('GET', key) or '0')
+local new = prev + delta
+if new < 0 then new = 0 end
+redis.call('SET', key, new)
+return {prev, new, new - prev}
+`;
+
 export async function PUT(
     request: Request,
     { params }: { params: { id: string } }
@@ -34,17 +48,20 @@ export async function PUT(
         }
 
         const userId = params.id;
-        const currentBalance = (await redis.get<number>(balanceKey(userId))) || 0;
-        const newBalance = Math.max(0, currentBalance + amount);
-
-        await redis.set(balanceKey(userId), newBalance);
+        const [currentBalance, newBalance, applied] = await redis.eval(
+            ADJUST_LUA,
+            [balanceKey(userId)],
+            [amount],
+        ) as [number, number, number];
         void mirrorUser({ userId, pointsBalance: newBalance });
 
         const transaction = {
             id: `ptxn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            amount,
-            type: amount > 0 ? 'earn' : 'spend',
-            description: `Admin adjustment: ${reason}`,
+            // The applied delta, not the requested one — when the zero floor
+            // clips a deduction, the ledger must match what actually happened.
+            amount: applied,
+            type: applied >= 0 ? 'earn' : 'adjust',
+            description: `Admin adjustment: ${reason}${applied !== amount ? ` (requested ${amount}, clipped at zero balance)` : ''}`,
             timestamp: new Date(),
         };
 
@@ -57,8 +74,8 @@ export async function PUT(
             actorId: session?.user?.id || 'unknown',
             actorEmail: session?.user?.email || undefined,
             target: userId,
-            summary: `${amount >= 0 ? 'Granted' : 'Deducted'} ${Math.abs(amount)} pts ${amount >= 0 ? 'to' : 'from'} ${userId} (→ ${newBalance}). Reason: ${reason}`,
-            metadata: { amount, previousBalance: currentBalance, newBalance, reason },
+            summary: `${amount >= 0 ? 'Granted' : 'Deducted'} ${Math.abs(applied)} pts ${amount >= 0 ? 'to' : 'from'} ${userId} (→ ${newBalance}). Reason: ${reason}`,
+            metadata: { amount, applied, previousBalance: currentBalance, newBalance, reason },
         });
 
         return NextResponse.json({

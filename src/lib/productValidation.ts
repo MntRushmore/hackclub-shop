@@ -88,7 +88,7 @@ export async function validateCartItems(items: CartItemForValidation[]): Promise
         });
 
         if (!variant) {
-            console.log('[Validation] Variant not found:', {
+            console.warn('[Validation] Variant not found:', {
                 itemName: item.name,
                 itemVariantId: item.variant_id,
                 productId: product.id,
@@ -106,7 +106,7 @@ export async function validateCartItems(items: CartItemForValidation[]): Promise
         const expectedPrice = price_cash ?? 0;
         const itemPrice = parseFloat(item.price);
         if (Math.abs(itemPrice - expectedPrice) > 0.01) {
-            console.log('[Validation] Price mismatch:', { itemName: item.name, itemPrice, expectedPrice });
+            console.warn('[Validation] Price mismatch:', { itemName: item.name, itemPrice, expectedPrice });
             return {
                 valid: false,
                 error: `Price mismatch for ${item.name}: expected ${expectedPrice}, got ${itemPrice}`,

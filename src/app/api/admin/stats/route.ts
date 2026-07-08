@@ -67,10 +67,17 @@ export async function GET(request: Request) {
             filteredOrders = orders.filter(o => new Date(o.createdAt) >= startDate);
         }
 
-        // Aggregates (revenue, counts, top products) exclude test orders so junk
-        // doesn't pollute the numbers. The full list — including test orders — is
-        // still returned for the admin page to optionally show.
-        const realOrders = filteredOrders.filter(o => !o.isTest);
+        // Aggregates (revenue, counts, top products) count only real, settled
+        // sales — matching lib/finance.ts: no test orders, no refunds, and no
+        // guest checkouts whose payment never landed (in-flight/abandoned Stripe
+        // sessions sit unpaid until the expiry webhook deletes them). The full
+        // list — including test orders — is still returned for the admin page
+        // to optionally show.
+        const realOrders = filteredOrders.filter(o =>
+            !o.isTest
+            && o.paymentStatus !== 'refunded'
+            && o.status !== 'refunded'
+            && (o.pathway !== 'guest' || o.paymentStatus === 'paid'));
 
         // Revenue is what we earned, not what we collected — sales tax (Stripe Tax,
         // folded into totalAmount on payment) is a pass-through liability, so back

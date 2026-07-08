@@ -11,31 +11,52 @@ interface RateLimitConfig {
     windowMs: number;
 }
 
+/**
+ * Sliding-window limiter, atomic in one Lua round trip: trim the window, count,
+ * and conditionally add are a single script, so a burst of concurrent requests
+ * can't all read a below-limit count and slip past (the old trim → count → add
+ * sequence raced). Returns {allowed, remaining, resetMs}.
+ */
+const RATE_LIMIT_LUA = `
+local key = KEYS[1]
+local now = tonumber(ARGV[1])
+local window = tonumber(ARGV[2])
+local max = tonumber(ARGV[3])
+local member = ARGV[4]
+redis.call('ZREMRANGEBYSCORE', key, 0, now - window)
+local count = redis.call('ZCARD', key)
+if count >= max then
+  local oldest = redis.call('ZRANGE', key, 0, 0, 'WITHSCORES')
+  local reset = now + window
+  if oldest[2] then reset = tonumber(oldest[2]) + window end
+  return {0, 0, reset}
+end
+redis.call('ZADD', key, now, member)
+redis.call('PEXPIRE', key, window)
+return {1, max - count - 1, now + window}
+`;
+
 export async function rateLimit(
     identifier: string,
     config: RateLimitConfig = { maxRequests: 10, windowMs: 60000 }
 ): Promise<{ success: boolean; remaining: number; reset: number }> {
     const key = `ratelimit:${identifier}`;
     const now = Date.now();
-    const windowStart = now - config.windowMs;
 
-    // Remove old entries
-    await redis.zremrangebyscore(key, 0, windowStart);
-
-    // Count current requests
-    const requestCount = await redis.zcard(key);
-
-    if (requestCount >= config.maxRequests) {
-        const oldestEntry = await redis.zrange<string[]>(key, 0, 0, { withScores: true });
-        const resetTime = oldestEntry.length >= 2 ? Number(oldestEntry[1]) + config.windowMs : now + config.windowMs;
-        return { success: false, remaining: 0, reset: resetTime };
+    try {
+        const [allowed, remaining, reset] = await redis.eval(
+            RATE_LIMIT_LUA,
+            [key],
+            [now, config.windowMs, config.maxRequests, `${now}-${Math.random()}`],
+        ) as [number, number, number];
+        return { success: allowed === 1, remaining, reset };
+    } catch (err) {
+        // Fail open: a Redis hiccup must not take checkout down — the limiter
+        // is abuse protection, not a correctness gate (money paths revalidate
+        // everything server-side regardless).
+        console.error('[rateLimit] eval failed:', err instanceof Error ? err.message : err);
+        return { success: true, remaining: 0, reset: now + config.windowMs };
     }
-
-    // Add new request
-    await redis.zadd(key, { score: now, member: `${now}-${Math.random()}` });
-    await redis.expire(key, Math.ceil(config.windowMs / 1000));
-
-    return { success: true, remaining: config.maxRequests - requestCount - 1, reset: now + config.windowMs };
 }
 
 export function rateLimitResponse() {

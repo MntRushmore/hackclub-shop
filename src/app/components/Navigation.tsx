@@ -8,6 +8,7 @@ import Image from 'next/image';
 import CartModal from './CartModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSession, signIn, signOut } from 'next-auth/react';
+import { usePathway } from '../../lib/usePathway';
 import Lottie from 'lottie-react';
 import animationData from '../../../public/images/shopping-bag.json';
 import type { LottieRefCurrentProps } from 'lottie-react';
@@ -65,6 +66,7 @@ const Navigation = () => {
   const bagIconRef = useRef<{ closeAndWait: () => Promise<void> }>(null);
   const cartContext = useContext(CartContext);
   const { data: session, status } = useSession();
+  const { isAdminMode } = usePathway();
   const [isClient, setIsClient] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [, setPrevPrice] = useState(0);
@@ -313,7 +315,12 @@ const Navigation = () => {
               ) : (
                 <span className="hidden sm:inline">{itemCount}</span>
               )}
-              <span className="hidden md:inline">· $<AnimatedPrice value={totalPrice} shouldAnimate={shouldAnimateCart} /></span>
+              {/* Admin full-catalog mode can hold points-priced items whose cart
+                  "price" is a points count, so a $ total would be wrong there.
+                  Public shoppers are all-cash and get the real dollar total. */}
+              {!isAdminMode && (
+                <span className="hidden md:inline">· $<AnimatedPrice value={totalPrice} shouldAnimate={shouldAnimateCart} /></span>
+              )}
             </motion.button>
             </div>
           </div>

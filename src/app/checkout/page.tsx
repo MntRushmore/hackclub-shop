@@ -130,7 +130,6 @@ const Checkout = () => {
                                 costPoints: s.costPoints || 0,
                             }))
                             : [];
-                        console.log('[Checkout] Loaded shipping options:', shipping);
                         setShippingOptions(shipping);
                         setSelectedShipping(shipping.length > 0 ? shipping[0] : null);
 

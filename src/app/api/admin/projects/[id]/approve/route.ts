@@ -4,6 +4,7 @@ import { Redis } from '@upstash/redis';
 import { authOptions } from '../../../../../../lib/authOptions';
 import { requireAdminPermission } from '../../../../../../lib/adminAuth';
 import { getProjectById, updateProjectStatus } from '../../../../../../lib/airtable';
+import { recordAudit } from '../../../../../../lib/auditLog';
 
 const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -58,10 +59,9 @@ export async function POST(
 
         const pointsAwarded = hoursApproved * POINTS_PER_HOUR;
         const userId = project.userId;
-        const currentBalance = (await redis.get<number>(pointsBalanceKey(userId))) || 0;
-        const newBalance = currentBalance + pointsAwarded;
-
-        await redis.set(pointsBalanceKey(userId), newBalance);
+        // Atomic increment — a double-click on Approve or a concurrent admin
+        // grant can't lose an update the way get-then-set could.
+        const newBalance = await redis.incrby(pointsBalanceKey(userId), pointsAwarded);
 
         const transaction = {
             id: `ptxn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -73,6 +73,17 @@ export async function POST(
 
         const transactions = (await redis.get<unknown[]>(pointsTxKey(userId))) || [];
         await redis.set(pointsTxKey(userId), [transaction, ...transactions]);
+
+        // Points are money — approvals mint them, so they go on the audit trail
+        // like every other balance mutation.
+        void recordAudit({
+            action: 'points.grant',
+            actorId: session!.user!.id!,
+            actorEmail: session!.user!.email || undefined,
+            target: userId,
+            summary: `Approved project ${projectId} for ${hoursApproved}h: +${pointsAwarded} points to ${userId}`,
+            metadata: { projectId, hoursApproved, pointsAwarded },
+        });
 
         return NextResponse.json({
             success: true,

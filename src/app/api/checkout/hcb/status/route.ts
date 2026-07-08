@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { rateLimit, rateLimitResponse } from '../../../../../lib/rateLimit';
 import { getGuestOrder, updateGuestOrder } from '../../../../../lib/guestOrders';
 import { findDonationForOrder } from '../../../../../lib/hcb';
 import { commitReserved, claimOrderSettlement } from '../../../../../lib/inventory';
@@ -16,6 +17,13 @@ import { sendEmail, buildOrderConfirmation, buildAdminNewOrder } from '../../../
  * reports `unpaid`; the client keeps polling until `paid`.
  */
 export async function GET(request: Request) {
+    // Unauthenticated + triggers reconciliation side effects (emails, Redis
+    // writes) on a match, so throttle order-id guessing. Generous enough for
+    // the callback page's poll loop.
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const rl = await rateLimit(`checkout:hcb-status:${ip}`, { maxRequests: 60, windowMs: 60000 });
+    if (!rl.success) return rateLimitResponse();
+
     const { searchParams } = new URL(request.url);
     const orderId = searchParams.get('orderId');
     if (!orderId) {

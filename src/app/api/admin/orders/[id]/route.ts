@@ -97,10 +97,11 @@ export async function POST(request: Request, { params }: { params: { id: string 
                 }
                 if (isHcbOrder) {
                     manualRefundNote = 'Refund the donation manually in HCB.';
-                } else if (isStripeConfigured() && guest.stripePaymentIntentId) {
-                    // Stripe order with a payment intent: refund via the API.
+                } else if (isStripeConfigured(guest.stripeMode || 'live') && guest.stripePaymentIntentId) {
+                    // Stripe order with a payment intent: refund via the API,
+                    // through the same key slot (live/test) that charged it.
                     try {
-                        await getStripe().refunds.create({ payment_intent: guest.stripePaymentIntentId });
+                        await getStripe(guest.stripeMode || 'live').refunds.create({ payment_intent: guest.stripePaymentIntentId });
                     } catch (err) {
                         console.error('[Admin order] Stripe refund failed:', err);
                         return NextResponse.json({ error: 'Stripe refund failed. Check the dashboard.' }, { status: 502 });
@@ -187,7 +188,6 @@ async function updateStudentOrder(
         // Refund points once (guard against double refund on an already-refunded order).
         if (isRefund && order.status !== 'refunded' && order.pointsSpent > 0) {
             pointsRefunded = order.pointsSpent;
-            const balance = (await redis.get<number>(`user:${userId}:pointsBalance`)) ?? 0;
             const txns = (await redis.get<PointsTransaction[]>(`user:${userId}:pointsTransactions`)) || [];
             const refundTxn: PointsTransaction = {
                 id: `ptxn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -198,7 +198,9 @@ async function updateStudentOrder(
                 orderId,
             };
             await Promise.all([
-                redis.set(`user:${userId}:pointsBalance`, balance + pointsRefunded),
+                // Atomic credit — can't race a concurrent spend/grant the way
+                // get-then-set could.
+                redis.incrby(`user:${userId}:pointsBalance`, pointsRefunded),
                 redis.set(`user:${userId}:pointsTransactions`, [refundTxn, ...txns]),
             ]);
         }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSession, signIn } from 'next-auth/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
@@ -8,6 +8,18 @@ import Icon from 'supercons';
 
 export default function SubmitProjectPage() {
     const { data: session, status } = useSession();
+    // Admin-only page: the student earning flow is retired, staff use this to
+    // enter submissions. The API enforces the same gate server-side.
+    const [isAdminUser, setIsAdminUser] = useState<boolean | null>(null);
+    useEffect(() => {
+        if (!session) return;
+        let cancelled = false;
+        fetch('/api/admin/me')
+            .then(r => (r.ok ? r.json() : { isAdmin: false }))
+            .then(d => { if (!cancelled) setIsAdminUser(Boolean(d.isAdmin)); })
+            .catch(() => { if (!cancelled) setIsAdminUser(false); });
+        return () => { cancelled = true; };
+    }, [session]);
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
@@ -113,6 +125,53 @@ export default function SubmitProjectPage() {
                     >
                         Sign In with Hack Club
                     </button>
+                </motion.div>
+            </div>
+        );
+    }
+
+    if (isAdminUser === null) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-white"
+                style={{
+                    backgroundImage: `
+                        linear-gradient(to right, #e0f2fe 1px, transparent 1px),
+                        linear-gradient(to bottom, #e0f2fe 1px, transparent 1px)
+                    `,
+                    backgroundSize: '30px 30px',
+                }}
+            >
+                <div className="text-hackclub-dark font-bold">Loading...</div>
+            </div>
+        );
+    }
+
+    if (!isAdminUser) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-white"
+                style={{
+                    backgroundImage: `
+                        linear-gradient(to right, #e0f2fe 1px, transparent 1px),
+                        linear-gradient(to bottom, #e0f2fe 1px, transparent 1px)
+                    `,
+                    backgroundSize: '30px 30px',
+                }}
+            >
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white rounded-2xl shadow-xl border-2 border-gray-200 p-8 max-w-md w-full mx-4 text-center"
+                >
+                    <h2 className="text-2xl font-black text-hackclub-dark mb-2">Not Available</h2>
+                    <p className="text-hackclub-slate mb-6">
+                        Project submission is handled by the Hack Club team. If you think you should have access, reach out to the shop admins.
+                    </p>
+                    <Link
+                        href="/shop"
+                        className="inline-block w-full bg-hackclub-red hover:bg-hackclub-orange text-white font-black py-3 px-6 rounded-full transition-colors"
+                    >
+                        Back to the Shop
+                    </Link>
                 </motion.div>
             </div>
         );

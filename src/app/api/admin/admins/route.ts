@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../../lib/authOptions';
 import { requireAdminPermission } from '../../../../lib/adminAuth';
-import { setAdminRole, listAdmins } from '../../../../lib/adminAuth';
+import { setAdminRole, listAdmins, getAdminRole } from '../../../../lib/adminAuth';
+import { recordAudit } from '../../../../lib/auditLog';
 import { AdminRole } from '../../../../types/Admin';
 
 function getGlobalAdmins(): string[] {
@@ -58,7 +59,27 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Cannot downgrade your own role' }, { status: 403 });
         }
 
+        // Global (env-configured) admins are always managers; a Redis role for
+        // them would be dead weight or a confusing silent no-op downgrade.
+        if (getGlobalAdmins().includes(userId)) {
+            return NextResponse.json({ error: 'This user is a global admin (set via GLOBAL_ADMINS); their role can only change in the environment config.' }, { status: 400 });
+        }
+
+        const previousRole = await getAdminRole(userId);
         await setAdminRole(userId, role as AdminRole);
+
+        // Granting/escalating admin access is the most security-sensitive admin
+        // action there is — always leave a trail.
+        void recordAudit({
+            action: previousRole ? 'admin.role-change' : 'admin.grant',
+            actorId: session!.user!.id!,
+            actorEmail: session!.user!.email || undefined,
+            target: userId,
+            summary: previousRole
+                ? `Changed admin ${userId} from ${previousRole} to ${role}`
+                : `Granted ${role} admin access to ${userId}`,
+            metadata: { from: previousRole, to: role },
+        });
 
         return NextResponse.json(
             { success: true, userId, role },

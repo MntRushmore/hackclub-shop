@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../../lib/authOptions';
+import { isAdmin } from '../../../../lib/adminAuth';
 import { createProjectSubmission } from '../../../../lib/airtable';
 import { rateLimit, rateLimitResponse } from '../../../../lib/rateLimit';
 
@@ -9,6 +10,14 @@ export async function POST(request: Request) {
 
     if (!session?.user?.id) {
         return NextResponse.json({ error: 'You must be signed in to submit a project' }, { status: 401 });
+    }
+
+    // Project submission is admin-only in the parent-facing shop: the student
+    // earning flow is retired, so this exists purely for staff to enter
+    // submissions on a student's behalf. Hiding the nav link is not access
+    // control; the API is the real gate.
+    if (!(await isAdmin(session))) {
+        return NextResponse.json({ error: 'Project submission is not available' }, { status: 403 });
     }
 
     const userId = session.user.id;
