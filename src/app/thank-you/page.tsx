@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useContext, Suspense } from 'react';
+import { useEffect, useState, useContext, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { CartContext } from '../../context/CartContext';
@@ -28,12 +28,18 @@ const ThankYouInner = () => {
   const [donation, setDonation] = useState<DonationShare | null>(isSustainer ? { tier: 'Sustainer' } : null);
   const [copied, setCopied] = useState(false);
   const cartContext = useContext(CartContext);
+  // The cart context value is a fresh object on every cart mutation, so keep the
+  // clearCart reference in a ref. Depending on `cartContext` directly would make
+  // the polling effect below re-run on the very clearCart() it triggers, which
+  // restarts polling and flickers the UI back to "confirming".
+  const clearCartRef = useRef(cartContext?.clearCart);
+  clearCartRef.current = cartContext?.clearCart;
 
   // Student order: cart already cleared at checkout; clear again here (idempotent)
   // so the nav badge resets. Guests clear only on confirmed payment (below).
   useEffect(() => {
-    if (!isGuest) cartContext?.clearCart();
-  }, [isGuest, cartContext]);
+    if (!isGuest) clearCartRef.current?.();
+  }, [isGuest]);
 
   useEffect(() => {
     if (!isGuest) return;
@@ -56,7 +62,7 @@ const ThankYouInner = () => {
           const data = await res.json();
           if (data.paymentStatus === 'paid') {
             // Confirmed paid — now it's safe to clear the cart.
-            cartContext?.clearCart();
+            clearCartRef.current?.();
             if (data.donation?.tier) setDonation(data.donation);
             setStatus('paid');
             return;
@@ -84,7 +90,7 @@ const ThankYouInner = () => {
     return () => {
       cancelled = true;
     };
-  }, [isGuest, sessionId, cartContext]);
+  }, [isGuest, sessionId]);
 
   const heading =
     status === 'paid' ? (donation ? 'You just backed a teenager.' : 'Thank You!')
