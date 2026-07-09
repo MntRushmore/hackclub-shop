@@ -7,7 +7,7 @@ import { CartContext } from '../../context/CartContext';
 import Image from 'next/image';
 import CartModal from './CartModal';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useSession, signIn, signOut } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 import { usePathway } from '../../lib/usePathway';
 import Lottie from 'lottie-react';
 import animationData from '../../../public/images/shopping-bag.json';
@@ -272,15 +272,10 @@ const Navigation = () => {
                   )}
                 </div>
               ) : (
-                <button
-                  onClick={() => signIn('hackclub')}
-                  className="flex items-center gap-2 text-hackclub-slate hover:text-hackclub-red font-bold transition-colors"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                  <span className="hidden sm:inline">Sign In</span>
-                </button>
+                // No public sign-in button: the shop is guest-only (everyone
+                // pays cash without an account). Admins sign in via /auth/signin
+                // or by visiting /admin, which prompts automatically.
+                null
               )}
 
             <motion.button

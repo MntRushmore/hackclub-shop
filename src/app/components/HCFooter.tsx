@@ -17,7 +17,6 @@ import FooterHeart from "./FooterHeart";
 const shopLinks = [
   { label: "Browse the shop", href: "/shop" },
   { label: "Track your order", href: "/orders/track" },
-  { label: "Your orders", href: "/orders" },
   { label: "Contact us", href: "mailto:shop@hackclub.com" },
 ];
 
