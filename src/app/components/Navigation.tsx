@@ -2,7 +2,7 @@
 
 import React, { useContext, useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { CartContext } from '../../context/CartContext';
 import Image from 'next/image';
 import CartModal from './CartModal';
@@ -63,6 +63,7 @@ ShoppingBagIcon.displayName = 'ShoppingBagIcon';
 
 const Navigation = () => {
   const router = useRouter();
+  const pathname = usePathname();
   const bagIconRef = useRef<{ closeAndWait: () => Promise<void> }>(null);
   const cartContext = useContext(CartContext);
   const { data: session, status } = useSession();
@@ -115,6 +116,11 @@ const Navigation = () => {
       }
     }
   }, [cartContext, isClient, isInitialMount, prevItemCount]);
+
+  // The launch-lock page is a standalone full-screen surface — no store chrome.
+  if (pathname === '/launch') {
+    return null;
+  }
 
   if (!cartContext || cartContext.cart === null) {
     return null;

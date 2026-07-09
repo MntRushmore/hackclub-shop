@@ -115,6 +115,33 @@ through Stripe automatically) — this proves the whole loop including refunds.
 - Vercel cron logs: `reconcile-holds` (every 6h; `needsHuman` entries mean a
   missed completion webhook — finalize those by hand), `match-followup` (daily)
 
+## Launch lock (the pre-launch "coming soon" wall)
+
+Until you're ready to announce, the whole store is hidden behind a
+password-gated coming-soon page, enforced in `src/middleware.ts` (server-side —
+it can't be skipped from the browser).
+
+Set both in Vercel production now:
+
+```
+vercel env add LAUNCH_LOCKED production --scope hackclub    # value: 1
+vercel env add LAUNCH_PASSWORD production --scope hackclub   # value: the shared password
+```
+
+- The lock is ON by default; a missing `LAUNCH_LOCKED` still means locked. Set
+  `LAUNCH_LOCKED=0` (or delete both vars) and redeploy to open the store at
+  announcement.
+- Safety valve: if `LAUNCH_LOCKED` is on but `LAUNCH_PASSWORD` is empty, the lock
+  fails OPEN and logs a warning — so a misconfig can never trap everyone.
+- Signed-in `GLOBAL_ADMINS` bypass the wall automatically (no password), so you
+  can work on the live site without entering it. Everyone else enters the
+  password once and gets a 30-day httpOnly cookie.
+- Always-open even while locked: `/api/auth/*`, `/auth/*`, `/api/webhooks/*`
+  (Stripe/EasyPost), `/api/cron/*` — so login, payment webhooks, and crons keep
+  working.
+- To force everyone to re-enter (rotate the wall), bump `COOKIE_VERSION` in
+  `src/lib/launchLock.ts`.
+
 ## Rollback
 
 If live checkout misbehaves: on /admin/finance flip **Everyone → Test** — real
