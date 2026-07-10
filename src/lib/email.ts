@@ -468,45 +468,6 @@ export function buildStatusUpdate(order: Order, to: string, message?: string): E
 }
 
 /**
- * Employer-match follow-up, sent by the match-followup cron a few days after a
- * donation settles. This is a marketing send (not a receipt): the cron checks
- * the suppression list before sending, and the unsubscribe footer is included.
- * House style per CONVERSION_EMAILS.md: warm, parent to parent, ONE call to
- * action, no em dashes.
- */
-export function buildMatchFollowup(order: Order, to: string): EmailMessage {
-    const d = order.donation!;
-    const amount = usd(d.amount);
-    const doubled = usd(d.amount * 2);
-
-    const text = `One search could double your ${amount}.
-
-A few days ago you backed a teenager at Hack Club with a ${amount} donation. Thank you. It is already at work.
-
-Here is the part most people miss: many employers match charitable donations, and it takes about two minutes to check. If yours does, your ${amount} becomes ${doubled}, at no cost to you.
-
-Search your company's benefits portal (Benevity, YourCause, or ask HR) for "Hack Club" or "The Hack Foundation" (EIN 81-2908499). Your emailed receipt has everything the form asks for.
-
-With gratitude,
-The Hack Club team`;
-
-    const html = shell('One search could double your donation', `
-        <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:${INK}">A few days ago you backed a teenager at Hack Club with a <strong>${escapeHtml(amount)}</strong> donation. Thank you. It is already at work.</p>
-        <p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:${INK}">Here is the part most people miss: <strong>many employers match charitable donations</strong>, and it takes about two minutes to check. If yours does, your ${escapeHtml(amount)} becomes <strong style="color:${RED}">${escapeHtml(doubled)}</strong>, at no cost to you.</p>
-        ${summaryBox(`
-            <p style="margin:0 0 6px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:${MUTED};font-weight:700">What to search for</p>
-            <p style="margin:0;font-size:15px;line-height:1.7;color:${INK}">In your company's benefits portal (Benevity, YourCause, or ask HR):<br/><strong>"Hack Club"</strong> or <strong>"The Hack Foundation"</strong> &middot; EIN 81-2908499</p>
-            <p style="margin:10px 0 0;color:${MUTED};font-size:13px;line-height:1.5">Your emailed receipt has everything the form asks for.</p>
-        `)}
-        <p style="margin:16px 0 0;font-size:15px;line-height:1.7;color:${INK}">With gratitude,<br/>The Hack Club team</p>`, {
-        eyebrow: 'Two minutes, double the impact',
-        unsubscribeFor: to,
-        preview: `Many employers match donations. Your ${amount} could become ${doubled}.`,
-    });
-    return withUnsubscribe({ to, subject: `One search could double your ${amount}`, html, text });
-}
-
-/**
  * Attach the one-click unsubscribe headers (RFC 8058) for a recipient-facing
  * message. The mailto + https targets both point at our unsubscribe handler so
  * Gmail/Apple render a native "Unsubscribe" button.

@@ -103,9 +103,6 @@ export interface OrderDonation {
     // True when the donation is a monthly subscription (first payment recorded
     // here; renewals bump the impact counters via the invoice.paid webhook).
     recurring?: boolean;
-    // ISO timestamp when the employer-match follow-up email went out (set by the
-    // match-followup cron; absent = not yet sent).
-    matchEmailSentAt?: string;
 }
 
 export interface Order {

@@ -110,16 +110,6 @@ export async function recordDonation(order: Order): Promise<void> {
     }
 }
 
-/** Donation order ids settled inside [fromMs, toMs] — the match-followup cron's scan window. */
-export async function getDonationOrderIdsBetween(fromMs: number, toMs: number): Promise<string[]> {
-    try {
-        return await redis.zrange<string[]>(DONATION_ORDERS_KEY, fromMs, toMs, { byScore: true });
-    } catch (err) {
-        console.error('[donorWall] donation index read failed:', err instanceof Error ? err.message : err);
-        return [];
-    }
-}
-
 /**
  * Public wall entries, newest first. Anonymous donors keep their tier/fund/
  * amount presence but displayName AND dedication are stripped here (the
